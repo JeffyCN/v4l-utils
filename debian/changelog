@@ -1,0 +1,5 @@
+libv4l (0.4.3-1) unstable; urgency=low
+
+  * Initial release (Closes: #488117)
+
+ -- Gregor Jasny <gjasny@web.de>  Wed, 03 Sep 2008 20:16:22 +0200

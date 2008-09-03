@@ -1,0 +1,4 @@
+#usr/include/*
+usr/lib32/lib*.a
+usr/lib32/lib*.so
+usr/lib32/pkgconfig/*

@@ -1,0 +1,66 @@
+Source: libv4l
+Section: libs
+Priority: optional
+Maintainer: Gregor Jasny <gjasny@web.de>
+Build-Depends: debhelper (>= 7), gcc-multilib [amd64]
+Standards-Version: 3.8.0
+Homepage: http://people.atrpms.net/~hdegoede/
+
+Package: libv4l
+Section: libs
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Collection of video4linux support libraries
+ libv4l is a collection of libraries which adds a thin abstraction layer on
+ top of video4linux2 devices. The purpose of this (thin) layer is to make it
+ easy for application writers to support a wide variety of devices without
+ having to write separate code for different devices in the same class. libv4l
+ consists of 3 different libraries: libv4lconvert, libv4l1 and libv4l2.
+ .
+ libv4lconvert offers functions to convert from any (known) pixelformat
+ to V4l2_PIX_FMT_BGR24 or V4l2_PIX_FMT_YUV420.
+ .
+ libv4l1 offers the (deprecated) v4l1 API on top of v4l2 devices, independent
+ of the drivers for those devices supporting v4l1 compatibility (which many
+ v4l2 drivers do not).
+ .
+ libv4l2 offers the v4l2 API on top of v4l2 devices, while adding for the
+ application transparent libv4lconvert conversion where necessary.
+
+Package: libv4l-dev
+Section: libdevel
+Architecture: any
+Depends: libv4l (= ${binary:Version}), ${shlibs:Depends}, ${misc:Depends}
+Description: Collection of video4linux support libraries (development files)
+ This package contains development files (headers and static libraries).
+
+Package: lib32v4l
+Section: libs
+Architecture: amd64
+Depends: libv4l (= ${binary:Version}), ${bidev:depends}, ${shlibs:Depends}, ${misc:Depends}
+Description: Collection of video4linux support libraries (32 bit)
+ libv4l is a collection of libraries which adds a thin abstraction layer on
+ top of video4linux2 devices. The purpose of this (thin) layer is to make it
+ easy for application writers to support a wide variety of devices without
+ having to write separate code for different devices in the same class. libv4l
+ consists of 3 different libraries: libv4lconvert, libv4l1 and libv4l2.
+ .
+ This package contains the 32 bit version of the libraries.
+ .
+ libv4lconvert offers functions to convert from any (known) pixelformat
+ to V4l2_PIX_FMT_BGR24 or V4l2_PIX_FMT_YUV420.
+ .
+ libv4l1 offers the (deprecated) v4l1 API on top of v4l2 devices, independent
+ of the drivers for those devices supporting v4l1 compatibility (which many
+ v4l2 drivers do not).
+ .
+ libv4l2 offers the v4l2 API on top of v4l2 devices, while adding for the
+ application transparent libv4lconvert conversion where necessary.
+
+Package: lib32v4l-dev
+Section: libdevel
+Architecture: amd64
+Depends: libv4l (= ${binary:Version}), lib32v4l (= ${binary:Version}), libv4l-dev (= ${binary:Version}), ${bidev:depends}, ${shlibs:Depends}, ${misc:Depends}
+Description: Collection of video4linux support libraries (32bit development files)
+ This package contains development files for 32 bit compatibility
+ (headers and static libraries).
