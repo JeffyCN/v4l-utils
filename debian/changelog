@@ -1,3 +1,9 @@
+libv4l (0.5.0-2) unstable; urgency=low
+
+  * Remove dh_shlibdeps warnings
+
+ -- Gregor Jasny <gjasny@web.de>  Thu, 02 Oct 2008 18:27:43 +0200
+
 libv4l (0.5.0-1) unstable; urgency=low
 
   * New upstream release

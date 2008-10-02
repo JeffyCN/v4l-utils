@@ -4,9 +4,11 @@
 # Uncomment this to turn on verbose mode.
 #export DH_VERBOSE=1
 
+include /usr/share/quilt/quilt.make
+
 DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
 
-build: build-stamp
+build: patch build-stamp
 build-stamp:
 	dh_testdir
 #	dh_testroot
@@ -37,7 +39,7 @@ endif
 
 	touch $@
 
-clean:
+clean: unpatch
 	dh_testdir
 	dh_testroot
 	rm -f build-stamp
