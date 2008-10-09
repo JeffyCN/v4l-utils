@@ -1,3 +1,31 @@
+libv4l (0.5.0-3) unstable; urgency=low
+
+  [ Kees Cook ]
+  * Rename lib* to lib*-0: the major ABI number should be reflected in the
+    binary package names.
+  * Drop .dirs files: they are redundant (i.e. only needed for creating empty
+    directories).
+  * Remove the static files from *-dev and the rules file.  Building
+    static libraries is not really a good idea, since it allows for copies of
+    the code to leak everywhere, which makes security updates a pain, etc.
+    Unless they are explicitly required, I strongly recommend dropping them.
+  * Correct the clean/unpatch rule combo: the build must clean first, then
+    unpatch.
+  * Added .symbols files to track the change of ABI over time.
+
+  [ Loic Minier ]
+  * Merge above changes by Kees Cook; reworded his description as a changelog.
+  * Add Kees Cook and myself as uploaders.
+  * Add ${misc:Depends} to all packages as recommended in debhelper >= 5 mode
+    and add ${shlibs:Depends} to -dev packages which sneak extra deps if they
+    start shipping binaries.
+  * Wrap build-deps and deps to get cleaner diffs when we change them.
+  * Remove boilerplate from rules.
+  * Add clean-patched to .PHONY; NB: the current clean-patched isn't -j2 safe.
+
+
+ -- Loic Minier <lool@dooz.org>  Thu, 09 Oct 2008 22:10:08 +0200
+
 libv4l (0.5.0-2) unstable; urgency=low
 
   * Remove dh_shlibdeps warnings

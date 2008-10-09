@@ -1,8 +1,4 @@
 #!/usr/bin/make -f
-# -*- makefile -*-
-
-# Uncomment this to turn on verbose mode.
-#export DH_VERBOSE=1
 
 include /usr/share/quilt/quilt.make
 
@@ -11,55 +7,34 @@ DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
 build: patch build-stamp
 build-stamp:
 	dh_testdir
-#	dh_testroot
 	dh_prep
 	dh_installdirs -s
-
-	# clean object files (maybe some non-pic were left behind)
-	$(MAKE) clean
 	# build shared libs and install
 	$(MAKE) PREFIX=/usr DESTDIR=$(CURDIR)/debian/tmp install
-	# clean object files
-	$(MAKE) clean
-	# build static libs and install
-	$(MAKE) PREFIX=/usr DESTDIR=$(CURDIR)/debian/tmp LINKTYPE=static install
-	# clean object files
-	$(MAKE) clean
-
 ifeq ($(DEB_HOST_ARCH), amd64)
+	# clean object files
+	$(MAKE) clean
 	# build 32 bit shared libs and install
-	$(MAKE) CPPFLAGS=-m32 LDFLAGS=-m32 PREFIX=/usr LIBDIR=/usr/lib32 DESTDIR=$(CURDIR)/debian/tmp  install
-	# clean object files
-	$(MAKE) CPPFLAGS=-m32 LDFLAGS=-m32 clean
-	# build 32 bit static libs and install
-	$(MAKE) CPPFLAGS=-m32 LDFLAGS=-m32 PREFIX=/usr LIBDIR=/usr/lib32 DESTDIR=$(CURDIR)/debian/tmp LINKTYPE=static install
-	# clean object files
-	$(MAKE) CPPFLAGS=-m32 LDFLAGS=-m32 clean
+	$(MAKE) CPPFLAGS+=-m32 LDFLAGS+=-m32 PREFIX=/usr LIBDIR=/usr/lib32 DESTDIR=$(CURDIR)/debian/tmp install
 endif
-
 	touch $@
 
-clean: unpatch
+clean: clean-patched unpatch
+clean-patched:
 	dh_testdir
 	dh_testroot
+	$(MAKE) clean
+	dh_clean
 	rm -f build-stamp
 
-	# Add here commands to clean up after the build process.
-	$(MAKE) clean
-
-	dh_clean
-
-# Build architecture-independent files here.
 binary-indep: build
-# We have nothing to do by default.
 
-# Build architecture-dependent files here.
 binary-arch: build
 	dh_testdir
 	dh_testroot
 	dh_lintian -s
-	dh_installchangelogs -plibv4l ChangeLog
-	dh_installdocs -plibv4l
+	dh_installchangelogs -plibv4l-0 ChangeLog
+	dh_installdocs -plibv4l-0
 	dh_install -s --sourcedir=debian/tmp
 	dh_link -s
 	dh_strip -s
@@ -73,4 +48,4 @@ binary-arch: build
 	dh_builddeb -s
 
 binary: binary-indep binary-arch
-.PHONY: build clean binary-indep binary-arch binary
+.PHONY: build clean binary-indep binary-arch binary clean-patched
