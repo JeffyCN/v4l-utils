@@ -1,0 +1,27 @@
+diff -r 423381bc0d61 v4l2-apps/lib/libv4l/libv4l2/libv4l2.c
+--- a/v4l2-apps/lib/libv4l/libv4l2/libv4l2.c	Fri Aug 29 14:00:57 2008 +0200
++++ b/v4l2-apps/lib/libv4l/libv4l2/libv4l2.c	Wed Sep 03 10:25:54 2008 +0200
+@@ -681,6 +681,10 @@
+ 	is_capture_request = 1;
+ 	stream_needs_locking = 1;
+       }
++    case VIDIOC_ENUM_FRAMESIZES:
++    case VIDIOC_ENUM_FRAMEINTERVALS:
++      is_capture_request = 1;
++      break;
+   }
+ 
+   if (!is_capture_request) {
+@@ -904,6 +908,12 @@
+ 	result = v4l2_streamoff(index);
+       break;
+ 
++    case VIDIOC_ENUM_FRAMESIZES:
++    case VIDIOC_ENUM_FRAMEINTERVALS:
++       errno = -ENOTTY;
++       result = -1;
++       break;
++
+     default:
+       result = syscall(SYS_ioctl, fd, request, arg);
+   }
