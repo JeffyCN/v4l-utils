@@ -5,7 +5,6 @@ Maintainer: Gregor Jasny <gjasny@web.de>
 Uploaders: Kees Cook <kees@outflux.net>,
            Loic Minier <lool@dooz.org>
 Build-Depends: debhelper (>= 7),
-               quilt,
                gcc-multilib [amd64]
 Standards-Version: 3.8.0
 Homepage: http://people.atrpms.net/~hdegoede/

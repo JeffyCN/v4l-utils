@@ -1,10 +1,8 @@
 #!/usr/bin/make -f
 
-include /usr/share/quilt/quilt.make
-
 DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
 
-build: patch build-stamp
+build: build-stamp
 build-stamp:
 	dh_testdir
 	dh_prep
@@ -19,8 +17,7 @@ ifeq ($(DEB_HOST_ARCH), amd64)
 endif
 	touch $@
 
-clean: clean-patched unpatch
-clean-patched:
+clean:
 	dh_testdir
 	dh_testroot
 	$(MAKE) clean
@@ -48,4 +45,4 @@ binary-arch: build
 	dh_builddeb -s
 
 binary: binary-indep binary-arch
-.PHONY: build clean binary-indep binary-arch binary clean-patched
+.PHONY: build clean binary-indep binary-arch binary
