@@ -2,6 +2,7 @@ libv4l (0.5.1-1) unstable; urgency=low
 
   * New Upstream Version
   * Removed quilt dependency as patch got merged upstream
+  * Reenable static libs
 
  -- Gregor Jasny <gjasny@web.de>  Sun, 19 Oct 2008 00:16:28 +0200
 

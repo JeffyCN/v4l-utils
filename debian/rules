@@ -9,11 +9,19 @@ build-stamp:
 	dh_installdirs -s
 	# build shared libs and install
 	$(MAKE) PREFIX=/usr DESTDIR=$(CURDIR)/debian/tmp install
+	# clean object files
+	$(MAKE) clean
+	# build static libs and install
+	$(MAKE) PREFIX=/usr DESTDIR=$(CURDIR)/debian/tmp LINKTYPE=static install
 ifeq ($(DEB_HOST_ARCH), amd64)
 	# clean object files
 	$(MAKE) clean
 	# build 32 bit shared libs and install
 	$(MAKE) CPPFLAGS+=-m32 LDFLAGS+=-m32 PREFIX=/usr LIBDIR=/usr/lib32 DESTDIR=$(CURDIR)/debian/tmp install
+	# clean object files
+	$(MAKE) clean
+	# build 32 bit static libs and install
+	$(MAKE) CPPFLAGS+=-m32 LDFLAGS+=-m32 PREFIX=/usr LIBDIR=/usr/lib32 DESTDIR=$(CURDIR)/debian/tmp LINKTYPE=static install
 endif
 	touch $@
 
