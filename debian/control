@@ -7,6 +7,8 @@ Uploaders: Kees Cook <kees@outflux.net>,
 Build-Depends: debhelper (>= 7),
                gcc-multilib [amd64]
 Standards-Version: 3.8.0
+Vcs-Browser: http://git.debian.org/?p=collab-maint/libv4l.git
+Vcs-Git: git://git.debian.org/git/collab-maint/libv4l.git
 Homepage: http://people.atrpms.net/~hdegoede/
 
 Package: libv4l-0
