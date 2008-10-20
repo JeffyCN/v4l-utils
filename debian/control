@@ -5,6 +5,7 @@ Maintainer: Gregor Jasny <gjasny@web.de>
 Uploaders: Kees Cook <kees@outflux.net>,
            Loic Minier <lool@dooz.org>
 Build-Depends: debhelper (>= 7),
+               linux-libc-dev (>= 2.6.19),
                gcc-multilib [amd64]
 Standards-Version: 3.8.0
 Vcs-Browser: http://git.debian.org/?p=collab-maint/libv4l.git
