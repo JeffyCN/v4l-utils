@@ -620,6 +620,36 @@ static int v4l2_check_buffer_change_ok(int index)
   return 0;
 }
 
+static int v4l2_pix_fmt_identical(struct v4l2_format *a, struct v4l2_format *b)
+{
+  if (a->fmt.pix.width == b->fmt.pix.width &&
+      a->fmt.pix.height == b->fmt.pix.height &&
+      a->fmt.pix.pixelformat == b->fmt.pix.pixelformat &&
+      a->fmt.pix.field == b->fmt.pix.field)
+    return 1;
+
+  return 0;
+}
+
+static void v4l2_set_src_and_dest_format(int index,
+  struct v4l2_format *src_fmt, struct v4l2_format *dest_fmt)
+{
+  /* Sigh some drivers (pwc) do not properly reflect what one really gets
+     after a s_fmt in their try_fmt answer. So update dest format (which we
+     report as result from s_fmt / g_fmt to the app) with all info from the src
+     format not changed by conversion */
+  dest_fmt->fmt.pix.field = src_fmt->fmt.pix.field;
+  dest_fmt->fmt.pix.colorspace = src_fmt->fmt.pix.colorspace;
+  /* When we're not converting use bytesperline and imagesize from src_fmt */
+  if (v4l2_pix_fmt_identical(src_fmt, dest_fmt)) {
+    dest_fmt->fmt.pix.bytesperline = src_fmt->fmt.pix.bytesperline;
+    dest_fmt->fmt.pix.sizeimage = src_fmt->fmt.pix.sizeimage;
+  }
+
+  devices[index].src_fmt = *src_fmt;
+  devices[index].dest_fmt = *dest_fmt;
+}
+
 int v4l2_ioctl (int fd, unsigned long int request, ...)
 {
   void *arg;
@@ -734,8 +764,10 @@ int v4l2_ioctl (int fd, unsigned long int request, ...)
     case VIDIOC_S_FMT:
       {
 	struct v4l2_format src_fmt, *dest_fmt = arg;
+	struct v4l2_pix_format req_pix_fmt;
 
-	if (!memcmp(&devices[index].dest_fmt, dest_fmt, sizeof(*dest_fmt))) {
+	if (v4l2_pix_fmt_identical(&devices[index].dest_fmt, dest_fmt)) {
+	  *dest_fmt = devices[index].dest_fmt;
 	  result = 0;
 	  break;
 	}
@@ -775,8 +807,9 @@ int v4l2_ioctl (int fd, unsigned long int request, ...)
 
 	/* Maybe after try format has adjusted width/height etc, to whats
 	   available nothing has changed (on the cam side) ? */
-	if (!memcmp(&devices[index].src_fmt, &src_fmt, sizeof(src_fmt))) {
-	  devices[index].dest_fmt = *dest_fmt;
+	if (v4l2_pix_fmt_identical(&devices[index].src_fmt, &src_fmt)) {
+	  v4l2_set_src_and_dest_format(index, &devices[index].src_fmt,
+				       dest_fmt);
 	  result = 0;
 	  break;
 	}
@@ -784,6 +817,7 @@ int v4l2_ioctl (int fd, unsigned long int request, ...)
 	if ((result = v4l2_check_buffer_change_ok(index)))
 	  break;
 
+	req_pix_fmt = src_fmt.fmt.pix;
 	result = syscall(SYS_ioctl, devices[index].fd, VIDIOC_S_FMT, &src_fmt);
 	if (result) {
 	  saved_err = errno;
@@ -793,9 +827,17 @@ int v4l2_ioctl (int fd, unsigned long int request, ...)
 	  errno = saved_err;
 	  break;
 	}
+	/* See if we've gotten what try_fmt promised us
+	   (this check should never fail) */
+	if (src_fmt.fmt.pix.width != req_pix_fmt.width ||
+	    src_fmt.fmt.pix.height != req_pix_fmt.height ||
+	    src_fmt.fmt.pix.pixelformat != req_pix_fmt.pixelformat) {
+	  V4L2_LOG_ERR("set_fmt gave us a different result then try_fmt!\n");
+	  /* Not what we expected / wanted, disable conversion */
+	  *dest_fmt = src_fmt;
+	}
 
-	devices[index].src_fmt = src_fmt;
-	devices[index].dest_fmt = *dest_fmt;
+	v4l2_set_src_and_dest_format(index, &src_fmt, dest_fmt);
       }
       break;
 

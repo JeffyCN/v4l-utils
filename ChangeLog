@@ -1,3 +1,17 @@
+libv4l-0.5.2
+------------
+* Add Philips SPC210NC to list of cams with upside down sensor, reported by
+  Rieker Flaik
+* Work around some drivers (pwc) not properly reflecting what one gets after a
+  s_fmt in their try_fmt answer
+* Check that s_fmt atleast gives us the width, height and pixelformat try_fmt
+  promised us, and if not disable conversion
+* Only check width, height and pixelformat when checking if we are doing
+  conversion, instead of doing a memcmp, as that are the only things which
+  the convert code checks
+* Take into account that the buffers only contain half of the lines when
+  field is V4L2_FIELD_ALTERNATE
+
 libv4l-0.5.1
 ------------
 * Add support for software cropping from 352x288 -> 320x240 / 176x144 ->
