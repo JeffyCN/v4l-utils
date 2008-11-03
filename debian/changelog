@@ -1,6 +1,10 @@
 libv4l (0.5.3-1) unstable; urgency=low
 
+  [ Gregor Jasny ]
   * New Upstream Version
+
+  [ Loic Minier ]
+  * Move .gbp.conf to debian/gbp.conf.
 
  -- Gregor Jasny <gjasny@web.de>  Mon, 27 Oct 2008 21:56:36 +0100
 
