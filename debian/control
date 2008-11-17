@@ -25,7 +25,7 @@ Description: Collection of video4linux support libraries
  consists of 3 different libraries: libv4lconvert, libv4l1 and libv4l2.
  .
  libv4lconvert offers functions to convert from any (known) pixelformat
- to V4l2_PIX_FMT_BGR24 or V4l2_PIX_FMT_YUV420.
+ to BGR24, RGB24, YUV420 and YVU420.
  .
  libv4l1 offers the (deprecated) v4l1 API on top of v4l2 devices, independent
  of the drivers for those devices supporting v4l1 compatibility (which many
@@ -59,7 +59,7 @@ Description: Collection of video4linux support libraries (32 bit)
  This package contains the 32 bit version of the libraries.
  .
  libv4lconvert offers functions to convert from any (known) pixelformat
- to V4l2_PIX_FMT_BGR24 or V4l2_PIX_FMT_YUV420.
+ to BGR24, RGB24, YUV420 and YVU420.
  .
  libv4l1 offers the (deprecated) v4l1 API on top of v4l2 devices, independent
  of the drivers for those devices supporting v4l1 compatibility (which many
