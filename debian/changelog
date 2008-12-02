@@ -1,3 +1,10 @@
+libv4l (0.5.7-1) unstable; urgency=low
+
+  * New Upstream Version
+    - Fixes a try_fmt handling bug with UVC cameras (Closes: #507280)
+
+ -- Gregor Jasny <gjasny@web.de>  Wed, 03 Dec 2008 00:14:57 +0100
+
 libv4l (0.5.6-1) unstable; urgency=low
 
   * New Upstream Version
