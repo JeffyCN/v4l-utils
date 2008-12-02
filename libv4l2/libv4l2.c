@@ -760,6 +760,9 @@ int v4l2_ioctl (int fd, unsigned long int request, ...)
 
     case VIDIOC_ENUM_FRAMEINTERVALS:
       result = v4lconvert_enum_frameintervals(devices[index].convert, arg);
+      if (result)
+        V4L2_LOG("ENUM_FRAMEINTERVALS Error: %s", 
+          v4lconvert_get_error_message(devices[index].convert));
       break;
 
     case VIDIOC_TRY_FMT:
@@ -771,10 +774,10 @@ int v4l2_ioctl (int fd, unsigned long int request, ...)
 	struct v4l2_format src_fmt, *dest_fmt = arg;
 	struct v4l2_pix_format req_pix_fmt;
 
-        /* Don't be lazy on uvc cams, as this triggers a bug in the uvcvideo
-           driver in kernel <= 2.6.28 (with certain cams) */
+	/* Don't be lazy on uvc cams, as this triggers a bug in the uvcvideo
+	   driver in kernel <= 2.6.28 (with certain cams) */
 	if (!(devices[index].flags & V4L2_IS_UVC) &&
- 	    v4l2_pix_fmt_identical(&devices[index].dest_fmt, dest_fmt)) {
+	    v4l2_pix_fmt_identical(&devices[index].dest_fmt, dest_fmt)) {
 	  *dest_fmt = devices[index].dest_fmt;
 	  result = 0;
 	  break;
@@ -949,7 +952,7 @@ int v4l2_ioctl (int fd, unsigned long int request, ...)
 	   but we need the buffer _now_ to write our converted data
 	   to it! */
 	if (devices[index].convert_mmap_buf == MAP_FAILED) {
-	  devices[index].convert_mmap_buf = (void *)syscall(SYS_mmap2,
+	  devices[index].convert_mmap_buf = (void *)syscall(SYS_mmap2, NULL,
 						   (size_t)(
 						     devices[index].no_frames *
 						     V4L2_FRAME_BUF_SIZE),
