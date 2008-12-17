@@ -40,6 +40,7 @@ Architecture: any
 Depends: libv4l-0 (= ${binary:Version}),
          ${shlibs:Depends},
          ${misc:Depends}
+Suggests: pkg-config (>= 0.18)
 Description: Collection of video4linux support libraries (development files)
  This package contains development files (headers and static libraries).
 
