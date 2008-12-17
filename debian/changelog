@@ -1,3 +1,10 @@
+libv4l (0.5.7-2) unstable; urgency=low
+
+  * Add .private suffix to Requires pkg-config field to
+    avoid excessive library dependencies (Closes: #509031)
+
+ -- Gregor Jasny <gjasny@web.de>  Wed, 17 Dec 2008 22:07:24 +0100
+
 libv4l (0.5.7-1) unstable; urgency=low
 
   * New Upstream Version
