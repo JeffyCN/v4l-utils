@@ -1,0 +1,14 @@
+# debian
+/build-stamp
+/debian/files
+/debian/*.debhelper.log
+/debian/*.debhelper
+/debian/*.substvars
+/debian/tmp/
+/debian/libv4l-0/
+/debian/libv4l-dev/
+# upstream
+*.a
+*.d
+*.o
+*.pc
