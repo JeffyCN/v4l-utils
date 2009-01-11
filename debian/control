@@ -13,7 +13,6 @@ Vcs-Git: git://git.debian.org/git/collab-maint/libv4l.git
 Homepage: http://people.atrpms.net/~hdegoede/
 
 Package: libv4l-0
-Section: libs
 Architecture: any
 Depends: ${shlibs:Depends},
          ${misc:Depends}
@@ -45,7 +44,6 @@ Description: Collection of video4linux support libraries (development files)
  This package contains development files (headers and static libraries).
 
 Package: lib32v4l-0
-Section: libs
 Architecture: amd64
 Depends: libv4l-0 (= ${binary:Version}),
          ${shlibs:Depends},

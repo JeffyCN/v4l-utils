@@ -1,6 +1,11 @@
 libv4l (0.5.8-1) unstable; urgency=low
 
+  [ Gregor Jasny ]
   * New Upstream Version
+
+  [ Loic Minier ]
+  * Drop Section: libs from binary packages and rely on the Source's Section,
+    per lintian.
 
  -- Gregor Jasny <gjasny@web.de>  Sun, 11 Jan 2009 15:32:37 +0100
 
