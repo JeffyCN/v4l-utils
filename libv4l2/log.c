@@ -119,9 +119,9 @@ void v4l2_log_ioctl(unsigned long int request, void *arg, int result)
   switch (request) {
     case VIDIOC_ENUM_FMT:
       {
-        struct v4l2_fmtdesc *fmt = arg;
-        fprintf(v4l2_log_file, "  index: %u, description: %s\n",
-          fmt->index, (result < 0) ? "" : fmt->description);
+	struct v4l2_fmtdesc *fmt = arg;
+	fprintf(v4l2_log_file, "  index: %u, description: %s\n",
+	  fmt->index, (result < 0) ? "" : (const char *)fmt->description);
       }
       break;
     case VIDIOC_G_FMT:
@@ -167,23 +167,23 @@ void v4l2_log_ioctl(unsigned long int request, void *arg, int result)
 	  (pixfmt >> 8) & 0xff,
 	  (pixfmt >> 16) & 0xff,
 	  pixfmt >> 24);
-        switch (frmsize->type) {
-          case V4L2_FRMSIZE_TYPE_DISCRETE:
-            fprintf(v4l2_log_file, " %ux%u\n", frmsize->discrete.width,
-              frmsize->discrete.height);
-            break;
+	switch (frmsize->type) {
+	  case V4L2_FRMSIZE_TYPE_DISCRETE:
+	    fprintf(v4l2_log_file, " %ux%u\n", frmsize->discrete.width,
+	      frmsize->discrete.height);
+	    break;
 	  case V4L2_FRMSIZE_TYPE_CONTINUOUS:
 	  case V4L2_FRMSIZE_TYPE_STEPWISE:
-            fprintf(v4l2_log_file, " %ux%u -> %ux%u\n",
-              frmsize->stepwise.min_width, frmsize->stepwise.min_height,
-              frmsize->stepwise.max_width, frmsize->stepwise.max_height);
+	    fprintf(v4l2_log_file, " %ux%u -> %ux%u\n",
+	      frmsize->stepwise.min_width, frmsize->stepwise.min_height,
+	      frmsize->stepwise.max_width, frmsize->stepwise.max_height);
 	    break;
-        }
+	}
       }
       break;
     case VIDIOC_ENUM_FRAMEINTERVALS:
       {
-        struct v4l2_frmivalenum *frmival = arg;
+	struct v4l2_frmivalenum *frmival = arg;
 	int pixfmt = frmival->pixel_format;
 
 	fprintf(v4l2_log_file, "  index: %u pixelformat: %c%c%c%c %ux%u: ",
@@ -194,20 +194,20 @@ void v4l2_log_ioctl(unsigned long int request, void *arg, int result)
 	  pixfmt >> 24,
 	  frmival->width,
 	  frmival->height);
-        switch (frmival->type) {
-          case V4L2_FRMIVAL_TYPE_DISCRETE:
-            fprintf(v4l2_log_file, "%u/%u\n", frmival->discrete.numerator,
-              frmival->discrete.denominator);
-            break;
+	switch (frmival->type) {
+	  case V4L2_FRMIVAL_TYPE_DISCRETE:
+	    fprintf(v4l2_log_file, "%u/%u\n", frmival->discrete.numerator,
+	      frmival->discrete.denominator);
+	    break;
 	  case V4L2_FRMIVAL_TYPE_CONTINUOUS:
 	  case V4L2_FRMIVAL_TYPE_STEPWISE:
-            fprintf(v4l2_log_file, "%u/%u -> %u/%u\n",
-              frmival->stepwise.min.numerator,
-              frmival->stepwise.min.denominator,
-              frmival->stepwise.max.numerator,
-              frmival->stepwise.max.denominator);
+	    fprintf(v4l2_log_file, "%u/%u -> %u/%u\n",
+	      frmival->stepwise.min.numerator,
+	      frmival->stepwise.min.denominator,
+	      frmival->stepwise.max.numerator,
+	      frmival->stepwise.max.denominator);
 	    break;
-        }
+	}
       }
       break;
 #endif

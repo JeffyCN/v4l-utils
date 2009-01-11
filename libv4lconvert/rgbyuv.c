@@ -339,7 +339,59 @@ void v4lconvert_yvyu_to_rgb24(const unsigned char *src, unsigned char *dest,
   }
 }
 
-void v4lconvert_yvyu_to_yuv420(const unsigned char *src, unsigned char *dest,
+void v4lconvert_uyvy_to_bgr24(const unsigned char *src, unsigned char *dest,
+  int width, int height)
+{
+  int j;
+
+  while (--height >= 0) {
+    for (j = 0; j < width; j += 2) {
+      int u = src[0];
+      int v = src[2];
+      int u1 = (((u - 128) << 7) +  (u - 128)) >> 6;
+      int rg = (((u - 128) << 1) +  (u - 128) +
+		((v - 128) << 2) + ((v - 128) << 1)) >> 3;
+      int v1 = (((v - 128) << 1) +  (v - 128)) >> 1;
+
+      *dest++ = CLIP(src[1] + u1);
+      *dest++ = CLIP(src[1] - rg);
+      *dest++ = CLIP(src[1] + v1);
+
+      *dest++ = CLIP(src[3] + u1);
+      *dest++ = CLIP(src[3] - rg);
+      *dest++ = CLIP(src[3] + v1);
+      src += 4;
+    }
+  }
+}
+
+void v4lconvert_uyvy_to_rgb24(const unsigned char *src, unsigned char *dest,
+  int width, int height)
+{
+  int j;
+
+  while (--height >= 0) {
+    for (j = 0; j < width; j += 2) {
+      int u = src[0];
+      int v = src[2];
+      int u1 = (((u - 128) << 7) +  (u - 128)) >> 6;
+      int rg = (((u - 128) << 1) +  (u - 128) +
+		((v - 128) << 2) + ((v - 128) << 1)) >> 3;
+      int v1 = (((v - 128) << 1) +  (v - 128)) >> 1;
+
+      *dest++ = CLIP(src[1] + v1);
+      *dest++ = CLIP(src[1] - rg);
+      *dest++ = CLIP(src[1] + u1);
+
+      *dest++ = CLIP(src[3] + v1);
+      *dest++ = CLIP(src[3] - rg);
+      *dest++ = CLIP(src[3] + u1);
+      src += 4;
+    }
+  }
+}
+
+void v4lconvert_uyvy_to_yuv420(const unsigned char *src, unsigned char *dest,
   int width, int height, int yvu)
 {
   int i, j;
@@ -350,8 +402,8 @@ void v4lconvert_yvyu_to_yuv420(const unsigned char *src, unsigned char *dest,
   src1 = src;
   for (i = 0; i < height; i++) {
     for (j = 0; j < width; j += 2) {
-      *dest++ = src1[0];
-      *dest++ = src1[2];
+      *dest++ = src1[1];
+      *dest++ = src1[3];
       src1 += 4;
     }
   }
@@ -368,8 +420,8 @@ void v4lconvert_yvyu_to_yuv420(const unsigned char *src, unsigned char *dest,
   }
   for (i = 0; i < height; i += 2) {
     for (j = 0; j < width; j += 2) {
-      *udest++ = ((int) src[2] + src1[2]) / 2;	/* U */
-      *vdest++ = ((int) src[0] + src1[0]) / 2;	/* V */
+      *udest++ = ((int) src[0] + src1[0]) / 2;	/* U */
+      *vdest++ = ((int) src[2] + src1[2]) / 2;	/* V */
       src += 4;
       src1 += 4;
     }
