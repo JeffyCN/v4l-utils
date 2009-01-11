@@ -1,3 +1,9 @@
+libv4l (0.5.8-1) unstable; urgency=low
+
+  * New Upstream Version
+
+ -- Gregor Jasny <gjasny@web.de>  Sun, 11 Jan 2009 15:32:37 +0100
+
 libv4l (0.5.7-2) unstable; urgency=low
 
   * Add .private suffix to Requires pkg-config field to
