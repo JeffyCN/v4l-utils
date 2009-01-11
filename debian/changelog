@@ -6,6 +6,7 @@ libv4l (0.5.8-1) unstable; urgency=low
   [ Loic Minier ]
   * Drop Section: libs from binary packages and rely on the Source's Section,
     per lintian.
+  * Expand descriptions slightly for consistency; thanks lintian again.
 
  -- Gregor Jasny <gjasny@web.de>  Sun, 11 Jan 2009 15:32:37 +0100
 
