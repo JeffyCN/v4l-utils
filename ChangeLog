@@ -1,3 +1,16 @@
+libv4l-0.5.8
+------------
+* Add support for UYVY (for USB Apple iSight) patch by Julien BLACHE
+  <jb@jblache.org>
+* Remove v4lconvert_yvyu_to_yuv420 function as its functionality is
+  duplicate with v4lconvert_yuyv_to_yuv420
+* Use Requires.private where appropiate in .pc files (patch by Gregor Jasny)
+* Switch to using USB-id's instead of USB product string, as not all devices
+  set a unique product string. This fixes the upside down issues with
+  genius e-messenger 112 cams
+* Add support for sn9c20x-i420 format patch by Vasily Khoruzhick
+  <anarsoul@gmail.com>
+
 libv4l-0.5.7
 ------------
 * Fix a nasty (and stupid) bug in the special try_fmt handling for UVC cams
