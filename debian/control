@@ -1,13 +1,13 @@
 Source: libv4l
 Section: libs
 Priority: optional
-Maintainer: Gregor Jasny <gjasny@web.de>
+Maintainer: Gregor Jasny <gjasny@googlemail.com>
 Uploaders: Kees Cook <kees@outflux.net>,
            Loic Minier <lool@dooz.org>
 Build-Depends: debhelper (>= 7),
                linux-libc-dev (>= 2.6.19),
                gcc-multilib [amd64]
-Standards-Version: 3.8.0
+Standards-Version: 3.8.1
 Vcs-Browser: http://git.debian.org/?p=collab-maint/libv4l.git
 Vcs-Git: git://git.debian.org/git/collab-maint/libv4l.git
 Homepage: http://people.atrpms.net/~hdegoede/

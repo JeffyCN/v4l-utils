@@ -1,6 +1,8 @@
 libv4l (0.5.9-1) unstable; urgency=low
 
   * New Upstream Version
+  * Changed maintainers email address
+  * Bumped standards to version 3.8.1 (no changes needed)
 
  -- Gregor Jasny <gjasny@googlemail.com>  Fri, 13 Mar 2009 20:22:46 +0100
 
