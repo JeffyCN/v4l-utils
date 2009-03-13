@@ -43,6 +43,14 @@
 #define V4L2_PIX_FMT_PAC207 v4l2_fourcc('P','2','0','7')
 #endif
 
+#ifndef V4L2_PIX_FMT_MR97310A
+#define V4L2_PIX_FMT_MR97310A v4l2_fourcc('M','3','1','0')
+#endif
+
+#ifndef V4L2_PIX_FMT_SQ905C
+#define V4L2_PIX_FMT_SQ905C v4l2_fourcc('9', '0', '5', 'C')
+#endif
+
 #ifndef V4L2_PIX_FMT_PJPG
 #define V4L2_PIX_FMT_PJPG v4l2_fourcc('P', 'J', 'P', 'G')
 #endif
@@ -61,6 +69,10 @@
 
 #ifndef V4L2_PIX_FMT_YVYU
 #define V4L2_PIX_FMT_YVYU v4l2_fourcc('Y', 'V', 'Y', 'U')
+#endif
+
+#ifndef V4L2_PIX_FMT_HM12
+#define V4L2_PIX_FMT_HM12 v4l2_fourcc('H', 'M', '1', '2')
 #endif
 
 #ifndef V4L2_PIX_FMT_SN9C20X_I420
@@ -173,6 +185,12 @@ void v4lconvert_decode_sn9c10x(const unsigned char *src, unsigned char *dst,
 void v4lconvert_decode_pac207(const unsigned char *src, unsigned char *dst,
   int width, int height);
 
+void v4lconvert_decode_mr97310a(const unsigned char *src, unsigned char *dst,
+  int width, int height);
+
+void v4lconvert_decode_sq905c(const unsigned char *src, unsigned char *dst,
+  int width, int height);
+
 void v4lconvert_bayer_to_rgb24(const unsigned char *bayer,
   unsigned char *rgb, int width, int height, unsigned int pixfmt);
 
@@ -181,6 +199,15 @@ void v4lconvert_bayer_to_bgr24(const unsigned char *bayer,
 
 void v4lconvert_bayer_to_yuv420(const unsigned char *bayer, unsigned char *yuv,
   int width, int height, unsigned int src_pixfmt, int yvu);
+
+void v4lconvert_hm12_to_rgb24(const unsigned char *src,
+  unsigned char *dst, int width, int height);
+
+void v4lconvert_hm12_to_bgr24(const unsigned char *src,
+  unsigned char *dst, int width, int height);
+
+void v4lconvert_hm12_to_yuv420(const unsigned char *src,
+  unsigned char *dst, int width, int height, int yvu);
 
 void v4lconvert_rotate(unsigned char *src, unsigned char *dest,
   int width, int height, unsigned int pix_fmt, int rotate);
