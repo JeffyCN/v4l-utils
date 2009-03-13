@@ -1,4 +1,4 @@
-override CPPFLAGS += -I../include -I../../../../linux/include -fvisibility=hidden
+override CPPFLAGS += -I../include -I../../../include -fvisibility=hidden
 
 CFLAGS := -g -O1
 CFLAGS += -Wall -Wno-unused -Wpointer-arith -Wstrict-prototypes -Wmissing-prototypes
@@ -10,8 +10,9 @@ CONVERT_LIB   = libv4lconvert.so
 override CPPFLAGS += -fPIC
 endif
 
-CONVERT_OBJS  = libv4lconvert.o tinyjpeg.o sn9c10x.o sn9c20x.o pac207.o flip.o crop.o \
-		jidctflt.o spca561-decompress.o rgbyuv.o spca501.o bayer.o
+CONVERT_OBJS  = libv4lconvert.o tinyjpeg.o sn9c10x.o sn9c20x.o pac207.o \
+		mr97310a.o flip.o crop.o jidctflt.o spca561-decompress.o \
+		rgbyuv.o spca501.o sq905c.o bayer.o hm12.o
 TARGETS       = $(CONVERT_LIB) libv4lconvert.pc
 INCLUDES      = ../include/libv4lconvert.h
 
@@ -57,7 +58,7 @@ endif
 	install -m 644 libv4lconvert.pc $(DESTDIR)$(LIBDIR)/pkgconfig
 
 clean::
-	rm -f *.a *.so* *.o *.d libv4lconvert.pc log *~
+	rm -f *.a *.so* *.o *.d libv4lconvert.pc log *~ *.orig *.rej
 
 %.o: %.c
 	$(CC) -c -MMD $(CPPFLAGS) $(CFLAGS) -o $@ $<

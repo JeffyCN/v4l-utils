@@ -44,23 +44,26 @@ static void v4lconvert_get_framesizes(struct v4lconvert_data *data,
    v4lconvert_try_format for low resolutions */
 static const struct v4lconvert_pixfmt supported_src_pixfmts[] = {
   SUPPORTED_DST_PIXFMTS,
-  { V4L2_PIX_FMT_YUYV,    0 },
-  { V4L2_PIX_FMT_YVYU,    0 },
-  { V4L2_PIX_FMT_UYVY,    0 },
+  { V4L2_PIX_FMT_YUYV,         0 },
+  { V4L2_PIX_FMT_YVYU,         0 },
+  { V4L2_PIX_FMT_UYVY,         0 },
   { V4L2_PIX_FMT_SN9C20X_I420, 0 },
-  { V4L2_PIX_FMT_SBGGR8,  0 },
-  { V4L2_PIX_FMT_SGBRG8,  0 },
-  { V4L2_PIX_FMT_SGRBG8,  0 },
-  { V4L2_PIX_FMT_SRGGB8,  0 },
-  { V4L2_PIX_FMT_SPCA501, 0 },
-  { V4L2_PIX_FMT_SPCA505, 0 },
-  { V4L2_PIX_FMT_SPCA508, 0 },
-  { V4L2_PIX_FMT_MJPEG,   V4LCONVERT_COMPRESSED },
-  { V4L2_PIX_FMT_JPEG,    V4LCONVERT_COMPRESSED },
-  { V4L2_PIX_FMT_SPCA561, V4LCONVERT_COMPRESSED },
-  { V4L2_PIX_FMT_SN9C10X, V4LCONVERT_COMPRESSED },
-  { V4L2_PIX_FMT_PAC207,  V4LCONVERT_COMPRESSED },
-  { V4L2_PIX_FMT_PJPG,    V4LCONVERT_COMPRESSED },
+  { V4L2_PIX_FMT_SBGGR8,       0 },
+  { V4L2_PIX_FMT_SGBRG8,       0 },
+  { V4L2_PIX_FMT_SGRBG8,       0 },
+  { V4L2_PIX_FMT_SRGGB8,       0 },
+  { V4L2_PIX_FMT_SPCA501,      0 },
+  { V4L2_PIX_FMT_SPCA505,      0 },
+  { V4L2_PIX_FMT_SPCA508,      0 },
+  { V4L2_PIX_FMT_HM12,         0 },
+  { V4L2_PIX_FMT_MJPEG,        V4LCONVERT_COMPRESSED },
+  { V4L2_PIX_FMT_JPEG,         V4LCONVERT_COMPRESSED },
+  { V4L2_PIX_FMT_SPCA561,      V4LCONVERT_COMPRESSED },
+  { V4L2_PIX_FMT_SN9C10X,      V4LCONVERT_COMPRESSED },
+  { V4L2_PIX_FMT_PAC207,       V4LCONVERT_COMPRESSED },
+  { V4L2_PIX_FMT_MR97310A,     V4LCONVERT_COMPRESSED },
+  { V4L2_PIX_FMT_SQ905C,       V4LCONVERT_COMPRESSED },
+  { V4L2_PIX_FMT_PJPG,         V4LCONVERT_COMPRESSED },
 };
 
 static const struct v4lconvert_pixfmt supported_dst_pixfmts[] = {
@@ -602,10 +605,30 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
       break;
     }
 
+    /* Conexant cx2341x raw video macroblock format */
+    case V4L2_PIX_FMT_HM12:
+      switch (dest_pix_fmt) {
+      case V4L2_PIX_FMT_RGB24:
+	v4lconvert_hm12_to_rgb24(src, dest, width, height);
+	break;
+      case V4L2_PIX_FMT_BGR24:
+	v4lconvert_hm12_to_bgr24(src, dest, width, height);
+	break;
+      case V4L2_PIX_FMT_YUV420:
+	v4lconvert_hm12_to_yuv420(src, dest, width, height, 0);
+	break;
+      case V4L2_PIX_FMT_YVU420:
+	v4lconvert_hm12_to_yuv420(src, dest, width, height, 1);
+	break;
+      }
+      break;
+
     /* compressed bayer formats */
     case V4L2_PIX_FMT_SPCA561:
     case V4L2_PIX_FMT_SN9C10X:
     case V4L2_PIX_FMT_PAC207:
+    case V4L2_PIX_FMT_MR97310A:
+    case V4L2_PIX_FMT_SQ905C:
     {
       unsigned char *tmpbuf;
 
@@ -626,6 +649,14 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 	case V4L2_PIX_FMT_PAC207:
 	  v4lconvert_decode_pac207(src, tmpbuf, width, height);
 	  src_pix_fmt = V4L2_PIX_FMT_SBGGR8;
+	  break;
+	case V4L2_PIX_FMT_MR97310A:
+	  v4lconvert_decode_mr97310a(src, tmpbuf, width, height);
+	  src_pix_fmt = V4L2_PIX_FMT_SBGGR8;
+	  break;
+	case V4L2_PIX_FMT_SQ905C:
+	  v4lconvert_decode_sq905c(src, tmpbuf, width, height);
+	  src_pix_fmt = V4L2_PIX_FMT_SRGGB8;
 	  break;
       }
       src = tmpbuf;
