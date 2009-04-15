@@ -1,3 +1,35 @@
+libv4l-0.5.97
+-------------
+* As the version number shows this is a beta release of the 0.6.x series,
+  the big change here is the addition of video processing to libv4l
+  currently this only does whitebalance and normalizing (which turns out
+  to be useless for most cams) but the basic framework for doing video
+  processing, and being able to control it through fake v4l2 controls using
+  for example v4l2ucp is there.
+  The initial version of this code was written by 3 of my computer science
+  students: Elmar Kleijn, Sjoerd Piepenbrink and Radjnies Bhansingh
+* Currently whitebalancing gets enabled based on USB-ID's and it only gets
+  enabled for Pixart webcam's. You can force it being enabled with other
+  webcams by setting the environment variable LIBV4LCONTROL_CONTROLS, this
+  sets a bitmask enabling certain v4l2 controls which control the video
+  processing set it to 15 to enable both whitebalancing and normalize. You
+  can then change the settings using a v4l2 control panel like v4l2ucp
+* Only report / allow supported destination formats in enum_fmt / try_fmt /
+  g_fmt / s_fmt when processing, rotating or flipping.
+* Some applications / libs (*cough* gstreamer *cough*) will not work
+  correctly with planar YUV formats when the width is not a multiple of 8,
+  so crop widths which are not a multiple of 8 to the nearest multiple of 8
+  when converting to planar YUV
+* Add dependency generation to libv4l by: Gilles Gigan <gilles.gigan@gmail.com>
+* Add support to use orientation from VIDIOC_ENUMINPUT by:
+  Adam Baker <linux@baker-net.org.uk>
+* sn9c20x cams have occasional bad jpeg frames, drop these to avoid the
+  flickering effect they cause, by: Brian Johnson <brijohn@gmail.com>
+* adjust libv4l's upside down cam detection to also work with devices
+  which have the usb interface as parent instead of the usb device
+* fix libv4l upside down detection for the new v4l minor numbering scheme
+* fix reading outside of the source memory when doing yuv420->rgb conversion
+
 libv4l-0.5.9
 ------------
 * Add support for MR97310A decompression by Kyle Guinn <elyk03@gmail.com>
