@@ -10,6 +10,8 @@ CONVERT_LIB   = libv4lconvert.so
 override CPPFLAGS += -fPIC
 endif
 
+LIBS_libv4lconvert = -lrt
+
 CONVERT_OBJS  = libv4lconvert.o tinyjpeg.o sn9c10x.o sn9c20x.o pac207.o \
 		mr97310a.o flip.o crop.o jidctflt.o spca561-decompress.o \
 		rgbyuv.o spca501.o sq905c.o bayer.o hm12.o \
@@ -44,6 +46,7 @@ libv4lconvert.pc:
 	@echo 'Description: v4l format conversion library' >> libv4lconvert.pc
 	@echo 'Version: '$(V4L2_LIB_VERSION) >> libv4lconvert.pc
 	@echo 'Libs: -L$${libdir} -lv4lconvert' >> libv4lconvert.pc
+	@echo 'Libs.private: -lrt' >> libv4lconvert.pc
 	@echo 'Cflags: -I$${prefix}/include' >> libv4lconvert.pc
 
 install: all
@@ -73,7 +76,7 @@ clean::
 	$(CC) -c $(CPPFLAGS) $(CFLAGS) -o $@ $<
 
 %.so:
-	$(CC) -shared $(LDFLAGS) -Wl,-soname,$@.$(LIB_RELEASE) -o $@.$(LIB_RELEASE) $^
+	$(CC) -shared $(LDFLAGS) -Wl,-soname,$@.$(LIB_RELEASE) -o $@.$(LIB_RELEASE) $^ $(LIBS_$*)
 	ln -f -s $@.$(LIB_RELEASE) $@
 
 %.a:
