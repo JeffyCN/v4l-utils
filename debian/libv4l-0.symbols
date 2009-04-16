@@ -27,4 +27,9 @@ libv4lconvert.so.0 libv4l-0 #MINVER#
  v4lconvert_enum_framesizes@Base 0.5.0
  v4lconvert_get_error_message@Base 0.5.0
  v4lconvert_needs_conversion@Base 0.5.0
+ v4lconvert_supported_dst_fmt_only@Base 0.5.97
+ v4lconvert_supported_dst_format@Base 0.5.97
  v4lconvert_try_format@Base 0.5.0
+ v4lconvert_vidioc_g_ctrl@Base 0.5.97
+ v4lconvert_vidioc_queryctrl@Base 0.5.97
+ v4lconvert_vidioc_s_ctrl@Base 0.5.97

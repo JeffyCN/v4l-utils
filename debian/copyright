@@ -9,7 +9,7 @@ Upstream Author:
 
 Copyright:
 
-    Copyright (C) 2008 Hans de Goede
+    Copyright (C) 2008-2009 Hans de Goede
 
 License:
 
@@ -38,6 +38,17 @@ Bayer pattern decoding functions
 
 CX2341X HM12 conversion routines
   * Copyright (C) 2009 Hans Verkuil <hverkuil@xs4all.nl>
+
+Libv4l Control:
+  * Copyright (C) 2008-2009 Elmar Kleijn <elmar_kleijn@hotmail.com>
+  * Copyright (C) 2008-2009 Sjoerd Piepenbrink <need4weed@gmail.com>
+  * Copyright (C) 2008-2009 Radjnies Bhansingh <radjnies@gmail.com>
+  * Copyright (C) 2008-2009 Hans de Goede <hdegoede@redhat.com>
+
+Libv4l Processing:
+  * Copyright (C) 2008-2009 Elmar Kleijn <elmar_kleijn@hotmail.com>
+  * Copyright (C) 2008-2009 Sjoerd Piepenbrink <need4weed@gmail.com>
+  * Copyright (C) 2008-2009 Hans de Goede <hdegoede@redhat.com>
 
 MR97310A decoder
   * Copyright (C) 2004 Theodore Kilgore <kilgota@auburn.edu>
