@@ -77,6 +77,7 @@
 #define V4L2_STREAM_CONTROLLED_BY_READ	0x0400
 #define V4L2_SUPPORTS_READ		0x0800
 #define V4L2_IS_UVC			0x1000
+#define V4L2_STREAM_TOUCHED		0x2000
 
 #define V4L2_MMAP_OFFSET_MAGIC      0xABCDEF00u
 
@@ -364,12 +365,20 @@ static int v4l2_deactivate_read_stream(int index)
   return 0;
 }
 
+static int v4l2_needs_conversion(int index)
+{
+  if (!(devices[index].flags & V4L2_DISABLE_CONVERSION))
+    return v4lconvert_needs_conversion(devices[index].convert,
+			    &devices[index].src_fmt, &devices[index].dest_fmt);
+
+  return 0;
+}
+
 static int v4l2_buffers_mapped(int index)
 {
   unsigned int i;
 
-  if (devices[index].src_fmt.fmt.pix.pixelformat ==
-      devices[index].dest_fmt.fmt.pix.pixelformat) {
+  if (!v4l2_needs_conversion(index)) {
     /* Normal (no conversion) mode */
     struct v4l2_buffer buf;
 
@@ -516,14 +525,6 @@ int v4l2_fd_open(int fd, int v4l2_flags)
 
   V4L2_LOG("open: %d\n", fd);
 
-  if (v4lconvert_supported_dst_fmt_only(convert) &&
-      !v4lconvert_supported_dst_format(fmt.fmt.pix.pixelformat)) {
-    V4L2_LOG("open %d: setting pixelformat to RGB24\n", fd);
-    fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_RGB24;
-    v4l2_ioctl(fd, VIDIOC_S_FMT, &fmt);
-    V4L2_LOG("open %d: done setting pixelformat\n", fd);
-  }
-
   return fd;
 }
 
@@ -566,7 +567,6 @@ int v4l2_close(int fd)
 
   /* Free resources */
   v4l2_unmap_buffers(index);
-  v4lconvert_destroy(devices[index].convert);
   if (devices[index].convert_mmap_buf != MAP_FAILED) {
     if (v4l2_buffers_mapped(index))
       V4L2_LOG_WARN("v4l2 mmap buffers still mapped on close()\n");
@@ -575,6 +575,7 @@ int v4l2_close(int fd)
 	      devices[index].no_frames * V4L2_FRAME_BUF_SIZE);
     devices[index].convert_mmap_buf = MAP_FAILED;
   }
+  v4lconvert_destroy(devices[index].convert);
 
   /* Remove the fd from our list of managed fds before closing it, because as
      soon as we've done the actual close the fd maybe returned by an open in
@@ -667,7 +668,7 @@ int v4l2_ioctl (int fd, unsigned long int request, ...)
 {
   void *arg;
   va_list ap;
-  int result, converting, index, saved_err;
+  int result, index, saved_err;
   int is_capture_request = 0, stream_needs_locking = 0;
 
   va_start (ap, request);
@@ -695,16 +696,17 @@ int v4l2_ioctl (int fd, unsigned long int request, ...)
       break;
     case VIDIOC_ENUM_FMT:
       if (((struct v4l2_fmtdesc *)arg)->type == V4L2_BUF_TYPE_VIDEO_CAPTURE &&
-	  (devices[index].flags & V4L2_ENABLE_ENUM_FMT_EMULATION))
+	  !(devices[index].flags & V4L2_DISABLE_CONVERSION))
 	is_capture_request = 1;
       break;
     case VIDIOC_ENUM_FRAMESIZES:
     case VIDIOC_ENUM_FRAMEINTERVALS:
-      if (devices[index].flags & V4L2_ENABLE_ENUM_FMT_EMULATION)
+      if (!(devices[index].flags & V4L2_DISABLE_CONVERSION))
 	is_capture_request = 1;
       break;
     case VIDIOC_TRY_FMT:
-      if (((struct v4l2_format *)arg)->type == V4L2_BUF_TYPE_VIDEO_CAPTURE)
+      if (((struct v4l2_format *)arg)->type == V4L2_BUF_TYPE_VIDEO_CAPTURE &&
+	  !(devices[index].flags & V4L2_DISABLE_CONVERSION))
 	is_capture_request = 1;
       break;
     case VIDIOC_S_FMT:
@@ -746,11 +748,27 @@ int v4l2_ioctl (int fd, unsigned long int request, ...)
   }
 
 
-  if (stream_needs_locking)
-    pthread_mutex_lock(&devices[index].stream_lock);
+  if (stream_needs_locking) {
+    /* If this is the first stream related ioctl, and we should only allow
+       libv4lconvert supported destination formats (so that it can do flipping,
+       processing, etc.) and the current destination format is not supported,
+       try setting the format to RGB24 (which is a supported dest. format). */
+    if (!(devices[index].flags & V4L2_STREAM_TOUCHED) &&
+	!(devices[index].flags & V4L2_DISABLE_CONVERSION) &&
+	v4lconvert_supported_dst_fmt_only(devices[index].convert) &&
+	!v4lconvert_supported_dst_format(
+			      devices[index].dest_fmt.fmt.pix.pixelformat)) {
+      struct v4l2_format fmt = devices[index].dest_fmt;
 
-  converting = v4lconvert_needs_conversion(devices[index].convert,
-			 &devices[index].src_fmt, &devices[index].dest_fmt);
+      V4L2_LOG("Setting pixelformat to RGB24 (supported_dst_fmt_only)");
+      devices[index].flags |= V4L2_STREAM_TOUCHED;
+      fmt.fmt.pix.pixelformat = V4L2_PIX_FMT_RGB24;
+      v4l2_ioctl(fd, VIDIOC_S_FMT, &fmt);
+      V4L2_LOG("Done setting pixelformat (supported_dst_fmt_only)");
+    }
+    pthread_mutex_lock(&devices[index].stream_lock);
+    devices[index].flags |= V4L2_STREAM_TOUCHED;
+  }
 
   switch (request) {
     case VIDIOC_QUERYCTRL:
@@ -931,7 +949,7 @@ int v4l2_ioctl (int fd, unsigned long int request, ...)
 	/* Do a real query even when converting to let the driver fill in
 	   things like buf->field */
 	result = syscall(SYS_ioctl, devices[index].fd, VIDIOC_QUERYBUF, buf);
-	if (result || !converting)
+	if (result || !v4l2_needs_conversion(index))
 	  break;
 
 	buf->m.offset = V4L2_MMAP_OFFSET_MAGIC | buf->index;
@@ -949,7 +967,7 @@ int v4l2_ioctl (int fd, unsigned long int request, ...)
 	  break;
 
       /* With some drivers the buffers must be mapped before queuing */
-      if (converting)
+      if (v4l2_needs_conversion(index))
 	if ((result = v4l2_map_buffers(index)))
 	  break;
 
@@ -964,7 +982,7 @@ int v4l2_ioctl (int fd, unsigned long int request, ...)
 	  if ((result = v4l2_deactivate_read_stream(index)))
 	    break;
 
-	if (!converting) {
+	if (!v4l2_needs_conversion(index)) {
 	  result = syscall(SYS_ioctl, devices[index].fd, VIDIOC_DQBUF, buf);
 	  if (result) {
 	    int saved_err = errno;
@@ -1051,8 +1069,7 @@ ssize_t v4l2_read (int fd, void* dest, size_t n)
   /* When not converting and the device supports read let the kernel handle
      it */
   if ((devices[index].flags & V4L2_SUPPORTS_READ) &&
-      !v4lconvert_needs_conversion(devices[index].convert,
-		   &devices[index].src_fmt, &devices[index].dest_fmt)) {
+      !v4l2_needs_conversion(index)) {
     result = syscall(SYS_read, fd, dest, n);
     goto leave;
   }
@@ -1111,8 +1128,7 @@ void *v4l2_mmap(void *start, size_t length, int prot, int flags, int fd,
   buffer_index = offset & 0xff;
   if (buffer_index >= devices[index].no_frames ||
       /* Got magic offset and not converting ?? */
-      !v4lconvert_needs_conversion(devices[index].convert,
-		   &devices[index].src_fmt, &devices[index].dest_fmt)) {
+      !v4l2_needs_conversion(index)) {
     errno = EINVAL;
     result = MAP_FAILED;
     goto leave;

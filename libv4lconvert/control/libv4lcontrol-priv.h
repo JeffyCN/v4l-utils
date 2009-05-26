@@ -24,27 +24,31 @@
 
 #define V4LCONTROL_SHM_SIZE 4096
 
-#define V4LCONTROL_WANTS_WB    (1 << V4LCONTROL_WHITEBALANCE)
-#define V4LCONTROL_WANTS_NORM  ((1 << V4LCONTROL_NORMALIZE) | \
-				(1 << V4LCONTROL_NORM_LOW_BOUND) | \
-				(1 << V4LCONTROL_NORM_HIGH_BOUND))
+#define V4LCONTROL_SUPPORTS_NEXT_CTRL 0x01
+
+struct v4lcontrol_flags_info;
 
 struct v4lcontrol_data {
   int fd;                   /* Device fd */
-  int flags;                /* Special flags for this device */
+  int flags;                /* Flags for this device */
+  int priv_flags;           /* Internal use only flags */
   int controls;             /* Which controls to use for this device */
   unsigned int *shm_values; /* shared memory control value store */
+  unsigned int old_values[V4LCONTROL_COUNT]; /* for controls_changed() */
+  const struct v4lcontrol_flags_info *flags_info;
 };
 
 struct v4lcontrol_flags_info {
   unsigned short vendor_id;
   unsigned short product_id;
   unsigned short product_mask;
+  const char *dmi_board_vendor;
+  const char *dmi_board_name;
 /* We could also use the USB manufacturer and product strings some devices have
   const char *manufacturer;
   const char *product; */
   int flags;
-  int controls;
+  int default_gamma;
 };
 
 #endif
