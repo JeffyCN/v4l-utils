@@ -83,6 +83,7 @@
 #define V4L2_PIX_FMT_SN9C20X_I420  v4l2_fourcc('S', '9', '2', '0')
 #endif
 
+#define ARRAY_SIZE(x) ((int)sizeof(x)/(int)sizeof((x)[0]))
 
 #define V4LCONVERT_ERROR_MSG_SIZE 256
 #define V4LCONVERT_MAX_FRAMESIZES 16
@@ -96,7 +97,8 @@
 #define V4LCONVERT_IS_SN9C20X            0x02
 
 /* Pixformat flags */
-#define V4LCONVERT_COMPRESSED 0x01
+#define V4LCONVERT_COMPRESSED            0x01 /* Compressed format */
+#define V4LCONVERT_NEEDS_CONVERSION      0x02 /* Apps likely wont know this */
 
 struct v4lconvert_data {
   int fd;
@@ -126,6 +128,8 @@ struct v4lconvert_pixfmt {
   unsigned int fmt;
   int flags;
 };
+
+void v4lconvert_fixup_fmt(struct v4l2_format *fmt);
 
 void v4lconvert_rgb24_to_yuv420(const unsigned char *src, unsigned char *dest,
   const struct v4l2_format *src_fmt, int bgr, int yvu);
@@ -215,7 +219,7 @@ void v4lconvert_rotate90(unsigned char *src, unsigned char *dest,
   struct v4l2_format *fmt);
 
 void v4lconvert_flip(unsigned char *src, unsigned char *dest,
-  struct v4l2_format *fmt, int flags);
+  struct v4l2_format *fmt, int hflip, int vflip);
 
 void v4lconvert_crop(unsigned char *src, unsigned char *dest,
   const struct v4l2_format *src_fmt, const struct v4l2_format *dest_fmt);

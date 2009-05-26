@@ -1,3 +1,9 @@
+libv4l (0.5.98-1) experimental; urgency=low
+
+  * New Upstream Version
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Tue, 26 May 2009 19:56:21 +0200
+
 libv4l (0.5.97-1) experimental; urgency=low
 
   * New Upstream Version

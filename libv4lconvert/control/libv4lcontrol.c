@@ -56,22 +56,38 @@
 static const struct v4lcontrol_flags_info v4lcontrol_flags[] = {
 /* First: Upside down devices */
   /* Philips SPC200NC */
-  { 0x0471, 0x0325, 0, V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED, 0 },
+  { 0x0471, 0x0325, 0, NULL, NULL, V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   /* Philips SPC300NC */
-  { 0x0471, 0x0326, 0, V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED, 0 },
+  { 0x0471, 0x0326, 0, NULL, NULL, V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   /* Philips SPC210NC */
-  { 0x0471, 0x032d, 0, V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED, 0 },
-  /* Genius E-M 112 */
-  { 0x093a, 0x2476, 0, V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED, 0 },
-/* Second: devices which can benifit from software video processing */
+  { 0x0471, 0x032d, 0, NULL, NULL, V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
+  /* Genius E-M 112 (also want whitebalance by default) */
+  { 0x093a, 0x2476, 0, NULL, NULL,
+    V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED|V4LCONTROL_WANTS_WB, 1500 },
+  /* Asus N50Vn laptop */
+  { 0x04f2, 0xb106, 0, "ASUSTeK Computer Inc.        ", "N50Vn      ",
+    V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
+/* Second: devices which should use some software processing by default */
   /* Pac207 based devices */
-  { 0x041e, 0x4028, 0,    0, V4LCONTROL_WANTS_WB },
-  { 0x093a, 0x2460, 0x1f, 0, V4LCONTROL_WANTS_WB },
-  { 0x145f, 0x013a, 0,    0, V4LCONTROL_WANTS_WB },
-  { 0x2001, 0xf115, 0,    0, V4LCONTROL_WANTS_WB },
+  { 0x041e, 0x4028, 0,    NULL, NULL, V4LCONTROL_WANTS_WB, 1500 },
+  { 0x093a, 0x2460, 0x1f, NULL, NULL, V4LCONTROL_WANTS_WB, 1500 },
+  { 0x145f, 0x013a, 0,    NULL, NULL, V4LCONTROL_WANTS_WB, 1500 },
+  { 0x2001, 0xf115, 0,    NULL, NULL, V4LCONTROL_WANTS_WB, 1500 },
   /* Pac7302 based devices */
-  { 0x093a, 0x2620, 0x0f, V4LCONTROL_ROTATED_90_JPEG, V4LCONTROL_WANTS_WB },
+  { 0x093a, 0x2620, 0x0f, NULL, NULL,
+    V4LCONTROL_ROTATED_90_JPEG|V4LCONTROL_WANTS_WB },
+  /* Pac7311 based devices */
+  { 0x093a, 0x2600, 0x0f, NULL, NULL, V4LCONTROL_WANTS_WB },
+  /* sq905 devices */
+  { 0x2770, 0x9120, 0,    NULL, NULL, V4LCONTROL_WANTS_WB },
+  /* spca561 revison 12a devices */
+  { 0x041e, 0x403b, 0,    NULL, NULL, V4LCONTROL_WANTS_WB_AUTOGAIN },
+  { 0x046d, 0x0928, 7,    NULL, NULL, V4LCONTROL_WANTS_WB_AUTOGAIN },
+  /* logitech quickcam express stv06xx + pb0100 */
+  { 0x046d, 0x0840, 0,    NULL, NULL, V4LCONTROL_WANTS_WB },
 };
+
+static const struct v4l2_queryctrl fake_controls[];
 
 static void v4lcontrol_init_flags(struct v4lcontrol_data *data)
 {
@@ -80,6 +96,8 @@ static void v4lcontrol_init_flags(struct v4lcontrol_data *data)
   char sysfs_name[512];
   unsigned short vendor_id = 0;
   unsigned short product_id = 0;
+  char dmi_board_vendor[512] = "";
+  char dmi_board_name[512]= "";
   int i, minor;
   char c, *s, buf[32];
   struct v4l2_input input;
@@ -158,30 +176,90 @@ static void v4lcontrol_init_flags(struct v4lcontrol_data *data)
       return; /* Should never happen */
   }
 
+  /* Get DMI board vendor and name */
+  f = fopen("/sys/devices/virtual/dmi/id/board_vendor", "r");
+  if (f) {
+    s = fgets(dmi_board_vendor, sizeof(dmi_board_vendor), f);
+    if (s)
+      s[strlen(s) - 1] = 0;
+    fclose(f);
+  }
+
+  f = fopen("/sys/devices/virtual/dmi/id/board_name", "r");
+  if (f) {
+    s = fgets(dmi_board_name, sizeof(dmi_board_name), f);
+    if (s)
+      s[strlen(s) - 1] = 0;
+    fclose(f);
+  }
+
   for (i = 0; i < ARRAY_SIZE(v4lcontrol_flags); i++)
     if (v4lcontrol_flags[i].vendor_id == vendor_id &&
 	v4lcontrol_flags[i].product_id ==
-	  (product_id & ~v4lcontrol_flags[i].product_mask)) {
+	  (product_id & ~v4lcontrol_flags[i].product_mask) &&
+	(v4lcontrol_flags[i].dmi_board_vendor == NULL ||
+	 !strcmp(v4lcontrol_flags[i].dmi_board_vendor, dmi_board_vendor)) &&
+	(v4lcontrol_flags[i].dmi_board_name == NULL ||
+	 !strcmp(v4lcontrol_flags[i].dmi_board_name, dmi_board_name))) {
       data->flags |= v4lcontrol_flags[i].flags;
-      data->controls = v4lcontrol_flags[i].controls;
+      data->flags_info = &v4lcontrol_flags[i];
       break;
     }
 }
 
-struct v4lcontrol_data *v4lcontrol_create(int fd)
+struct v4lcontrol_data *v4lcontrol_create(int fd, int always_needs_conversion)
 {
   int shm_fd;
-  int init = 0;
+  int i, init = 0;
   char *s, shm_name[256];
   struct v4l2_capability cap;
+  struct v4l2_queryctrl ctrl;
 
   struct v4lcontrol_data *data = calloc(1, sizeof(struct v4lcontrol_data));
 
   if (!data)
     return NULL;
 
+  data->fd = fd;
+
+  v4lcontrol_init_flags(data);
+
+  /* Allow overriding through environment */
+  if ((s = getenv("LIBV4LCONTROL_FLAGS")))
+    data->flags = strtol(s, NULL, 0);
+
+  ctrl.id = V4L2_CTRL_FLAG_NEXT_CTRL;
+  if (syscall(SYS_ioctl, data->fd, VIDIOC_QUERYCTRL, &ctrl) == 0)
+    data->priv_flags |= V4LCONTROL_SUPPORTS_NEXT_CTRL;
+
+  /* If the device always needs conversion, we can add fake controls at no cost
+     (no cost when not activated by the user that is) */
+  if (always_needs_conversion || v4lcontrol_needs_conversion(data)) {
+    for (i = 0; i < V4LCONTROL_AUTO_ENABLE_COUNT; i++) {
+      ctrl.id = fake_controls[i].id;
+      if (syscall(SYS_ioctl, data->fd, VIDIOC_QUERYCTRL, &ctrl) == -1)
+	data->controls |= 1 << i;
+    }
+  }
+
+  if (data->flags & V4LCONTROL_WANTS_AUTOGAIN)
+    data->controls |= 1 << V4LCONTROL_AUTOGAIN |
+		      1 << V4LCONTROL_AUTOGAIN_TARGET;
+
+  /* Allow overriding through environment */
+  if ((s = getenv("LIBV4LCONTROL_CONTROLS")))
+    data->controls = strtol(s, NULL, 0);
+
+  if (data->controls == 0)
+    return data; /* No need to create a shared memory segment */
+
   syscall(SYS_ioctl, fd, VIDIOC_QUERYCAP, &cap);
   snprintf(shm_name, 256, "/%s:%s", cap.bus_info, cap.card);
+
+  /* / is not allowed inside shm names */
+  for (i = 1; shm_name[i]; i++)
+    if (shm_name[i] == '/')
+      shm_name[i] = '-';
 
   /* Open the shared memory object identified by shm_name */
   if ((shm_fd = shm_open(shm_name, (O_CREAT | O_EXCL | O_RDWR),
@@ -204,20 +282,16 @@ struct v4lcontrol_data *v4lcontrol_create(int fd)
   if (init) {
     /* Initialize the new shm object we created */
     memset(data->shm_values, 0, sizeof(V4LCONTROL_SHM_SIZE));
-    data->shm_values[V4LCONTROL_WHITEBALANCE] = 1;
-    data->shm_values[V4LCONTROL_NORM_HIGH_BOUND] = 255;
+
+    for (i = 0; i < V4LCONTROL_COUNT; i++)
+      data->shm_values[i] = fake_controls[i].default_value;
+
+    if (data->flags & V4LCONTROL_WANTS_WB)
+      data->shm_values[V4LCONTROL_WHITEBALANCE] = 1;
+
+    if (data->flags_info && data->flags_info->default_gamma)
+      data->shm_values[V4LCONTROL_GAMMA] = data->flags_info->default_gamma;
   }
-
-  data->fd = fd;
-
-  v4lcontrol_init_flags(data);
-
-  /* Allow overriding through environment */
-  if ((s = getenv("LIBV4LCONTROL_FLAGS")))
-    data->flags = strtol(s, NULL, 0);
-
-  if ((s = getenv("LIBV4LCONTROL_CONTROLS")))
-    data->controls = strtol(s, NULL, 0);
 
   return data;
 
@@ -228,16 +302,58 @@ error:
 
 void v4lcontrol_destroy(struct v4lcontrol_data *data)
 {
-  munmap(data->shm_values, V4LCONTROL_SHM_SIZE);
+  if (data->controls)
+    munmap(data->shm_values, V4LCONTROL_SHM_SIZE);
   free(data);
 }
 
 /* FIXME get better CID's for normalize */
-struct v4l2_queryctrl fake_controls[V4LCONTROL_COUNT] = {
+static const struct v4l2_queryctrl fake_controls[V4LCONTROL_COUNT] = {
 {
   .id = V4L2_CID_AUTO_WHITE_BALANCE,
   .type = V4L2_CTRL_TYPE_BOOLEAN,
-  .name =  "Whitebalance",
+  .name =  "Whitebalance (software)",
+  .minimum = 0,
+  .maximum = 1,
+  .step = 1,
+  .default_value = 0,
+  .flags = 0
+},
+{
+  .id = V4L2_CID_HFLIP,
+  .type = V4L2_CTRL_TYPE_BOOLEAN,
+  .name =  "Horizontal flip",
+  .minimum = 0,
+  .maximum = 1,
+  .step = 1,
+  .default_value = 0,
+  .flags = 0
+},
+{
+  .id = V4L2_CID_VFLIP,
+  .type = V4L2_CTRL_TYPE_BOOLEAN,
+  .name =  "Vertical flip",
+  .minimum = 0,
+  .maximum = 1,
+  .step = 1,
+  .default_value = 0,
+  .flags = 0
+},
+{
+  .id = V4L2_CID_GAMMA,
+  .type = V4L2_CTRL_TYPE_INTEGER,
+  .name =  "Gamma (software)",
+  .minimum = 500,  /* == 0.5 */
+  .maximum = 3000, /* == 3.0 */
+  .step = 1,
+  .default_value = 1000, /* == 1.0 */
+  .flags = 0
+},
+{}, /* Dummy place holder for V4LCONTROL_AUTO_ENABLE_COUNT */
+{
+  .id = V4L2_CID_AUTOGAIN,
+  .type = V4L2_CTRL_TYPE_BOOLEAN,
+  .name =  "Auto Gain (software)",
   .minimum = 0,
   .maximum = 1,
   .step = 1,
@@ -245,50 +361,71 @@ struct v4l2_queryctrl fake_controls[V4LCONTROL_COUNT] = {
   .flags = 0
 },
 {
-  .id = V4L2_CID_DO_WHITE_BALANCE,
-  .type = V4L2_CTRL_TYPE_BOOLEAN,
-  .name =  "Normalize",
-  .minimum = 0,
-  .maximum = 1,
-  .step = 1,
-  .default_value = 0,
-  .flags = 0
-},
-{
-  .id = V4L2_CID_BLACK_LEVEL,
+  .id = V4L2_CTRL_CLASS_USER + 0x2000, /* FIXME */
   .type = V4L2_CTRL_TYPE_INTEGER,
-  .name =  "Normalize: low bound",
+  .name =  "Auto Gain target",
   .minimum = 0,
-  .maximum = 127,
-  .step = 1,
-  .default_value = 0,
-  .flags = 0
-},
-{
-  .id = V4L2_CID_WHITENESS,
-  .type = V4L2_CTRL_TYPE_INTEGER,
-  .name =  "Normalize: high bound",
-  .minimum = 128,
   .maximum = 255,
   .step = 1,
-  .default_value = 255,
+  .default_value = 100,
   .flags = 0
 },
 };
+
+static void v4lcontrol_copy_queryctrl(struct v4lcontrol_data *data,
+  struct v4l2_queryctrl *ctrl, int i)
+{
+  memcpy(ctrl, &fake_controls[i], sizeof(struct v4l2_queryctrl));
+
+  /* Hmm, not pretty */
+  if (ctrl->id == V4L2_CID_AUTO_WHITE_BALANCE &&
+      (data->flags & V4LCONTROL_WANTS_WB))
+    ctrl->default_value = 1;
+
+  if (ctrl->id == V4L2_CID_GAMMA && data->flags_info &&
+      data->flags_info->default_gamma)
+    ctrl->default_value = data->flags_info->default_gamma;
+}
 
 int v4lcontrol_vidioc_queryctrl(struct v4lcontrol_data *data, void *arg)
 {
   int i;
   struct v4l2_queryctrl *ctrl = arg;
+  int retval;
+  __u32 orig_id=ctrl->id;
 
+  /* if we have an exact match return it */
   for (i = 0; i < V4LCONTROL_COUNT; i++)
     if ((data->controls & (1 << i)) &&
 	ctrl->id == fake_controls[i].id) {
-      memcpy(ctrl, &fake_controls[i], sizeof(struct v4l2_queryctrl));
+      v4lcontrol_copy_queryctrl(data, ctrl, i);
       return 0;
     }
 
-  return syscall(SYS_ioctl, data->fd, VIDIOC_QUERYCTRL, arg);
+  /* find out what the kernel driver would respond. */
+  retval = syscall(SYS_ioctl, data->fd, VIDIOC_QUERYCTRL, arg);
+
+  if ((data->priv_flags & V4LCONTROL_SUPPORTS_NEXT_CTRL) &&
+      (orig_id & V4L2_CTRL_FLAG_NEXT_CTRL)) {
+    /* If the hardware has no more controls check if we still have any
+       fake controls with a higher id then the hardware's highest */
+    if (retval)
+      ctrl->id = V4L2_CTRL_FLAG_NEXT_CTRL;
+
+    /* If any of our controls have an id > orig_id but less than
+       ctrl->id then return that control instead. Note we do not
+       break when we have a match, but keep iterating, so that
+       we end up with the fake ctrl with the lowest CID > orig_id. */
+    for (i = 0; i < V4LCONTROL_COUNT; i++)
+      if ((data->controls & (1 << i)) &&
+	  (fake_controls[i].id > (orig_id & ~V4L2_CTRL_FLAG_NEXT_CTRL)) &&
+	  (fake_controls[i].id <= ctrl->id)) {
+	v4lcontrol_copy_queryctrl(data, ctrl, i);
+	retval = 0;
+      }
+  }
+
+  return retval;
 }
 
 int v4lcontrol_vidioc_g_ctrl(struct v4lcontrol_data *data, void *arg)
@@ -334,10 +471,29 @@ int v4lcontrol_get_flags(struct v4lcontrol_data *data)
 
 int v4lcontrol_get_ctrl(struct v4lcontrol_data *data, int ctrl)
 {
-  if (data->controls & (1 << ctrl))
+  if (data->controls & (1 << ctrl)) {
+    /* Special case for devices with flipped input */
+    if ((ctrl == V4LCONTROL_HFLIP && (data->flags & V4LCONTROL_HFLIPPED)) ||
+	(ctrl == V4LCONTROL_VFLIP && (data->flags & V4LCONTROL_VFLIPPED)))
+      return !data->shm_values[ctrl];
+
     return data->shm_values[ctrl];
+  }
 
   return 0;
+}
+
+int v4lcontrol_controls_changed(struct v4lcontrol_data *data)
+{
+  int res;
+
+  res = memcmp(data->shm_values, data->old_values,
+	       V4LCONTROL_COUNT * sizeof(unsigned int));
+
+  memcpy(data->old_values, data->shm_values,
+	 V4LCONTROL_COUNT * sizeof(unsigned int));
+
+  return res;
 }
 
 /* See the comment about this in libv4lconvert.h */

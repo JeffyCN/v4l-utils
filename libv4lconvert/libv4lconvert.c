@@ -27,7 +27,6 @@
 #include "libv4lconvert-priv.h"
 
 #define MIN(a,b) (((a)<(b))?(a):(b))
-#define ARRAY_SIZE(x) ((int)sizeof(x)/(int)sizeof((x)[0]))
 
 /* Note for proper functioning of v4lconvert_enum_fmt the first entries in
   supported_src_pixfmts must match with the entries in supported_dst_pixfmts */
@@ -47,15 +46,15 @@ static const struct v4lconvert_pixfmt supported_src_pixfmts[] = {
   { V4L2_PIX_FMT_YUYV,         0 },
   { V4L2_PIX_FMT_YVYU,         0 },
   { V4L2_PIX_FMT_UYVY,         0 },
-  { V4L2_PIX_FMT_SN9C20X_I420, 0 },
-  { V4L2_PIX_FMT_SBGGR8,       0 },
-  { V4L2_PIX_FMT_SGBRG8,       0 },
-  { V4L2_PIX_FMT_SGRBG8,       0 },
-  { V4L2_PIX_FMT_SRGGB8,       0 },
-  { V4L2_PIX_FMT_SPCA501,      0 },
-  { V4L2_PIX_FMT_SPCA505,      0 },
-  { V4L2_PIX_FMT_SPCA508,      0 },
-  { V4L2_PIX_FMT_HM12,         0 },
+  { V4L2_PIX_FMT_SN9C20X_I420, V4LCONVERT_NEEDS_CONVERSION },
+  { V4L2_PIX_FMT_SBGGR8,       V4LCONVERT_NEEDS_CONVERSION },
+  { V4L2_PIX_FMT_SGBRG8,       V4LCONVERT_NEEDS_CONVERSION },
+  { V4L2_PIX_FMT_SGRBG8,       V4LCONVERT_NEEDS_CONVERSION },
+  { V4L2_PIX_FMT_SRGGB8,       V4LCONVERT_NEEDS_CONVERSION },
+  { V4L2_PIX_FMT_SPCA501,      V4LCONVERT_NEEDS_CONVERSION },
+  { V4L2_PIX_FMT_SPCA505,      V4LCONVERT_NEEDS_CONVERSION },
+  { V4L2_PIX_FMT_SPCA508,      V4LCONVERT_NEEDS_CONVERSION },
+  { V4L2_PIX_FMT_HM12,         V4LCONVERT_NEEDS_CONVERSION },
   { V4L2_PIX_FMT_MJPEG,        V4LCONVERT_COMPRESSED },
   { V4L2_PIX_FMT_JPEG,         V4LCONVERT_COMPRESSED },
   { V4L2_PIX_FMT_SPCA561,      V4LCONVERT_COMPRESSED },
@@ -88,6 +87,10 @@ struct v4lconvert_data *v4lconvert_create(int fd)
   int i, j;
   struct v4lconvert_data *data = calloc(1, sizeof(struct v4lconvert_data));
   struct v4l2_capability cap;
+  /* This keeps tracks of devices which have only formats for which apps
+     most likely will need conversion and we can thus safely add software
+     processing controls without a performance impact. */
+  int always_needs_conversion = 1;
 
   if (!data)
     return NULL;
@@ -107,8 +110,13 @@ struct v4lconvert_data *v4lconvert_create(int fd)
       if (fmt.pixelformat == supported_src_pixfmts[j].fmt) {
 	data->supported_src_formats |= 1 << j;
 	v4lconvert_get_framesizes(data, fmt.pixelformat, j);
+	if (!supported_src_pixfmts[j].flags)
+	  always_needs_conversion = 0;
 	break;
       }
+
+    if (j == ARRAY_SIZE(supported_src_pixfmts))
+      always_needs_conversion = 0;
   }
 
   data->no_formats = i;
@@ -119,16 +127,19 @@ struct v4lconvert_data *v4lconvert_create(int fd)
       data->flags |= V4LCONVERT_IS_UVC;
     else if (!strcmp((char *)cap.driver, "sn9c20x"))
       data->flags |= V4LCONVERT_IS_SN9C20X;
+
+    if ((cap.capabilities & 0xff) & ~V4L2_CAP_VIDEO_CAPTURE)
+      always_needs_conversion = 0;
   }
 
-  data->control = v4lcontrol_create(fd);
+  data->control = v4lcontrol_create(fd, always_needs_conversion);
   if (!data->control) {
     free(data);
     return NULL;
   }
   data->control_flags = v4lcontrol_get_flags(data->control);
 
-  data->processing = v4lprocessing_create(data->control);
+  data->processing = v4lprocessing_create(fd, data->control);
   if (!data->processing) {
     v4lcontrol_destroy(data->control);
     free(data);
@@ -321,7 +332,7 @@ static int v4lconvert_do_try_format(struct v4lconvert_data *data,
   return 0;
 }
 
-static void v4lconvert_fixup_fmt(struct v4l2_format *fmt)
+void v4lconvert_fixup_fmt(struct v4l2_format *fmt)
 {
   switch (fmt->fmt.pix.pixelformat) {
   case V4L2_PIX_FMT_RGB24:
@@ -365,7 +376,8 @@ int v4lconvert_try_format(struct v4lconvert_data *data,
 
   /* In case of a non exact resolution match, see if this is a well known
      resolution some apps are hardcoded too and try to give the app what it
-     asked for by cropping a slightly larger resolution */
+     asked for by cropping a slightly larger resolution or adding a small
+     black border to a slightly smaller resolution */
   if (try_dest.fmt.pix.width != desired_width ||
       try_dest.fmt.pix.height != desired_height) {
     for (i = 0; i < ARRAY_SIZE(v4lconvert_crop_res); i++) {
@@ -379,13 +391,20 @@ int v4lconvert_try_format(struct v4lconvert_data *data,
 	try2_dest.fmt.pix.height = desired_height * 124 / 100;
 	result = v4lconvert_do_try_format(data, &try2_dest, &try2_src);
 	if (result == 0 &&
-	    ((try2_dest.fmt.pix.width >= desired_width &&
+	    (/* Add a small black border of max 16 pixels */
+	     (try2_dest.fmt.pix.width >= desired_width - 16 &&
+	      try2_dest.fmt.pix.width <= desired_width &&
+	      try2_dest.fmt.pix.height >= desired_height - 16 &&
+	      try2_dest.fmt.pix.height <= desired_height) ||
+	     /* Standard cropping to max 80% of actual width / height */
+	     (try2_dest.fmt.pix.width >= desired_width &&
 	      try2_dest.fmt.pix.width <= desired_width * 5 / 4 &&
 	      try2_dest.fmt.pix.height >= desired_height &&
 	      try2_dest.fmt.pix.height <= desired_height * 5 / 4) ||
+	     /* Downscale 2x + cropping to max 80% of actual width / height */
 	     (try2_dest.fmt.pix.width >= desired_width * 2 &&
 	      try2_dest.fmt.pix.width <= desired_width * 5 / 2 &&
-	      try2_dest.fmt.pix.height >= desired_height &&
+	      try2_dest.fmt.pix.height >= desired_height * 2 &&
 	      try2_dest.fmt.pix.height <= desired_height * 5 / 2))) {
 	  /* Success! */
 	  try2_dest.fmt.pix.width = desired_width;
@@ -697,6 +716,8 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
       }
       /* Do processing on the tmp buffer, because doing it on bayer data is
 	 cheaper, and bayer == rgb and our dest_fmt may be yuv */
+      tmpfmt.fmt.pix.bytesperline = width;
+      tmpfmt.fmt.pix.sizeimage = width * height;
       v4lprocessing_processing(data->processing, tmpbuf, &tmpfmt);
       /* Deliberate fall through to raw bayer fmt code! */
       src_pix_fmt = tmpfmt.fmt.pix.pixelformat;
@@ -854,7 +875,8 @@ int v4lconvert_convert(struct v4lconvert_data *data,
   const struct v4l2_format *dest_fmt, /* in */
   unsigned char *src, int src_size, unsigned char *dest, int dest_size)
 {
-  int res, dest_needed, temp_needed, processing, convert = 0, crop = 0;
+  int res, dest_needed, temp_needed, processing, convert = 0;
+  int rotate90, vflip, hflip, crop;
   unsigned char *convert1_dest = dest;
   unsigned char *convert2_src = src, *convert2_dest = dest;
   unsigned char *rotate90_src = src, *rotate90_dest = dest;
@@ -864,14 +886,15 @@ int v4lconvert_convert(struct v4lconvert_data *data,
   struct v4l2_format my_dest_fmt = *dest_fmt;
 
   processing = v4lprocessing_pre_processing(data->processing);
+  rotate90 = data->control_flags & V4LCONTROL_ROTATED_90_JPEG;
+  hflip = v4lcontrol_get_ctrl(data->control, V4LCONTROL_HFLIP);
+  vflip = v4lcontrol_get_ctrl(data->control, V4LCONTROL_VFLIP);
+  crop = my_dest_fmt.fmt.pix.width != my_src_fmt.fmt.pix.width ||
+	 my_dest_fmt.fmt.pix.height != my_src_fmt.fmt.pix.height;
 
   if (/* If no conversion/processing is needed */
-      (src_fmt->fmt.pix.width == dest_fmt->fmt.pix.width &&
-       src_fmt->fmt.pix.height == dest_fmt->fmt.pix.height &&
-       src_fmt->fmt.pix.pixelformat == dest_fmt->fmt.pix.pixelformat &&
-       !processing &&
-       !(data->control_flags & (V4LCONTROL_ROTATED_90_JPEG |
-				V4LCONTROL_VFLIPPED | V4LCONTROL_HFLIPPED))) ||
+      (src_fmt->fmt.pix.pixelformat == dest_fmt->fmt.pix.pixelformat &&
+       !processing && !rotate90 && !hflip && !vflip && !crop) ||
       /* or if we should do processing/rotating/flipping but the app tries to
 	 use the native cam format, we just return an unprocessed frame copy */
       !v4lconvert_supported_dst_format(dest_fmt->fmt.pix.pixelformat)) {
@@ -923,10 +946,6 @@ int v4lconvert_convert(struct v4lconvert_data *data,
   else if (my_dest_fmt.fmt.pix.pixelformat != my_src_fmt.fmt.pix.pixelformat)
     convert = 1;
 
-  if (my_dest_fmt.fmt.pix.width != my_src_fmt.fmt.pix.width ||
-      my_dest_fmt.fmt.pix.height != my_src_fmt.fmt.pix.height)
-    crop = 1;
-
   /* convert_pixfmt (only if convert == 2) -> processing -> convert_pixfmt ->
      rotate -> flip -> crop, all steps are optional */
   if (convert == 2) {
@@ -939,8 +958,7 @@ int v4lconvert_convert(struct v4lconvert_data *data,
     convert2_src = convert1_dest;
   }
 
-  if (convert && ((data->control_flags & (V4LCONTROL_ROTATED_90_JPEG |
-			V4LCONTROL_VFLIPPED | V4LCONTROL_HFLIPPED)) || crop)) {
+  if (convert && (rotate90 || hflip || vflip || crop)) {
     convert2_dest = v4lconvert_alloc_buffer(data, temp_needed,
 		     &data->convert2_buf, &data->convert2_buf_size);
     if (!convert2_dest)
@@ -949,9 +967,7 @@ int v4lconvert_convert(struct v4lconvert_data *data,
     rotate90_src = flip_src = crop_src = convert2_dest;
   }
 
-  if ((data->control_flags & V4LCONTROL_ROTATED_90_JPEG) &&
-      ((data->control_flags & (V4LCONTROL_VFLIPPED | V4LCONTROL_HFLIPPED)) ||
-       crop)) {
+  if (rotate90 && (hflip || vflip || crop)) {
     rotate90_dest = v4lconvert_alloc_buffer(data, temp_needed,
 		    &data->rotate90_buf, &data->rotate90_buf_size);
     if (!rotate90_dest)
@@ -960,8 +976,7 @@ int v4lconvert_convert(struct v4lconvert_data *data,
     flip_src = crop_src = rotate90_dest;
   }
 
-  if ((data->control_flags & (V4LCONTROL_VFLIPPED | V4LCONTROL_HFLIPPED)) &&
-      crop) {
+  if ((vflip || hflip) && crop) {
     flip_dest = v4lconvert_alloc_buffer(data, temp_needed, &data->flip_buf,
 					&data->flip_buf_size);
     if (!flip_dest)
@@ -993,19 +1008,19 @@ int v4lconvert_convert(struct v4lconvert_data *data,
       return res;
 
     src_size = my_src_fmt.fmt.pix.sizeimage;
+
+    /* We call processing here again in case the source format was not
+       rgb, but the dest is. v4lprocessing checks it self it only actually
+       does the processing once per frame. */
+    if (processing)
+      v4lprocessing_processing(data->processing, convert2_dest, &my_src_fmt);
   }
 
-  /* We call processing here again in case the source format was not
-     rgb, but the dest is. v4lprocessing checks it self it only actually
-     does the processing once per frame. */
-  if (processing)
-    v4lprocessing_processing(data->processing, rotate90_src, &my_src_fmt);
-
-  if (data->control_flags & V4LCONTROL_ROTATED_90_JPEG)
+  if (rotate90)
     v4lconvert_rotate90(rotate90_src, rotate90_dest, &my_src_fmt);
 
-  if (data->control_flags & (V4LCONTROL_VFLIPPED | V4LCONTROL_HFLIPPED))
-    v4lconvert_flip(flip_src, flip_dest, &my_src_fmt, data->control_flags);
+  if (hflip || vflip)
+    v4lconvert_flip(flip_src, flip_dest, &my_src_fmt, hflip, vflip);
 
   if (crop)
     v4lconvert_crop(crop_src, dest, &my_src_fmt, &my_dest_fmt);

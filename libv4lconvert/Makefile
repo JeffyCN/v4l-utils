@@ -3,6 +3,8 @@ override CPPFLAGS += -I../include -I../../../include -fvisibility=hidden
 CFLAGS := -g -O1
 CFLAGS += -Wall -Wno-unused -Wpointer-arith -Wstrict-prototypes -Wmissing-prototypes
 
+LIBS_libv4lconvert = -lrt
+
 ifeq ($(LINKTYPE),static)
 CONVERT_LIB   = libv4lconvert.a
 else
@@ -10,13 +12,12 @@ CONVERT_LIB   = libv4lconvert.so
 override CPPFLAGS += -fPIC
 endif
 
-LIBS_libv4lconvert = -lrt
-
 CONVERT_OBJS  = libv4lconvert.o tinyjpeg.o sn9c10x.o sn9c20x.o pac207.o \
 		mr97310a.o flip.o crop.o jidctflt.o spca561-decompress.o \
 		rgbyuv.o spca501.o sq905c.o bayer.o hm12.o \
 		control/libv4lcontrol.o processing/libv4lprocessing.o \
-		processing/rgbprocessing.o processing/bayerprocessing.o
+		processing/whitebalance.o processing/autogain.o \
+		processing/gamma.o
 TARGETS       = $(CONVERT_LIB) libv4lconvert.pc
 INCLUDES      = ../include/libv4lconvert.h
 
