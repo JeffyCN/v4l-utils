@@ -20,7 +20,6 @@
 
 */
 
-#include <string.h>
 #include "libv4lconvert-priv.h"
 
 static void v4lconvert_rotate180_rgbbgr24(const unsigned char *src,
@@ -107,48 +106,37 @@ static void v4lconvert_rotate90_yuv420(const unsigned char *src,
     }
 }
 
-void v4lconvert_rotate90(unsigned char *src, unsigned char *dest,
-  struct v4l2_format *fmt)
+void v4lconvert_rotate(unsigned char *src, unsigned char *dest,
+  int width, int height, unsigned int pix_fmt, int rotate)
 {
-  int tmp;
-
-  tmp = fmt->fmt.pix.width;
-  fmt->fmt.pix.width = fmt->fmt.pix.height;
-  fmt->fmt.pix.height = tmp;
-
-  switch (fmt->fmt.pix.pixelformat) {
-    case V4L2_PIX_FMT_RGB24:
-    case V4L2_PIX_FMT_BGR24:
-      v4lconvert_rotate90_rgbbgr24(src, dest, fmt->fmt.pix.width,
-				   fmt->fmt.pix.height);
-      break;
-    case V4L2_PIX_FMT_YUV420:
-    case V4L2_PIX_FMT_YVU420:
-      v4lconvert_rotate90_yuv420(src, dest, fmt->fmt.pix.width,
-				 fmt->fmt.pix.height);
-      break;
-  }
-}
-
-void v4lconvert_flip(unsigned char *src, unsigned char *dest,
-  struct v4l2_format *fmt, int flags)
-{
-  /* FIXME implement separate vflipping and hflipping, for now we always
-     rotate 180 when vflip is selected! */
-  if (flags & V4LCONTROL_VFLIPPED) {
-    switch (fmt->fmt.pix.pixelformat) {
+  switch (rotate) {
+  case 0:
+    break;
+  case 90:
+    switch (pix_fmt) {
       case V4L2_PIX_FMT_RGB24:
       case V4L2_PIX_FMT_BGR24:
-	v4lconvert_rotate180_rgbbgr24(src, dest, fmt->fmt.pix.width,
-				      fmt->fmt.pix.height);
+	v4lconvert_rotate90_rgbbgr24(src, dest, width, height);
 	break;
       case V4L2_PIX_FMT_YUV420:
       case V4L2_PIX_FMT_YVU420:
-	v4lconvert_rotate180_yuv420(src, dest, fmt->fmt.pix.width,
-				    fmt->fmt.pix.height);
+	v4lconvert_rotate90_yuv420(src, dest, width, height);
 	break;
     }
+    break;
+  case 180:
+    switch (pix_fmt) {
+      case V4L2_PIX_FMT_RGB24:
+      case V4L2_PIX_FMT_BGR24:
+	v4lconvert_rotate180_rgbbgr24(src, dest, width, height);
+	break;
+      case V4L2_PIX_FMT_YUV420:
+      case V4L2_PIX_FMT_YVU420:
+	v4lconvert_rotate180_yuv420(src, dest, width, height);
+	break;
+    }
+    break;
+  default:
+    printf("FIXME add %d degrees rotation\n", rotate);
   }
-  else /* FIXME and do nothing when only HFLIP is selected */
-    memcpy(dest, src, fmt->fmt.pix.sizeimage);
 }

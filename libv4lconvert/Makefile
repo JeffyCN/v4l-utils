@@ -12,9 +12,7 @@ endif
 
 CONVERT_OBJS  = libv4lconvert.o tinyjpeg.o sn9c10x.o sn9c20x.o pac207.o \
 		mr97310a.o flip.o crop.o jidctflt.o spca561-decompress.o \
-		rgbyuv.o spca501.o sq905c.o bayer.o hm12.o \
-		control/libv4lcontrol.o processing/libv4lprocessing.o \
-		processing/rgbprocessing.o processing/bayerprocessing.o
+		rgbyuv.o spca501.o sq905c.o bayer.o hm12.o
 TARGETS       = $(CONVERT_LIB) libv4lconvert.pc
 INCLUDES      = ../include/libv4lconvert.h
 
@@ -31,8 +29,6 @@ LIBDIR = $(PREFIX)/lib
 endif
 
 all: $(TARGETS)
-
-include $(CONVERT_OBJS:.o=.d)
 
 $(CONVERT_LIB): $(CONVERT_OBJS)
 
@@ -62,15 +58,10 @@ endif
 	install -m 644 libv4lconvert.pc $(DESTDIR)$(LIBDIR)/pkgconfig
 
 clean::
-	rm -f *.a *.so* *.o *.d */*.o */*.d libv4lconvert.pc log *~ */*~
-	rm -f *.orig *.rej */*.orig */*.rej
-
-%.d:: %.c
-	@set -e; rm -f $@; \
-	$(CC) -MM $(CPPFLAGS) $< | sed 's,\($*\)\.o[ :]*,\1.o $@ : ,g' > $@
+	rm -f *.a *.so* *.o *.d libv4lconvert.pc log *~ *.orig *.rej
 
 %.o: %.c
-	$(CC) -c $(CPPFLAGS) $(CFLAGS) -o $@ $<
+	$(CC) -c -MMD $(CPPFLAGS) $(CFLAGS) -o $@ $<
 
 %.so:
 	$(CC) -shared $(LDFLAGS) -Wl,-soname,$@.$(LIB_RELEASE) -o $@.$(LIB_RELEASE) $^

@@ -1,9 +1,3 @@
-libv4l (0.5.97-1) experimental; urgency=low
-
-  * New Upstream Version
-
- -- Gregor Jasny <gjasny@googlemail.com>  Wed, 15 Apr 2009 18:48:12 +0200
-
 libv4l (0.5.9-2) unstable; urgency=low
 
   * Updated debian/copyright file (now Lintian clean)
