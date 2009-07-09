@@ -8,3 +8,8 @@
  necessary to implement CGMBUF in the kernel for each driver.
 
 -take the possibility of pitch != width into account everywhere
+
+-make updating of parameters happen based on time elapsed rather then
+ frames
+
+-get standardized CID for AUTOGAIN_TARGET upstream and switch to that
