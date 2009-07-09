@@ -1,8 +1,9 @@
 libv4l (0.6.0-1) unstable; urgency=low
 
   * New Upstream Version
+  * Bumped standards to version 3.8.2 (no changes needed)
 
- -- Gregor Jasny <gjasny@googlemail.com>  Thu, 09 Jul 2009 22:19:47 +0200
+ -- Gregor Jasny <gjasny@googlemail.com>  Thu, 09 Jul 2009 22:21:22 +0200
 
 libv4l (0.5.99-1) experimental; urgency=low
 
