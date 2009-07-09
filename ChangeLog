@@ -1,11 +1,26 @@
+libv4l-0.6.0
+------------
+* Recognize disabled controls and replace with fake equivalents where
+  available
+* Add support for decompressing ov511 and ov518 "JPEG", by piping data through
+  an external helper as I've failed to contact Mark W. McClelland to get
+  permission to relicense the code. If you know a working email address for
+  Mark W. McClelland, please let me know.
+* Add tons of laptop models to the upside down devices table
+* Support for rgb565 source format by Mauro Carvalho Chehab
+* Many bug fixes (see the mercurial tree for details)
+* Improved pac207 decompression code to also support higher compression
+  modes of the pac207, which enables us to use higher framerates.
+  Many many thanks to Bertrik Sikken for figuring the decompression out!
+
 libv4l-0.5.99
-----------
+-------------
 * Link libv4lconvert with -lm for powf by Gregor Jasny
 * Fix black screen on devices with hardware gamma control
 * Fix crash with devices on which we do not emulate fake controls
 * Add a patch by Hans Petter Selasky <hselasky@freebsd.org>, which should
   lead to allowing use of libv4l (and the Linux webcam drivers ported
-  to userspace usb drivers) on FreeBSd, this is a work in progress
+  to userspace usb drivers) on FreeBSD, this is a work in progress
 
 libv4l-0.5.98
 -------------
