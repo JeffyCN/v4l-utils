@@ -78,6 +78,9 @@ PAC207 decoder
   * Bertrik.Sikken. Thomas Kaiser Copyright (C) 2005
   * Copyright (C) 2003 2004 2005 Michel Xhaard
 
+RGB565 conversion routines
+  * Copyright (C) 2009 Mauro Carvalho Chehab <mchehab@redhat.com>
+
 Sonix SN9C10X decoder
   * Bertrik.Sikken. Copyright (C) 2005
 
