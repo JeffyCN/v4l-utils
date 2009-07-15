@@ -7,6 +7,14 @@ build-stamp:
 	dh_testdir
 	dh_prep
 	dh_installdirs -s
+	#
+	# The Debian library packaging guide mandates that private library subdirs
+	# must be versioned with the library package name. However this would break
+	# compatibility with older packages so for libv4l-0 lib/libv4l is used.
+	# If upstream bumps soname and the package name becomes libv4l-1, use
+	# LIBSUBDIR=libv4l-1 as $(MAKE) argument to allow different soname versions
+	# to be installed side by side.
+	#
 	# build shared libs and install
 	$(MAKE) PREFIX=/usr DESTDIR=$(CURDIR)/debian/tmp install
 	# clean object files
