@@ -1,3 +1,10 @@
+libv4l (0.6.0-2) unstable; urgency=low
+
+  * Add UID to SHM segment name and fallback to malloc (Closes: #542204)
+  * Bumped standards to version 3.8.3 (no changes needed) 
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Wed, 19 Aug 2009 14:42:00 +0200
+
 libv4l (0.6.0-1) unstable; urgency=low
 
   * New Upstream Version
