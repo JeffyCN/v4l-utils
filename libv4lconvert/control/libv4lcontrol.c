@@ -311,7 +311,7 @@ struct v4lcontrol_data *v4lcontrol_create(int fd, int always_needs_conversion)
     return data; /* No need to create a shared memory segment */
 
   SYS_IOCTL(fd, VIDIOC_QUERYCAP, &cap);
-  snprintf(shm_name, 256, "/%s:%s", cap.bus_info, cap.card);
+  snprintf(shm_name, 256, "/%lu-%s:%s", (unsigned long)geteuid(), cap.bus_info, cap.card);
 
   /* / is not allowed inside shm names */
   for (i = 1; shm_name[i]; i++)
@@ -322,23 +322,35 @@ struct v4lcontrol_data *v4lcontrol_create(int fd, int always_needs_conversion)
   if ((shm_fd = shm_open(shm_name, (O_CREAT | O_EXCL | O_RDWR),
 			 (S_IREAD | S_IWRITE))) >= 0)
     init = 1;
-  else if ((shm_fd = shm_open(shm_name, O_RDWR, (S_IREAD | S_IWRITE))) < 0)
-    goto error;
+  else
+    shm_fd = shm_open(shm_name, O_RDWR, (S_IREAD | S_IWRITE));
+  
+  if (shm_fd >= 0) {
+    /* Set the shared memory size */
+    ftruncate(shm_fd, V4LCONTROL_SHM_SIZE);
 
-  /* Set the shared memory size */
-  ftruncate(shm_fd, V4LCONTROL_SHM_SIZE);
+    /* Retreive a pointer to the shm object */
+    data->shm_values = mmap(NULL, V4LCONTROL_SHM_SIZE, (PROT_READ | PROT_WRITE),
+			    MAP_SHARED, shm_fd, 0);
+    close(shm_fd);
 
-  /* Retreive a pointer to the shm object */
-  data->shm_values = mmap(NULL, V4LCONTROL_SHM_SIZE, (PROT_READ | PROT_WRITE),
-			  MAP_SHARED, shm_fd, 0);
-  close(shm_fd);
+    if (data->shm_values == MAP_FAILED)
+      data->shm_values = NULL;
+  }
 
-  if (data->shm_values == MAP_FAILED)
-    goto error;
+  /* Fall back to malloc */
+  if (data->shm_values == NULL) {
+    data->shm_values = malloc(V4LCONTROL_SHM_SIZE);
+    if (!data->shm_values)
+      goto error;
+    
+    init = 1;
+    data->priv_flags |= V4LCONTROL_MEMORY_IS_MALLOCED;
+  }
 
   if (init) {
     /* Initialize the new shm object we created */
-    memset(data->shm_values, 0, sizeof(V4LCONTROL_SHM_SIZE));
+    memset(data->shm_values, 0, V4LCONTROL_SHM_SIZE);
 
     for (i = 0; i < V4LCONTROL_COUNT; i++)
       data->shm_values[i] = fake_controls[i].default_value;
@@ -359,8 +371,12 @@ error:
 
 void v4lcontrol_destroy(struct v4lcontrol_data *data)
 {
-  if (data->controls)
-    munmap(data->shm_values, V4LCONTROL_SHM_SIZE);
+  if (data->controls) {
+    if (data->priv_flags & V4LCONTROL_MEMORY_IS_MALLOCED)
+      free(data->shm_values);
+    else
+      munmap(data->shm_values, V4LCONTROL_SHM_SIZE);
+  }
   free(data);
 }
 
