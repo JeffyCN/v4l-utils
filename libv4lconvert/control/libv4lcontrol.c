@@ -59,15 +59,28 @@ static const struct v4lcontrol_flags_info v4lcontrol_flags[] = {
   { 0x093a, 0x2476, 0, NULL, NULL,
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED|V4LCONTROL_WANTS_WB, 1500 },
   /* Laptops */
+  { 0x046d, 0x09b2, 0, "FUJITSU", "FJNB1C9",
+    V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED, 0,
+    "FUJITSU SIEMENS", "LIFEBOOK P7230" },
   { 0x04f2, 0xb012, 0, "ASUSTeK Computer Inc.        ", "F7L       ",
+    V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
+  { 0x04f2, 0xb012, 0, "ASUSTeK Computer Inc.        ", "F7Se      ",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   { 0x04f2, 0xb012, 0, "ASUSTeK Computer Inc.        ", "F7SR      ",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
+  { 0x04f2, 0xb012, 0, "ASUSTeK Computer Inc.        ", "G50VT     ",
+    V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   { 0x04f2, 0xb012, 0, "ASUSTeK Computer Inc.        ", "W7S       ",
+    V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
+  { 0x04f2, 0xb012, 0, "ASUSTeK Computer Inc.        ", "W7Sg      ",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   { 0x04f2, 0xb012, 0, "ASUSTeK Computer Inc.        ", "X55SR     ",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   { 0x04f2, 0xb012, 0, "ASUSTeK Computer Inc.        ", "X55SV     ",
+    V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
+  { 0x04f2, 0xb012, 0, "ASUSTeK Computer Inc.        ", "X71Vn     ",
+    V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
+  { 0x04f2, 0xb012, 0, "PEGATRON CORPORATION         ", "X71SL     ",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   /* These 3 PACKARD BELL's seem to be Asus notebook in disguise */
   { 0x04f2, 0xb012, 0, "Packard Bell BV", "T32A      ",
@@ -80,7 +93,11 @@ static const struct v4lcontrol_flags_info v4lcontrol_flags[] = {
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   { 0x04f2, 0xb036, 0, "ASUSTeK Computer Inc.        ", "U6V       ",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
+  { 0x04f2, 0xb036, 0, "ASUSTeK Computer Inc.        ", "UL30A     ",
+    V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   { 0x04f2, 0xb071, 0, "ASUSTeK Computer Inc.        ", "K40IJ     ",
+    V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
+  { 0x04f2, 0xb071, 0, "ASUSTeK Computer Inc.        ", "K40IN      ",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   { 0x04f2, 0xb071, 0, "ASUSTeK Computer Inc.        ", "K50IJ     ",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
@@ -92,12 +109,18 @@ static const struct v4lcontrol_flags_info v4lcontrol_flags[] = {
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   { 0x04f2, 0xb071, 0, "ASUSTeK Computer Inc.        ", "N10J      ",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
+  { 0x04f2, 0xb071, 0, "ASUSTeK Computer Inc.        ", "N10Jc     ",
+    V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   { 0x04f2, 0xb071, 0, "ASUSTeK Computer Inc.        ", "N20A      ",
+    V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
+  { 0x04f2, 0xb071, 0, "ASUSTeK Computer Inc.        ", "U6Vc      ",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   /* Note no whitespace padding for these 2 models, this is not a typo */
   { 0x04f2, 0xb071, 0, "ASUSTeK Computer INC.", "K50AB",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   { 0x04f2, 0xb071, 0, "ASUSTeK Computer INC.", "N5051Tp",
+    V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
+  { 0x04f2, 0xb072, 0, "ASUSTeK Computer Inc.        ", "K50IJ     ",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   { 0x04f2, 0xb106, 0, "ASUSTeK Computer Inc.        ", "N50Vc      ",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
@@ -109,13 +132,16 @@ static const struct v4lcontrol_flags_info v4lcontrol_flags[] = {
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   { 0x04f2, 0xb106, 0, "ASUSTeK Computer Inc.        ", "N51Vn     ",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
+  { 0x04f2, 0xb106, 0, "ASUSTeK Computer INC.", "N5051Tp",
+    V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   { 0x04f2, 0xb16b, 0, "ASUSTeK Computer Inc.        ", "U80A      ",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   /* Note no whitespace padding for board vendor, this is not a typo */
   { 0x064e, 0xa111, 0, "ASUSTeK Computer Inc.", "F5RL      ",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
-  /* Another Asus laptop in disguise */
   { 0x064e, 0xa111, 0, "PEGATRON CORPORATION         ", "F5SR    ",
+    V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
+  { 0x064e, 0xa116, 0, "ASUSTeK Computer Inc.        ", "K70IO     ",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   { 0x064e, 0xa116, 0, "ASUSTeK Computer Inc.        ", "N10Jb     ",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
@@ -123,7 +149,12 @@ static const struct v4lcontrol_flags_info v4lcontrol_flags[] = {
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   { 0x064e, 0xa116, 0, "ASUSTeK Computer Inc.        ", "N20A      ",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
+  { 0x064e, 0xa116, 0, "ASUS CORPORATION            ", "N90SV     ",
+    V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   { 0x064e, 0xa116, 0, "ASUSTeK Computer Inc.        ", "X58LE     ",
+    V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
+  /* Note no whitespace padding for this  model, this is not a typo */
+  { 0x064e, 0xa116, 0, "ASUSTeK Computer INC.", "K40AB",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   { 0x090c, 0xe370, 0, "ASUSTeK Computer Inc.        ", "U6S       ",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
@@ -139,6 +170,8 @@ static const struct v4lcontrol_flags_info v4lcontrol_flags[] = {
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   { 0x174f, 0x5a35, 0, "ASUSTeK Computer Inc.        ", "F5N       ",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
+  { 0x174f, 0x5a35, 0, "ASUSTeK Computer Inc.        ", "F5SL    ",
+    V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   { 0x174f, 0x5a35, 0, "ASUSTeK Computer Inc.        ", "G1S       ",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   { 0x174f, 0x5a35, 0, "ASUSTeK Computer Inc.        ", "G1Sn      ",
@@ -146,6 +179,8 @@ static const struct v4lcontrol_flags_info v4lcontrol_flags[] = {
   { 0x174f, 0x5a35, 0, "ASUSTeK Computer Inc.        ", "G2S       ",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   { 0x174f, 0xa311, 0, "ASUSTeK Computer Inc.        ", "A3F       ",
+    V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
+  { 0x1d4d, 0x1002, 0, "ASUSTeK Computer Inc.        ", "B50A      ",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   { 0x5986, 0x0200, 0, "LENOVO", "SPEEDY    ",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED, 0, NULL, NULL, NULL,
@@ -172,13 +207,19 @@ static const struct v4lcontrol_flags_info v4lcontrol_flags[] = {
   /* spca561 revison 12a devices */
   { 0x041e, 0x403b, 0,    NULL, NULL, V4LCONTROL_WANTS_WB_AUTOGAIN },
   { 0x046d, 0x0928, 7,    NULL, NULL, V4LCONTROL_WANTS_WB_AUTOGAIN },
-  /* logitech quickcam express stv06xx + pb0100 */
-  { 0x046d, 0x0840, 0,    NULL, NULL, V4LCONTROL_WANTS_WB },
+  /* logitech quickcam express stv06xx 2 versions:
+     pb0100   only needs whitebalance, see software autogain code enable below
+     hdcs10xx needs both whitebalance and autogain. */
+  { 0x046d, 0x0840, 0,    NULL, NULL, V4LCONTROL_WANTS_WB_AUTOGAIN },
   /* logitech quickcam messenger variants, st6422 */
   { 0x046d, 0x08f0, 0,    NULL, NULL, V4LCONTROL_WANTS_AUTOGAIN },
   { 0x046d, 0x08f5, 0,    NULL, NULL, V4LCONTROL_WANTS_AUTOGAIN },
   { 0x046d, 0x08f6, 0,    NULL, NULL, V4LCONTROL_WANTS_AUTOGAIN },
   { 0x046d, 0x08da, 0,    NULL, NULL, V4LCONTROL_WANTS_AUTOGAIN },
+  /* mr97310a cams, note some models do not have the necessary controls, for
+     those we will only do whitebal. see software autogain code enable below */
+  { 0x08ca, 0x0111, 0,    NULL, NULL, V4LCONTROL_WANTS_WB_AUTOGAIN },
+  { 0x093a, 0x010e, 1,    NULL, NULL, V4LCONTROL_WANTS_WB_AUTOGAIN },
 };
 
 static const struct v4l2_queryctrl fake_controls[];
@@ -210,29 +251,17 @@ static void v4lcontrol_get_dmi_string(const char *string, char *buf, int size)
   fclose(f);
 }
 
-static void v4lcontrol_init_flags(struct v4lcontrol_data *data)
+static int v4lcontrol_get_usb_ids(struct v4lcontrol_data *data,
+  unsigned short *vendor_id, unsigned short *product_id)
 {
-  struct stat st;
   FILE *f;
-  char sysfs_name[512];
-  unsigned short vendor_id = 0;
-  unsigned short product_id = 0;
-  char dmi_system_vendor[512], dmi_system_name[512], dmi_system_version[512];
-  char dmi_board_vendor[512], dmi_board_name[512], dmi_board_version[512];
   int i, minor;
+  struct stat st;
+  char sysfs_name[512];
   char c, *s, buf[32];
-  struct v4l2_input input;
-
-  if ((SYS_IOCTL(data->fd, VIDIOC_G_INPUT, &input.index) == 0) &&
-      (SYS_IOCTL(data->fd, VIDIOC_ENUMINPUT, &input) == 0)) {
-    if (input.status & V4L2_IN_ST_HFLIP)
-      data->flags |= V4LCONTROL_HFLIPPED;
-    if (input.status & V4L2_IN_ST_VFLIP)
-      data->flags |= V4LCONTROL_VFLIPPED;
-  }
 
   if (fstat(data->fd, &st) || !S_ISCHR(st.st_mode)) {
-    return; /* Should never happen */
+    return 0; /* Should never happen */
   }
 
   /* <Sigh> find ourselve in sysfs */
@@ -251,7 +280,7 @@ static void v4lcontrol_init_flags(struct v4lcontrol_data *data)
       break;
   }
   if (i == 256)
-    return; /* Not found, sysfs not mounted? */
+    return 0; /* Not found, sysfs not mounted? */
 
   /* Get vendor and product ID */
   snprintf(sysfs_name, sizeof(sysfs_name),
@@ -262,9 +291,9 @@ static void v4lcontrol_init_flags(struct v4lcontrol_data *data)
     fclose(f);
 
     if (!s ||
-	sscanf(s, "usb:v%4hxp%4hx%c", &vendor_id, &product_id, &c) != 3 ||
+	sscanf(s, "usb:v%4hxp%4hx%c", vendor_id, product_id, &c) != 3 ||
 	c != 'd')
-      return; /* Not an USB device */
+      return 0; /* Not an USB device */
   } else {
     /* Try again assuming the device link points to the usb
        device instead of the usb interface (bug in older versions
@@ -275,27 +304,37 @@ static void v4lcontrol_init_flags(struct v4lcontrol_data *data)
 	     "/sys/class/video4linux/video%d/device/idVendor", i);
     f = fopen(sysfs_name, "r");
     if (!f)
-      return; /* Not an USB device (or no sysfs) */
+      return 0; /* Not an USB device (or no sysfs) */
 
     s = fgets(buf, sizeof(buf), f);
     fclose(f);
 
-    if (!s || sscanf(s, "%04hx%c", &vendor_id, &c) != 2 || c != '\n')
-      return; /* Should never happen */
+    if (!s || sscanf(s, "%04hx%c", vendor_id, &c) != 2 || c != '\n')
+      return 0; /* Should never happen */
 
     /* Get product ID */
     snprintf(sysfs_name, sizeof(sysfs_name),
 	     "/sys/class/video4linux/video%d/device/idProduct", i);
     f = fopen(sysfs_name, "r");
     if (!f)
-      return; /* Should never happen */
+      return 0; /* Should never happen */
 
     s = fgets(buf, sizeof(buf), f);
     fclose(f);
 
-    if (!s || sscanf(s, "%04hx%c", &product_id, &c) != 2 || c != '\n')
-      return; /* Should never happen */
+    if (!s || sscanf(s, "%04hx%c", product_id, &c) != 2 || c != '\n')
+      return 0; /* Should never happen */
   }
+
+  return 1;
+}
+
+static void v4lcontrol_get_flags_from_db(struct v4lcontrol_data *data,
+  unsigned short vendor_id, unsigned short product_id)
+{
+  char dmi_system_vendor[512], dmi_system_name[512], dmi_system_version[512];
+  char dmi_board_vendor[512], dmi_board_name[512], dmi_board_version[512];
+  int i;
 
   /* Get DMI board and system strings */
   v4lcontrol_get_dmi_string("sys_vendor", dmi_system_vendor,
@@ -339,11 +378,14 @@ static void v4lcontrol_init_flags(struct v4lcontrol_data *data)
 struct v4lcontrol_data *v4lcontrol_create(int fd, int always_needs_conversion)
 {
   int shm_fd;
-  int i, rc, init = 0;
+  int i, rc, got_usb_ids, init = 0;
   char *s, shm_name[256], pwd_buf[1024];
   struct v4l2_capability cap;
   struct v4l2_queryctrl ctrl;
   struct passwd pwd, *pwd_p;
+  unsigned short vendor_id = 0;
+  unsigned short product_id = 0;
+  struct v4l2_input input;
 
   struct v4lcontrol_data *data = calloc(1, sizeof(struct v4lcontrol_data));
 
@@ -354,7 +396,18 @@ struct v4lcontrol_data *v4lcontrol_create(int fd, int always_needs_conversion)
 
   data->fd = fd;
 
-  v4lcontrol_init_flags(data);
+  /* Check if the driver has indicated some form of flipping is needed */
+  if ((SYS_IOCTL(data->fd, VIDIOC_G_INPUT, &input.index) == 0) &&
+      (SYS_IOCTL(data->fd, VIDIOC_ENUMINPUT, &input) == 0)) {
+    if (input.status & V4L2_IN_ST_HFLIP)
+      data->flags |= V4LCONTROL_HFLIPPED;
+    if (input.status & V4L2_IN_ST_VFLIP)
+      data->flags |= V4LCONTROL_VFLIPPED;
+  }
+
+  got_usb_ids = v4lcontrol_get_usb_ids(data, &vendor_id, &product_id);
+  if (got_usb_ids)
+    v4lcontrol_get_flags_from_db(data, vendor_id, product_id);
 
   /* Allow overriding through environment */
   if ((s = getenv("LIBV4LCONTROL_FLAGS")))
@@ -375,9 +428,30 @@ struct v4lcontrol_data *v4lcontrol_create(int fd, int always_needs_conversion)
     }
   }
 
-  if (data->flags & V4LCONTROL_WANTS_AUTOGAIN)
+  /* Check if a camera does not have hardware autogain and has the necessary
+     controls, before enabling sw autogain, even if this is requested by flags.
+     This is necessary because some cameras share a USB-ID, but can have
+     different sensors with / without autogain or the necessary controls. */
+  while (data->flags & V4LCONTROL_WANTS_AUTOGAIN) {
+    ctrl.id = V4L2_CID_AUTOGAIN;
+    rc = SYS_IOCTL(data->fd, VIDIOC_QUERYCTRL, &ctrl);
+    if (rc == 0 && !(ctrl.flags & V4L2_CTRL_FLAG_DISABLED))
+      break;
+
+    ctrl.id = V4L2_CID_EXPOSURE;
+    rc = SYS_IOCTL(data->fd, VIDIOC_QUERYCTRL, &ctrl);
+    if (rc != 0 || (ctrl.flags & V4L2_CTRL_FLAG_DISABLED))
+      break;
+
+    ctrl.id = V4L2_CID_GAIN;
+    rc = SYS_IOCTL(data->fd, VIDIOC_QUERYCTRL, &ctrl);
+    if (rc != 0 || (ctrl.flags & V4L2_CTRL_FLAG_DISABLED))
+      break;
+
     data->controls |= 1 << V4LCONTROL_AUTOGAIN |
 		      1 << V4LCONTROL_AUTOGAIN_TARGET;
+    break;
+  }
 
   /* Allow overriding through environment */
   if ((s = getenv("LIBV4LCONTROL_CONTROLS")))
@@ -392,12 +466,21 @@ struct v4lcontrol_data *v4lcontrol_create(int fd, int always_needs_conversion)
   }
 
   if (getpwuid_r(geteuid(), &pwd, pwd_buf, sizeof(pwd_buf), &pwd_p) == 0) {
-    snprintf(shm_name, 256, "/libv4l-%s:%s:%s", pwd.pw_name,
-	     cap.bus_info, cap.card);
+    if (got_usb_ids)
+      snprintf(shm_name, 256, "/libv4l-%s:%s:%04x:%04x:%s", pwd.pw_name,
+	       cap.bus_info, (int)vendor_id, (int)product_id, cap.card);
+    else
+      snprintf(shm_name, 256, "/libv4l-%s:%s:%s", pwd.pw_name,
+	       cap.bus_info, cap.card);
   } else {
     perror("libv4lcontrol: error getting username using uid instead");
-    snprintf(shm_name, 256, "/libv4l-%lu:%s:%s", (unsigned long)geteuid(),
-	     cap.bus_info, cap.card);
+    if (got_usb_ids)
+      snprintf(shm_name, 256, "/libv4l-%lu:%s:%04x:%04x:%s",
+	       (unsigned long)geteuid(), cap.bus_info,
+	       (int)vendor_id, (int)product_id, cap.card);
+    else
+      snprintf(shm_name, 256, "/libv4l-%lu:%s:%s", (unsigned long)geteuid(),
+	       cap.bus_info, cap.card);
   }
 
   /* / is not allowed inside shm names */
