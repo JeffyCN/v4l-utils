@@ -1,3 +1,10 @@
+libv4l (0.6.2-1) unstable; urgency=low
+
+  * New Upstream Version
+  * Updated upstream location
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Fri, 09 Oct 2009 14:19:54 +0000
+
 libv4l (0.6.1-1) unstable; urgency=low
 
   * New Upstream Version
