@@ -10,7 +10,7 @@ Build-Depends: debhelper (>= 7),
 Standards-Version: 3.8.3
 Vcs-Browser: http://git.debian.org/?p=collab-maint/libv4l.git
 Vcs-Git: git://git.debian.org/git/collab-maint/libv4l.git
-Homepage: http://people.atrpms.net/~hdegoede/
+Homepage: http://people.fedoraproject.org/~jwrdegoede/
 
 Package: libv4l-0
 Architecture: any
