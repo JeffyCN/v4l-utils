@@ -26,6 +26,7 @@
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <unistd.h>
 #include <string.h>
 #include <pwd.h>
@@ -80,6 +81,8 @@ static const struct v4lcontrol_flags_info v4lcontrol_flags[] = {
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   { 0x04f2, 0xb012, 0, "ASUSTeK Computer Inc.        ", "X71Vn     ",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
+  { 0x04f2, 0xb012, 0, "ASUSTeK Computer Inc.        ", "X71Q      ",
+    V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   { 0x04f2, 0xb012, 0, "PEGATRON CORPORATION         ", "X71SL     ",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   /* These 3 PACKARD BELL's seem to be Asus notebook in disguise */
@@ -90,6 +93,8 @@ static const struct v4lcontrol_flags_info v4lcontrol_flags[] = {
   { 0x04f2, 0xb012, 0, "PACKARD BELL BV              ", "EasyNote_BG46",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   { 0x04f2, 0xb036, 0, "ASUSTeK Computer Inc.        ", "U6S       ",
+    V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
+  { 0x04f2, 0xb036, 0, "ASUSTeK Computer Inc.        ", "U6Sg      ",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   { 0x04f2, 0xb036, 0, "ASUSTeK Computer Inc.        ", "U6V       ",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
@@ -113,6 +118,8 @@ static const struct v4lcontrol_flags_info v4lcontrol_flags[] = {
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   { 0x04f2, 0xb071, 0, "ASUSTeK Computer Inc.        ", "N20A      ",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
+  { 0x04f2, 0xb071, 0, "ASUSTeK Computer Inc.        ", "N61Vg     ",
+    V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   { 0x04f2, 0xb071, 0, "ASUSTeK Computer Inc.        ", "U6Vc      ",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   /* Note no whitespace padding for these 2 models, this is not a typo */
@@ -135,6 +142,8 @@ static const struct v4lcontrol_flags_info v4lcontrol_flags[] = {
   { 0x04f2, 0xb106, 0, "ASUSTeK Computer INC.", "N5051Tp",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   { 0x04f2, 0xb16b, 0, "ASUSTeK Computer Inc.        ", "U80A      ",
+    V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
+  { 0x04f2, 0xb16b, 0, "ASUSTeK Computer Inc.        ", "U80V      ",
     V4LCONTROL_HFLIPPED|V4LCONTROL_VFLIPPED },
   /* Note no whitespace padding for board vendor, this is not a typo */
   { 0x064e, 0xa111, 0, "ASUSTeK Computer Inc.", "F5RL      ",
@@ -220,6 +229,9 @@ static const struct v4lcontrol_flags_info v4lcontrol_flags[] = {
      those we will only do whitebal. see software autogain code enable below */
   { 0x08ca, 0x0111, 0,    NULL, NULL, V4LCONTROL_WANTS_WB_AUTOGAIN },
   { 0x093a, 0x010e, 1,    NULL, NULL, V4LCONTROL_WANTS_WB_AUTOGAIN },
+  /* stv0680 based cams */
+  { 0x0553, 0x0202, 0,    NULL, NULL, V4LCONTROL_WANTS_WB },
+  { 0x041e, 0x4007, 0,    NULL, NULL, V4LCONTROL_WANTS_WB },
 };
 
 static const struct v4l2_queryctrl fake_controls[];
@@ -640,7 +652,7 @@ int v4lcontrol_vidioc_queryctrl(struct v4lcontrol_data *data, void *arg)
   int i;
   struct v4l2_queryctrl *ctrl = arg;
   int retval;
-  __u32 orig_id=ctrl->id;
+  uint32_t orig_id=ctrl->id;
 
   /* if we have an exact match return it */
   for (i = 0; i < V4LCONTROL_COUNT; i++)
