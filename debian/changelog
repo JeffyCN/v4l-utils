@@ -1,3 +1,10 @@
+libv4l (0.6.3-1) unstable; urgency=low
+
+  * New Upstream Version
+  * Updated Debian copyright file
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Tue, 27 Oct 2009 13:33:01 +0000
+
 libv4l (0.6.2-1) unstable; urgency=low
 
   * New Upstream Version
