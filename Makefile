@@ -1,17 +1,34 @@
-LIB_RELEASE=0
-V4L2_LIB_VERSION=$(LIB_RELEASE).6.4
-
 all install:
-	$(MAKE) -C libv4lconvert V4L2_LIB_VERSION=$(V4L2_LIB_VERSION) $@
-	$(MAKE) -C libv4l2 V4L2_LIB_VERSION=$(V4L2_LIB_VERSION) $@
-	$(MAKE) -C libv4l1 V4L2_LIB_VERSION=$(V4L2_LIB_VERSION) $@
+	$(MAKE) -C lib $@
+	$(MAKE) -C utils $@
 
-clean:
-	rm -f *~ include/*~ DEADJOE include/DEADJOE
-	$(MAKE) -C libv4lconvert V4L2_LIB_VERSION=$(V4L2_LIB_VERSION) $@
-	$(MAKE) -C libv4l2 V4L2_LIB_VERSION=$(V4L2_LIB_VERSION) $@
-	$(MAKE) -C libv4l1 V4L2_LIB_VERSION=$(V4L2_LIB_VERSION) $@
+sync-with-kernel:
+	@if [ ! -f $(KERNEL_DIR)/include/linux/videodev2.h -o \
+	      ! -f $(KERNEL_DIR)/include/linux/ivtv.h -o \
+	      ! -f $(KERNEL_DIR)/include/linux/i2c-id.h -o \
+	      ! -f $(KERNEL_DIR)/include/media/v4l2-chip-ident.h ]; then \
+	  echo "Error you must set KERNEL_DIR to point to an extracted kernel source dir"; \
+	  exit 1; \
+	fi
+	cp -a $(KERNEL_DIR)/include/linux/videodev2.h include/linux
+	cp -a $(KERNEL_DIR)/include/linux/ivtv.h include/linux
+	cp -a $(KERNEL_DIR)/include/linux/i2c-id.h include/linux
+	cp -a $(KERNEL_DIR)/include/media/v4l2-chip-ident.h include/media
+	make -C utils $@
 
-export: clean
-	tar --transform s/^\./libv4l-$(V4L2_LIB_VERSION)/g -zcvf \
-		/tmp/libv4l-$(V4L2_LIB_VERSION).tar.gz .
+clean::
+	rm -f include/*/*~
+	$(MAKE) -C lib $@
+	$(MAKE) -C utils $@
+
+tag:
+	@git tag -a -m "Tag as v4l-utils-$(V4L_UTILS_VERSION)" v4l-utils-$(V4L_UTILS_VERSION)
+	@echo "Tagged as v4l-utils-$(V4L_UTILS_VERSION)"
+
+archive-no-tag:
+	@git archive --format=tar --prefix=v4l-utils-$(V4L_UTILS_VERSION)/ v4l-utils-$(V4L_UTILS_VERSION) > v4l-utils-$(V4L_UTILS_VERSION).tar
+	@bzip2 -f v4l-utils-$(V4L_UTILS_VERSION).tar
+
+archive: clean tag archive-no-tag
+
+include Make.rules
