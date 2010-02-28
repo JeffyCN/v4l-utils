@@ -1,4 +1,4 @@
-Source: libv4l
+Source: v4l-utils
 Section: libs
 Priority: optional
 Maintainer: Gregor Jasny <gjasny@googlemail.com>
