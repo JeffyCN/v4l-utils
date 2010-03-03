@@ -11,93 +11,107 @@ Copyright:
 
     Copyright (C) 2008-2009 Hans de Goede
 
+Files: lib/libv4l2/log.c
+Copyright: 2008 Elmar Kleijn <elmar_kleijn@hotmail.com>
+           2008 Sjoerd Piepenbrink <need4weed@gmail.com>
+           2008 Hans de Goede <hdegoede@redhat.com>
+License: LGPL-2.1+
+
+Files: lib/libv4lconvert/bayer.c
+Copyright: 2008 Hans de Goede <hdegoede@redhat.com>
+           Written by Damien Douxchamps and Frederic Devernay
+License: LGPL-2.1+
+
+CX2341: lib/libv4lconvert/hm12.c
+Copyright: 2009 Hans Verkuil <hverkuil@xs4all.nl>
+License: LGPL-2.1+
+
+Files: lib/libv4lconvert/control/*:
+Copyright: 2008-2009 Elmar Kleijn <elmar_kleijn@hotmail.com>
+           2008-2009 Sjoerd Piepenbrink <need4weed@gmail.com>
+           2008-2009 Radjnies Bhansingh <radjnies@gmail.com>
+           2008-2009 Hans de Goede <hdegoede@redhat.com>
+License: LGPL-2.1+
+
+Files: lib/libv4lconvert/processing/libv4lprocessing*, lib/libv4lconvert/processing/whitebalance.c
+Copyright: 2008-2009 Elmar Kleijn <elmar_kleijn@hotmail.com>
+           2008-2009 Sjoerd Piepenbrink <need4weed@gmail.com>
+           2008-2009 Hans de Goede <hdegoede@redhat.com>
+License: LGPL-2.1+
+
+Files: lib/libv4lconvert/libv4lsyscall-priv.h
+Copyright: 2009 Hans Petter Selasky. All rights reserved.
 License:
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions
+ * are met:
+ * 1. Redistributions of source code must retain the above copyright
+ *    notice, this list of conditions and the following disclaimer.
+ * 2. Redistributions in binary form must reproduce the above copyright
+ *    notice, this list of conditions and the following disclaimer in the
+ *    documentation and/or other materials provided with the distribution.
+ *
+ * THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+ * ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
+ * ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS
+ * OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION)
+ * HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT
+ * LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
+ * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
+ * SUCH DAMAGE.
 
-    This package is free software; you can redistribute it and/or
-    modify it under the terms of the GNU Lesser General Public
-    License as published by the Free Software Foundation; either
-    version 2.1 of the License, or (at your option) any later version.
+Files: lib/libv4lconvert/mr97310a.c
+Copyright: 2004-2009 Theodore Kilgore <kilgota@auburn.edu>
+License: LGPL-2+
 
-    This package is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
-    Lesser General Public License for more details.
+Files: lib/libv4lconvert/ov511-decomp.c
+Copyright: 1999-2003 Mark W. McClelland
+           1998-2000 OmniVision Technologies
+License: GPL-2
 
-    You should have received a copy of the GNU Lesser General Public
-    License along with this package; if not, write to the Free Software
-    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
+Files: lib/libv4lconvert/ov518-decomp.c
+Copyright: 2002-2003 Mark W. McClelland
+           Yuri van Oers <yvanoers AT xs4all.nl>
+           1998-2000 OmniVision Technologies
+License: GPL-2
 
-On Debian systems, the complete text of the GNU Lesser General
-Public License can be found in `/usr/share/common-licenses/LGPL'.
+Files: lib/libv4lconvert/pac207.c
+Copyright: 2005  Bertrik.Sikken. Thomas Kaiser
+           2003 2004 2005 Michel Xhaard
+License: LGPL-2.1+
 
-The Debian packaging is Copyright 2008, Gregor Jasny <gjasny@googlemail.com> and
-is licensed under the GPL, see `/usr/share/common-licenses/GPL'.
+Files: lib/libv4lconvert/rgbyuv.c
+Copyright: 2008 Hans de Goede <hdegoede@redhat.com>
+           2009 Mauro Carvalho Chehab <mchehab@redhat.com>
+License: LGPL-2.1+
 
-Bayer pattern decoding functions
-  * Written by Damien Douxchamps and Frederic Devernay
+Files: lib/libv4lconvert/sn9c10x.c
+Copyright: 2005 Bertrik.Sikken
+License: LGPL-2.1+
 
-CX2341X HM12 conversion routines
-  * Copyright (C) 2009 Hans Verkuil <hverkuil@xs4all.nl>
+Files: lib/libv4lconvert/sn9c2028-decomp.c
+Copyright: 2005 Theodore Kilgore <kilgota@auburn.edu>
+License: LGPL-2.1+
 
-Libv4l Control:
-  * Copyright (C) 2008-2009 Elmar Kleijn <elmar_kleijn@hotmail.com>
-  * Copyright (C) 2008-2009 Sjoerd Piepenbrink <need4weed@gmail.com>
-  * Copyright (C) 2008-2009 Radjnies Bhansingh <radjnies@gmail.com>
-  * Copyright (C) 2008-2009 Hans de Goede <hdegoede@redhat.com>
+Files: lib/libv4lconvert/sn9c20x.c
+Copyright: 2008-2009 Vasily Khoruzhick
+           Jens on microdia google group
+License: LGPL-2.1+
 
-Libv4l Processing:
-  * Copyright (C) 2008-2009 Elmar Kleijn <elmar_kleijn@hotmail.com>
-  * Copyright (C) 2008-2009 Sjoerd Piepenbrink <need4weed@gmail.com>
-  * Copyright (C) 2008-2009 Hans de Goede <hdegoede@redhat.com>
+Files: lib/libv4lconvert/spca561-decompress.c
+Copyright: 2005 Andrzej Szombierski [qq@kuku.eu.org]
+License: LGPL-2.1+
 
-MR97310A decoder
-  * Copyright (C) 2004-2009 Theodore Kilgore <kilgota@auburn.edu>
+Files: lib/libv4lconvert/sq905c.c
+Copyright: 2005, 2007, 2009 Theodore Kilgore <kilgota@auburn.edu>
+License: LGPL-2.1+
 
-OV511 Decompression Support Module
- * Copyright (c) 1999-2003 Mark W. McClelland. All rights reserved.
-   http://alpha.dyndns.org/ov511/
-
- * Original decompression code Copyright 1998-2000 OmniVision Technologies
-
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation; version 2 of the License.
-
-OV518 Decompression Support Module
- * Copyright (c) 2002-2003 Mark W. McClelland. All rights reserved.
- * http://alpha.dyndns.org/ov511/
-
- * Fast integer iDCT by Yuri van Oers <yvanoers AT xs4all.nl>
- * Original OV511 decompression code Copyright 1998-2000 OmniVision Technologies
-
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the
- * Free Software Foundation; version 2 of the License.
-
-PAC207 decoder
-  * Bertrik.Sikken. Thomas Kaiser Copyright (C) 2005
-  * Copyright (C) 2003 2004 2005 Michel Xhaard
-
-RGB565 conversion routines
-  * Copyright (C) 2009 Mauro Carvalho Chehab <mchehab@redhat.com>
-
-Sonix SN9C10X decoder
-  * Bertrik.Sikken. Copyright (C) 2005
-
-Sonix SN9C20X decoder
-  * Vasily Khoruzhick, Copyright (C) 2008-2009
-  * Algorithm based on Java code written by Jens on microdia google group
-
-SPCA561 decoder
-  * Copyright (C) 2005 Andrzej Szombierski [qq@kuku.eu.org]
-
-SQ905C decoder
-  * Copyright (c) 2005 and 2007 Theodore Kilgore <kilgota@auburn.edu>
-  * This version for libv4lconvert is
-  * Copyright (c) 2009 Theodore Kilgore <kilgota@auburn.edu>
-
-Small jpeg decoder library (tinyjpeg)
-    Copyright (c) 2006, Luc Saillard <luc@saillard.org>
+Files: lib/libv4lconvert/tinyjpeg*
+Copyright: 2006, Luc Saillard <luc@saillard.org>
+License:
     All rights reserved.
     Redistribution and use in source and binary forms, with or without
     modification, are permitted provided that the following conditions are met:
@@ -125,8 +139,9 @@ Small jpeg decoder library (tinyjpeg)
     ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
     POSSIBILITY OF SUCH DAMAGE.
 
-jidctflt.c
-    Copyright (C) 1994-1998, Thomas G. Lane.
+Files: lib/libv4lconvert/jidctflt.c
+Copyright: 1994-1998, Thomas G. Lane.
+License:
     This file is part of the Independent JPEG Group's software.
 
     The authors make NO WARRANTY or representation, either express or implied,
@@ -169,4 +184,139 @@ jidctflt.c
     Japanese, but the algorithm is described in the Pennebaker & Mitchell
     JPEG textbook (see REFERENCES section in file README).  The following code
     is based directly on figure 4-8 in P&M.
+
+Files: debian/*
+Copyright: 2008, 2009, 2010 Gregor Jasny <gjasny@googlemail.com>
+License: GPL2+
+
+Files: lib/*
+Copyright: 2008, 2009, 2010 Hans de Goede <hdegoede@redhat.com>
+License: LGPL-2.1+
+
+Files: utils/decode_tm6000/decode_tm6000.c
+Copyright: 2007 Mauro Carvalho Chehab <mchehab@infradead.org>
+License: GPL-2
+
+Files: utils/keytable/keytable.c
+Copyright: 2006-2009 Mauro Carvalho Chehab <mchehab@infradead.org>
+License: GPL-2
+
+Files: utils/libv4l2util/frequencies.c
+Copyright: 2006 Nathan Laredo <laredo@gnu.org>
+           2006 Hans Verkuil <hverkuil@xs4all.nl>
+License: LGPL-2.1+
+
+Files: utils/libv4l2util/libv4l2util.h
+Copyright: 2006 Hans Verkuil <hverkuil@xs4all.nl>
+License: LGPL-2.1+
+
+Files: utils/libv4l2util/v4l2_driver.*
+Copyright: 2006 Mauro Carvalho Chehab <mchehab@infradead.org>
+License: LGPL-2.1+
+
+Files: utils/qv4l2-qt*
+Copyright: 2006 Hans Verkuil <hverkuil@xs4all.nl>
+License: GPL-2+
+
+Files: utils/v4l2-compliance/v4l2-compliance.cpp
+Copyright: 2008  Hans Verkuil <hverkuil@xs4all.nl>
+License: GPL-2+
+
+Files: utils/v4l2-ctl/cx18-ctl.c
+Copyright: 2003-2004  Kevin Thayer <nufan_wfk at yahoo dot com>
+           2004  Hans Verkuil <hverkuil@xs4all.nl>
+License: GPL-2+
+
+Files: utils/v4l2-ctl/ivtv-ctl.c
+Copyright: 2003-2004  Kevin Thayer <nufan_wfk at yahoo dot com>
+           2004  Hans Verkuil <hverkuil@xs4all.nl>
+License: GPL-2+
+
+Files: utils/v4l2-ctl/v4l2-ctl.c
+Copyright: 2003-2004  Kevin Thayer <nufan_wfk at yahoo dot com>
+           2004, 2006, 2007  Hans Verkuil <hverkuil@xs4all.nl>
+License: GPL-2+
+
+Files: utils/v4l2-dbg/v4l2-dbg-*
+Copyright: 2008 Mauro Carvalho Chehab <mchehab@infradead.org>
+License: GPL-2
+
+Files: utils/v4l2-dbg/v4l2-dbg-micron.h
+Copyright: 2009 Mauro Carvalho Chehab <mchehab@infradead.org>
+License: GPL-2
+
+Files: utils/v4l2-dbg/v4l2-dbg.cpp
+Copyright: 2007  Hans Verkuil <hverkuil@xs4all.nl>
+License: GPL-2+
+
+Files: utils/v4l2-dbg/v4l2-dbg.h
+Copyright: 2008 Mauro Carvalho Chehab <mchehab@infradead.org>
+License: GPL-2
+
+Files: utils/v4l2-sysfs-path/v4l2-sysfs-path.c
+Copyright: 2009 Mauro Carvalho Chehab <mchehab@redhat.com>
+License: GPL-2
+
+Files: utils/xc3028-firmware/firmware-tool.c
+Copyright: 2007 Michel Ludwig <michel.ludwig@gmail.com>
+           2007, 2008 Mauro Carvalho Chehab <mchehab@infradead.org>
+License: GPL-2
+
+Files: utils/xc3028-firmware/standards.*
+Copyright: 2007 Michel Ludwig <michel.ludwig@gmail.com>
+License: GPL-2
+
+Files: utils/xc3028-firmware/tuner-xc2028-types.h
+Copyright: 2007-2008 Mauro Carvalho Chehab (mchehab@infradead.org)
+License: GPL-2
+
+License: GPL-2
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation version 2.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA.
+
+License: GPL-2+
+    This program is free software; you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation; either version 2 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program; if not, write to the Free Software
+    Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+
+On Debian systems, the complete text of the GNU General Public License
+version 2 can be found in `/usr/share/common-licenses/GPL-2'.
+
+License: LGPL-2.1+
+    This package is free software; you can redistribute it and/or
+    modify it under the terms of the GNU Lesser General Public
+    License as published by the Free Software Foundation; either
+    version 2.1 of the License, or (at your option) any later version.
+
+    This package is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+    Lesser General Public License for more details.
+
+    You should have received a copy of the GNU Lesser General Public
+    License along with this package; if not, write to the Free Software
+    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301 USA
+
+On Debian systems, the complete text of the GNU Lesser General
+Public License can be found in `/usr/share/common-licenses/LGPL'.
 

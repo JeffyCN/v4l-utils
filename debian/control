@@ -1,10 +1,12 @@
 Source: v4l-utils
-Section: libs
+Section: video
 Priority: optional
 Maintainer: Gregor Jasny <gjasny@googlemail.com>
 Uploaders: Martin Pitt <mpitt@debian.org>,
            Loic Minier <lool@dooz.org>
 Build-Depends: debhelper (>= 7),
+               libqt4-dev,
+               libsysfs-dev,
                linux-libc-dev (>= 2.6.19),
                gcc-multilib [amd64]
 Standards-Version: 3.8.4
@@ -13,6 +15,7 @@ Vcs-Git: git://git.debian.org/git/collab-maint/libv4l.git
 Homepage: http://people.fedoraproject.org/~jwrdegoede/
 
 Package: libv4l-0
+Section: libs
 Architecture: any
 Depends: ${shlibs:Depends},
          ${misc:Depends}
@@ -62,6 +65,7 @@ Description: Collection of video4linux support libraries (development files)
  This package contains development files (headers and static libraries).
 
 Package: lib32v4l-0
+Section: libs
 Architecture: amd64
 Depends: libv4l-0 (= ${binary:Version}),
          ${shlibs:Depends},
@@ -112,3 +116,20 @@ Description: Collection of video4linux support libraries (32 bits development fi
  .
  This package contains the 32 bits version of the development files (headers
  and static libraries).
+
+Package: v4l-utils
+Section: utils
+Architecture: any
+Depends: libv4l-0 (= ${binary:Version}),
+         ${shlibs:Depends},
+         ${misc:Depends}
+Conflicts: ivtv-utils
+Description: Collection of video4linux utilities
+ v4l-utils contains a collection of video4linux utilities:
+ .
+ decode_tm6000: decodes tm6000 proprietary format streams
+ qv4l2: QT v4l2 control panel application
+ v4l2-compliance: tool to test v4l2 API compliance of drivers
+ v4l2-ctl, cx18-ctl, ivtv-ctl: tools to control v4l2 controls from the cmdline
+ v4l2-dbg: tool to directly get and set registers of v4l2 devices
+ v4l2-sysfs-path: sysfs helper tool

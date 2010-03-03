@@ -1,3 +1,13 @@
+v4l-utils (0.7.90-1) experimental; urgency=low
+
+  * New upstream version
+  * Bumped standards to version 3.8.4 (no changes needed)
+  * Updated uploaders field
+  * Changed package source name changed to v4l-util
+  * Updated copyright file to DEP-5 like syntax
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Sun, 28 Feb 2010 19:44:15 +0100
+
 libv4l (0.6.4-1) unstable; urgency=low
 
   * New Upstream Version
