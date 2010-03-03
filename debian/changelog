@@ -5,6 +5,7 @@ v4l-utils (0.7.90-1) experimental; urgency=low
   * Updated uploaders field
   * Changed package source name changed to v4l-util
   * Updated copyright file to DEP-5 like syntax
+  * Disable pristine tar until bz2 issue is resolved
 
  -- Gregor Jasny <gjasny@googlemail.com>  Sun, 28 Feb 2010 19:44:15 +0100
 
