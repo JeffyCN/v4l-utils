@@ -1,3 +1,9 @@
+v4l-utils (0.7.91-1) experimental; urgency=low
+
+  * New upstream version
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Fri, 12 Mar 2010 17:20:08 +0100
+
 v4l-utils (0.7.90-1) experimental; urgency=low
 
   * New upstream version
