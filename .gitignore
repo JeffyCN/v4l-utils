@@ -8,7 +8,9 @@
 /debian/libv4l-0/
 /debian/libv4l-dev/
 # upstream
-*.a
-*.d
 *.o
+*.d
+*.so
+*.so.0
 *.pc
+*.a
