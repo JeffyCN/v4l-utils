@@ -2,6 +2,7 @@ v4l-utils (0.7.91-1) experimental; urgency=low
 
   * New upstream version
   * Reindent v4l-utils long description (Closes: #573598)
+  * Add FAQ extry how to port applications to libv4l (Closes: #569607)
 
  -- Gregor Jasny <gjasny@googlemail.com>  Fri, 12 Mar 2010 17:20:08 +0100
 
