@@ -7,6 +7,7 @@
 /debian/tmp/
 /debian/libv4l-0/
 /debian/libv4l-dev/
+/debian/v4l-utils/
 # upstream
 *.o
 *.d
