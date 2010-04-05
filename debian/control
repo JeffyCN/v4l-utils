@@ -124,12 +124,21 @@ Depends: libv4l-0 (= ${binary:Version}),
          ${shlibs:Depends},
          ${misc:Depends}
 Conflicts: ivtv-utils
-Description: Collection of video4linux utilities
- v4l-utils contains a various video4linux utilities:
+Description: Collection of command line video4linux utilities
+ v4l-utils contains the following video4linux command line utilities:
  .
   decode_tm6000: decodes tm6000 proprietary format streams
-  qv4l2: QT v4l2 control panel application
   v4l2-compliance: tool to test v4l2 API compliance of drivers
   v4l2-ctl, cx18-ctl, ivtv-ctl: tools to control v4l2 controls from the cmdline
   v4l2-dbg: tool to directly get and set registers of v4l2 devices
   v4l2-sysfs-path: sysfs helper tool
+
+Package: qv4l2
+Section: utils
+Architecture: any
+Depends: libv4l-0 (= ${binary:Version}),
+         ${shlibs:Depends},
+         ${misc:Depends}
+Description: Graphical Qt v4l2 control panel
+ Qt v4l2 control panel application. You can change all through the v4l2
+ interface exposed device controls.
