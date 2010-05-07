@@ -198,7 +198,7 @@ Copyright: 2007 Mauro Carvalho Chehab <mchehab@infradead.org>
 License: GPL-2
 
 Files: utils/keytable/keytable.c
-Copyright: 2006-2009 Mauro Carvalho Chehab <mchehab@infradead.org>
+Copyright: Copyright (C) 2006-2010 Mauro Carvalho Chehab <mchehab@redhat.com>
 License: GPL-2
 
 Files: utils/libv4l2util/frequencies.c
@@ -219,7 +219,7 @@ Copyright: 2006 Hans Verkuil <hverkuil@xs4all.nl>
 License: GPL-2+
 
 Files: utils/v4l2-compliance/v4l2-compliance.cpp
-Copyright: 2008  Hans Verkuil <hverkuil@xs4all.nl>
+Copyright: 2008, 2010  Hans Verkuil <hverkuil@xs4all.nl>
 License: GPL-2+
 
 Files: utils/v4l2-ctl/cx18-ctl.c
