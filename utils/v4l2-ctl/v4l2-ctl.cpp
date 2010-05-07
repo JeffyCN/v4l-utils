@@ -134,6 +134,7 @@ enum Option {
 	OptGetOverlayCropCap,
 	OptGetOutputOverlayCropCap,
 	OptOverlay,
+	OptSleep,
 	OptGetJpegComp,
 	OptSetJpegComp,
 	OptGetModulator,
@@ -142,6 +143,14 @@ enum Option {
 	OptGetOutputParm,
 	OptSetOutputParm,
 	OptQueryStandard,
+	OptPollForEvent,
+	OptWaitForEvent,
+	OptGetPriority,
+	OptSetPriority,
+	OptListDvPresets,
+	OptSetDvPreset,
+	OptGetDvPreset,
+	OptQueryDvPreset,
 	OptLast = 256
 };
 
@@ -278,8 +287,17 @@ static struct option long_options[] = {
 	{"set-jpeg-comp", required_argument, 0, OptSetJpegComp},
 	{"get-modulator", no_argument, 0, OptGetModulator},
 	{"set-modulator", required_argument, 0, OptSetModulator},
+	{"get-priority", no_argument, 0, OptGetPriority},
+	{"set-priority", required_argument, 0, OptSetPriority},
+	{"wait-for-event", required_argument, 0, OptWaitForEvent},
+	{"poll-for-event", required_argument, 0, OptPollForEvent},
 	{"overlay", required_argument, 0, OptOverlay},
+	{"sleep", required_argument, 0, OptSleep},
 	{"list-devices", no_argument, 0, OptListDevices},
+	{"list-dv-presets", no_argument, 0, OptListDvPresets},
+	{"set-dv-presets", required_argument, 0, OptSetDvPreset},
+	{"get-dv-presets", no_argument, 0, OptGetDvPreset},
+	{"query-dv-presets", no_argument, 0, OptQueryDvPreset},
 	{0, 0, 0, 0}
 };
 
@@ -320,7 +338,7 @@ static void usage(void)
 	       "                     secam-X (X = B/G/H/D/K/L/Lc) or just 'secam' (V4L2_STD_SECAM)\n"
 	       "  --list-standards   display supported video standards [VIDIOC_ENUMSTD]\n"
 	       "  --get-detected-standard\n"
-	       "                     display video detected input video standard [VIDIOC_QUERYSTD]\n"
+	       "                     display detected input video standard [VIDIOC_QUERYSTD]\n"
 	       "  -P, --get-parm     display video parameters [VIDIOC_G_PARM]\n"
 	       "  -p, --set-parm=<fps>\n"
 	       "                     set video framerate in <fps> [VIDIOC_S_PARM]\n"
@@ -450,13 +468,28 @@ static void usage(void)
 	       "                     bilingual:	 Modulate as bilingual\n"
 	       "                     mono-sap:	 Modulate as mono with Second Audio Program\n"
 	       "                     stereo-sap: Modulate as stereo with Second Audio Program\n"
+	       "  --get-priority     query the current access priority [VIDIOC_G_PRIORITY]\n"
+	       "  --set-priority=<prio>\n"
+	       "                     set the new access priority [VIDIOC_S_PRIORITY]\n"
+	       "                     <prio> is 1 (background), 2 (interactive) or 3 (record)\n"
 	       "  --get-output-parm  display output video parameters [VIDIOC_G_PARM]\n"
 	       "  --set-output-parm=<fps>\n"
 	       "                     set output video framerate in <fps> [VIDIOC_S_PARM]\n"
-	       "\n");
-	printf("Expert options:\n"
+	       "  --wait-for-event=<event>\n"
+	       "                     wait for an event [VIDIOC_DQEVENT]\n"
+	       "                     <event> is the event number or one of:\n"
+	       "                     eos, vsync\n"
+	       "  --poll-for-event=<event>\n"
+	       "                     poll for an event [VIDIOC_DQEVENT]\n"
+	       "                     see --wait-for-event for possible events\n"
+	       "  --list-dv-presets  list supported digital video presets [VIDIOC_ENUM_DV_PRESETS]\n"
+	       "  --set-dv-preset=<num>\n"
+	       "                     set the digital video preset to <num> [VIDIOC_S_DV_PRESET]\n"
+	       "  --get-dv-preset    query the digital video preset in use [VIDIOC_G_DV_PRESET]\n"
+	       "  --query-dv-preset  query the detected digital video preset [VIDIOC_QUERY_DV_PRESET]\n"
+	       "  --sleep=<secs>     sleep for <secs> seconds, call QUERYCAP and close the file handle\n"
 	       "  --streamoff        turn the stream off [VIDIOC_STREAMOFF]\n"
-	       "  --streamon         turn the stream on [VIDIOC_STREAMOFF]\n"
+	       "  --streamon         turn the stream on [VIDIOC_STREAMON]\n"
 	       "  --log-status       log the board status in the kernel log [VIDIOC_LOG_STATUS]\n");
 	exit(0);
 }
@@ -564,14 +597,14 @@ static std::string flags2s(unsigned val, const flag_def *def)
 
 	while (def->flag) {
 		if (val & def->flag) {
-			if (s.length()) s += " ";
+			if (s.length()) s += ", ";
 			s += def->str;
 			val &= ~def->flag;
 		}
 		def++;
 	}
 	if (val) {
-		if (s.length()) s += " ";
+		if (s.length()) s += ", ";
 		s += num2s(val);
 	}
 	return s;
@@ -599,6 +632,30 @@ static std::string status2s(__u32 status)
 	return status ? flags2s(status, in_status_def) : "ok";
 }
 
+
+static const flag_def input_cap_def[] = {
+	{V4L2_IN_CAP_PRESETS, "DV presets" },
+	{V4L2_IN_CAP_CUSTOM_TIMINGS, "custom DV timings" },
+	{V4L2_IN_CAP_STD, "SD presets" },
+	{ 0, NULL }
+};
+
+static std::string input_cap2s(__u32 capabilities)
+{
+	return capabilities ? flags2s(capabilities, input_cap_def) : "not defined";
+}
+
+static const flag_def output_cap_def[] = {
+	{V4L2_OUT_CAP_PRESETS, "DV presets" },
+	{V4L2_OUT_CAP_CUSTOM_TIMINGS, "custom DV timings" },
+	{V4L2_OUT_CAP_STD, "SD presets" },
+	{ 0, NULL }
+};
+
+static std::string output_cap2s(__u32 capabilities)
+{
+	return capabilities ? flags2s(capabilities, output_cap_def) : "not defined";
+}
 
 static void print_sliced_vbi_cap(struct v4l2_sliced_vbi_cap &cap)
 {
@@ -704,7 +761,7 @@ static void print_qctrl(int fd, struct v4l2_queryctrl *queryctrl,
 				queryctrl->default_value, ctrl->value);
 		break;
 	case V4L2_CTRL_TYPE_BUTTON:
-		printf("%31s (button)\n", s.c_str());
+		printf("%31s (btn)  :", s.c_str());
 		break;
 	default: break;
 	}
@@ -744,11 +801,18 @@ static int print_control(int fd, struct v4l2_queryctrl &qctrl, int show_menus)
 		return 1;
 	}
 	ext_ctrl.id = qctrl.id;
+	if ((qctrl.flags & V4L2_CTRL_FLAG_WRITE_ONLY) ||
+	    qctrl.type == V4L2_CTRL_TYPE_BUTTON) {
+		print_qctrl(fd, &qctrl, &ext_ctrl, show_menus);
+		return 1;
+	}
 	ctrls.ctrl_class = V4L2_CTRL_ID2CLASS(qctrl.id);
 	ctrls.count = 1;
 	ctrls.controls = &ext_ctrl;
-	if (V4L2_CTRL_ID2CLASS(qctrl.id) != V4L2_CTRL_CLASS_USER &&
-	    qctrl.id < V4L2_CID_PRIVATE_BASE) {
+	if (qctrl.type == V4L2_CTRL_TYPE_INTEGER64 ||
+	    qctrl.type == V4L2_CTRL_TYPE_STRING ||
+	    (V4L2_CTRL_ID2CLASS(qctrl.id) != V4L2_CTRL_CLASS_USER &&
+	     qctrl.id < V4L2_CID_PRIVATE_BASE)) {
 		if (qctrl.type == V4L2_CTRL_TYPE_STRING) {
 		    ext_ctrl.size = qctrl.maximum + 1;
 		    ext_ctrl.string = (char *)malloc(ext_ctrl.size);
@@ -1121,32 +1185,6 @@ static void print_video_formats_ext(int fd, enum v4l2_buf_type type)
 		printf("\n");
 		fmt.index++;
 	}
-}
-
-static char *pts_to_string(char *str, unsigned long pts)
-{
-	static char buf[256];
-	int hours, minutes, seconds, fracsec;
-	float fps;
-	int frame;
-	char *p = (str) ? str : buf;
-
-	static const int MPEG_CLOCK_FREQ = 90000;
-	seconds = pts / MPEG_CLOCK_FREQ;
-	fracsec = pts % MPEG_CLOCK_FREQ;
-
-	minutes = seconds / 60;
-	seconds = seconds % 60;
-
-	hours = minutes / 60;
-	minutes = minutes % 60;
-
-	fps = 30;
-	frame = (int)ceilf(((float)fracsec / (float)MPEG_CLOCK_FREQ) * fps);
-
-	snprintf(p, sizeof(buf), "%d:%02d:%02d:%d", hours, minutes, seconds,
-		 frame);
-	return p;
 }
 
 static const char *audmode2s(int audmode)
@@ -1650,6 +1688,45 @@ static enum v4l2_field parse_field(const char *s)
 	return V4L2_FIELD_ANY;
 }
 
+static void print_event(const struct v4l2_event *ev)
+{
+	printf("%ld.%06ld: event %u, pending %u: ",
+			ev->timestamp.tv_sec, ev->timestamp.tv_nsec / 1000,
+			ev->sequence, ev->pending);
+	switch (ev->type) {
+	case V4L2_EVENT_VSYNC:
+		printf("vsync %s\n", field2s(ev->u.vsync.field).c_str());
+		break;
+	case V4L2_EVENT_EOS:
+		printf("eos\n");
+		break;
+	default:
+		if (ev->type >= V4L2_EVENT_PRIVATE_START)
+			printf("unknown private event (%08x)\n", ev->type);
+		else
+			printf("unknown event (%08x)\n", ev->type);
+		break;
+	}
+}
+
+static __u32 parse_event(const char *e)
+{
+	__u32 event = 0;
+
+	if (isdigit(e[0]))
+		event = strtoul(e, 0L, 0);
+	else if (!strcmp(e, "eos"))
+		event = V4L2_EVENT_EOS;
+	else if (!strcmp(e, "vsync"))
+		event = V4L2_EVENT_VSYNC;
+
+	if (event == 0) {
+		fprintf(stderr, "Unknown event\n");
+		usage();
+	}
+	return event;
+}
+
 static __u32 find_pixel_format(int fd, unsigned index)
 {
 	struct v4l2_fmtdesc fmt;
@@ -1708,6 +1785,8 @@ int main(int argc, char **argv)
 	struct v4l2_framebuffer fbuf;   /* fbuf */
 	struct v4l2_jpegcompression jpegcomp; /* jpeg compression */
 	struct v4l2_streamparm parm;	/* get/set parm */
+	struct v4l2_dv_enum_preset dv_enum_preset; /* list_dv_preset */
+	struct v4l2_dv_preset dv_preset; /* set_dv_preset/get_dv_preset/query_dv_preset */
 	int input;			/* set_input/get_input */
 	int output;			/* set_output/get_output */
 	int txsubchans = 0;		/* set_modulator */
@@ -1720,6 +1799,10 @@ int main(int argc, char **argv)
 	int overlay;			/* overlay */
 	unsigned int *set_overlay_fmt_ptr = NULL;
 	struct v4l2_format *overlay_fmt_ptr = NULL;
+	__u32 wait_for_event = 0;	/* wait for this event */
+	__u32 poll_for_event = 0;	/* poll for this event */
+	unsigned secs = 0;
+	enum v4l2_priority prio = V4L2_PRIORITY_UNSET;
 	char short_options[26 * 2 * 2 + 1];
 	int idx = 0;
 	int ret;
@@ -1749,6 +1832,8 @@ int main(int argc, char **argv)
 	memset(&vs, 0, sizeof(vs));
 	memset(&fbuf, 0, sizeof(fbuf));
 	memset(&jpegcomp, 0, sizeof(jpegcomp));
+	memset(&dv_preset, 0, sizeof(dv_preset));
+	memset(&dv_enum_preset, 0, sizeof(dv_enum_preset));
 
 	if (argc == 1) {
 		usage();
@@ -2197,8 +2282,27 @@ int main(int argc, char **argv)
 			}
 			break;
 		}
+		case OptSleep:
+			secs = strtoul(optarg, 0L, 0);
+			break;
+		case OptSetPriority:
+			prio = (enum v4l2_priority)strtoul(optarg, 0L, 0);
+			break;
+		case OptWaitForEvent:
+			wait_for_event = parse_event(optarg);
+			if (wait_for_event == 0)
+				return 1;
+			break;
+		case OptPollForEvent:
+			poll_for_event = parse_event(optarg);
+			if (poll_for_event == 0)
+				return 1;
+			break;
 		case OptListDevices:
 			list_devices();
+			break;
+		case OptSetDvPreset:
+			dv_preset.preset = strtoul(optarg, 0L, 0);
 			break;
 		case ':':
 			fprintf(stderr, "Option `%s' requires a value\n",
@@ -2269,6 +2373,8 @@ int main(int argc, char **argv)
 		options[OptGetCropCap] = 1;
 		options[OptGetOutputCropCap] = 1;
 		options[OptGetJpegComp] = 1;
+		options[OptGetDvPreset] = 1;
+		options[OptGetPriority] = 1;
 		options[OptSilent] = 1;
 	}
 
@@ -2289,6 +2395,12 @@ int main(int argc, char **argv)
 	if (options[OptStreamOff]) {
 		int dummy = 0;
 		doioctl(fd, VIDIOC_STREAMOFF, &dummy, "VIDIOC_STREAMOFF");
+	}
+
+	if (options[OptSetPriority]) {
+		if (doioctl(fd, VIDIOC_S_PRIORITY, &prio, "VIDIOC_S_PRIORITY") >= 0) {
+			printf("Priority set: %d\n", prio);
+		}
 	}
 
 	if (options[OptSetFreq]) {
@@ -2323,6 +2435,11 @@ int main(int argc, char **argv)
 			printf("Standard set to %08llx\n", (unsigned long long)std);
 	}
 
+        if (options[OptSetDvPreset]){
+		if (doioctl(fd, VIDIOC_S_DV_PRESET, &dv_preset, "VIDIOC_S_DV_PRESET") >= 0) {
+			printf("Preset set: %d\n", dv_preset.preset);
+		}
+	}
 
 	if (options[OptSetParm]) {
 		memset(&parm, 0, sizeof(parm));
@@ -2429,7 +2546,6 @@ int main(int argc, char **argv)
 				printfmt(in_vfmt);
 		}
 	}
-set_vid_fmt_error:
 
 	if (options[OptSetVideoOutFormat] || options[OptTryVideoOutFormat]) {
 		struct v4l2_format in_vfmt;
@@ -2563,16 +2679,20 @@ set_vid_fmt_error:
 	if (options[OptSetCtrl] && !set_ctrls.empty()) {
 		struct v4l2_ext_controls ctrls = { 0 };
 		class2ctrls_map class2ctrls;
+		bool use_ext_ctrls = false;
 
 		for (ctrl_set_map::iterator iter = set_ctrls.begin();
 				iter != set_ctrls.end(); ++iter) {
 			struct v4l2_ext_control ctrl = { 0 };
 
 			ctrl.id = ctrl_str2q[iter->first].id;
+			if (ctrl_str2q[iter->first].type == V4L2_CTRL_TYPE_INTEGER64)
+				use_ext_ctrls = true;
 			if (ctrl_str2q[iter->first].type == V4L2_CTRL_TYPE_STRING) {
 				unsigned len = iter->second.length();
 				unsigned maxlen = ctrl_str2q[iter->first].maximum;
 
+				use_ext_ctrls = true;
 				ctrl.size = maxlen + 1;
 				ctrl.string = (char *)malloc(ctrl.size);
 				if (len > maxlen) {
@@ -2589,7 +2709,9 @@ set_vid_fmt_error:
 		}
 		for (class2ctrls_map::iterator iter = class2ctrls.begin();
 				iter != class2ctrls.end(); ++iter) {
-			if (iter->first == V4L2_CTRL_CLASS_USER) {
+			if (!use_ext_ctrls &&
+			    (iter->first == V4L2_CTRL_CLASS_USER ||
+			     iter->first == V4L2_CID_PRIVATE_BASE)) {
 				for (unsigned i = 0; i < iter->second.size(); i++) {
 					struct v4l2_control ctrl;
 
@@ -2812,14 +2934,29 @@ set_vid_fmt_error:
 		}
 	}
 
-	if (options[OptQueryStandard]) {
+	if (options[OptGetDvPreset]) {
+		if (doioctl(fd, VIDIOC_G_DV_PRESET, &dv_preset, "VIDIOC_G_DV_PRESET") >= 0) {
+			printf("Preset: %d\n", dv_preset.preset);
+		}
+	}
+
+        if (options[OptQueryStandard]) {
 		if (doioctl(fd, VIDIOC_QUERYSTD, &std, "VIDIOC_QUERYSTD") == 0) {
 			printf("Video Standard = 0x%08llx\n", (unsigned long long)std);
 			print_v4lstd((unsigned long long)std);
 		}
 	}
 
-	if (options[OptGetParm]) {
+        if (options[OptQueryDvPreset]) {
+                doioctl(fd, VIDIOC_QUERY_DV_PRESET, &dv_preset, "VIDIOC_QUERY_DV_PRESET");
+                if (dv_preset.preset != V4L2_DV_INVALID) {
+                        printf("Preset: %d\n", dv_preset.preset);
+                } else {
+                        fprintf(stderr, "No active input detected\n");
+                }
+        }
+
+        if (options[OptGetParm]) {
 		memset(&parm, 0, sizeof(parm));
 		parm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 		if (doioctl(fd, VIDIOC_G_PARM, &parm, "VIDIOC_G_PARM") == 0) {
@@ -2866,13 +3003,17 @@ set_vid_fmt_error:
 	if (options[OptGetCtrl] && !get_ctrls.empty()) {
 		struct v4l2_ext_controls ctrls = { 0 };
 		class2ctrls_map class2ctrls;
+		bool use_ext_ctrls = false;
 
 		for (ctrl_get_list::iterator iter = get_ctrls.begin();
 				iter != get_ctrls.end(); ++iter) {
 			struct v4l2_ext_control ctrl = { 0 };
 
 			ctrl.id = ctrl_str2q[*iter].id;
+			if (ctrl_str2q[*iter].type == V4L2_CTRL_TYPE_INTEGER64)
+				use_ext_ctrls = true;
 			if (ctrl_str2q[*iter].type == V4L2_CTRL_TYPE_STRING) {
+				use_ext_ctrls = true;
 				ctrl.size = ctrl_str2q[*iter].maximum + 1;
 				ctrl.string = (char *)malloc(ctrl.size);
 				ctrl.string[0] = 0;
@@ -2881,7 +3022,9 @@ set_vid_fmt_error:
 		}
 		for (class2ctrls_map::iterator iter = class2ctrls.begin();
 				iter != class2ctrls.end(); ++iter) {
-			if (iter->first == V4L2_CTRL_CLASS_USER) {
+			if (!use_ext_ctrls &&
+			    (iter->first == V4L2_CTRL_CLASS_USER ||
+			     iter->first == V4L2_CID_PRIVATE_BASE)) {
 				for (unsigned i = 0; i < iter->second.size(); i++) {
 					struct v4l2_control ctrl;
 
@@ -2949,6 +3092,11 @@ set_vid_fmt_error:
 		}
 	}
 
+	if (options[OptGetPriority]) {
+		if (doioctl(fd, VIDIOC_G_PRIORITY, &prio, "VIDIOC_G_PRIORITY") == 0)
+			printf("Priority: %d\n", prio);
+	}
+
 	if (options[OptLogStatus]) {
 		static char buf[40960];
 		int len;
@@ -2961,7 +3109,7 @@ set_vid_fmt_error:
 				char *q;
 
 				buf[len] = 0;
-				while ((q = strstr(p, "START STATUS CARD #"))) {
+				while ((q = strstr(p, "START STATUS"))) {
 					p = q + 1;
 				}
 				if (p) {
@@ -2984,16 +3132,17 @@ set_vid_fmt_error:
 		while (ioctl(fd, VIDIOC_ENUMINPUT, &vin) >= 0) {
 			if (vin.index)
 				printf("\n");
-			printf("\tInput   : %d\n", vin.index);
-			printf("\tName    : %s\n", vin.name);
-			printf("\tType    : 0x%08X\n", vin.type);
-			printf("\tAudioset: 0x%08X\n", vin.audioset);
-			printf("\tTuner   : 0x%08X\n", vin.tuner);
-			printf("\tStandard: 0x%016llX (%s)\n", (unsigned long long)vin.std,
+			printf("\tInput       : %d\n", vin.index);
+			printf("\tName        : %s\n", vin.name);
+			printf("\tType        : 0x%08X\n", vin.type);
+			printf("\tAudioset    : 0x%08X\n", vin.audioset);
+			printf("\tTuner       : 0x%08X\n", vin.tuner);
+			printf("\tStandard    : 0x%016llX (%s)\n", (unsigned long long)vin.std,
 				std2s(vin.std).c_str());
-			printf("\tStatus  : 0x%08X (%s)\n", vin.status, status2s(vin.status).c_str());
-			vin.index++;
-		}
+			printf("\tStatus      : 0x%08X (%s)\n", vin.status, status2s(vin.status).c_str());
+			printf("\tCapabilities: 0x%08X (%s)\n", vin.capabilities, input_cap2s(vin.capabilities).c_str());
+                        vin.index++;
+                }
 	}
 
 	if (options[OptListOutputs]) {
@@ -3002,12 +3151,13 @@ set_vid_fmt_error:
 		while (ioctl(fd, VIDIOC_ENUMOUTPUT, &vout) >= 0) {
 			if (vout.index)
 				printf("\n");
-			printf("\tOutput  : %d\n", vout.index);
-			printf("\tName    : %s\n", vout.name);
-			printf("\tType    : 0x%08X\n", vout.type);
-			printf("\tAudioset: 0x%08X\n", vout.audioset);
-			printf("\tStandard: 0x%016llX (%s)\n", (unsigned long long)vout.std,
+			printf("\tOutput      : %d\n", vout.index);
+			printf("\tName        : %s\n", vout.name);
+			printf("\tType        : 0x%08X\n", vout.type);
+			printf("\tAudioset    : 0x%08X\n", vout.audioset);
+			printf("\tStandard    : 0x%016llX (%s)\n", (unsigned long long)vout.std,
 					std2s(vout.std).c_str());
+			printf("\tCapabilities: 0x%08X (%s)\n", vout.capabilities, output_cap2s(vout.capabilities).c_str());
 			vout.index++;
 		}
 	}
@@ -3117,9 +3267,66 @@ set_vid_fmt_error:
 		list_controls(fd, 0);
 	}
 
+	if (options[OptListDvPresets]) {
+		dv_enum_preset.index = 0;
+		printf("ioctl: VIDIOC_ENUM_DV_PRESETS\n");
+		while (ioctl(fd, VIDIOC_ENUM_DV_PRESETS, &dv_enum_preset) >= 0) {
+			if (dv_enum_preset.index)
+				printf("\n");
+			printf("\tIndex   : %d\n", dv_enum_preset.index);
+			printf("\tPreset  : %d\n", dv_enum_preset.preset);
+			printf("\tName    : %s\n", dv_enum_preset.name);
+			printf("\tWidth   : %d\n", dv_enum_preset.width);
+			printf("\tHeight  : %d\n", dv_enum_preset.height);
+			dv_enum_preset.index++;
+		}
+	}
 	if (options[OptStreamOn]) {
 		int dummy = 0;
 		doioctl(fd, VIDIOC_STREAMON, &dummy, "VIDIOC_STREAMON");
+	}
+
+	if (options[OptWaitForEvent]) {
+		struct v4l2_event_subscription sub = { wait_for_event };
+		struct v4l2_event ev;
+
+		if (!doioctl(fd, VIDIOC_SUBSCRIBE_EVENT, &sub, "VIDIOC_SUBSCRIBE_EVENT")) {
+			if (!doioctl(fd, VIDIOC_DQEVENT, &ev, "VIDIOC_DQEVENT")) {
+				print_event(&ev);
+			}
+		}
+	}
+
+	if (options[OptPollForEvent]) {
+		struct v4l2_event_subscription sub = { poll_for_event };
+		struct v4l2_event ev;
+
+		if (!doioctl(fd, VIDIOC_SUBSCRIBE_EVENT, &sub, "VIDIOC_SUBSCRIBE_EVENT")) {
+			fd_set fds;
+
+			fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
+			while (1) {
+				int res;
+
+				FD_ZERO(&fds);
+				FD_SET(fd, &fds);
+				res = select(fd + 1, NULL, NULL, &fds, NULL);
+				if (res <= 0)
+					break;
+				if (!doioctl(fd, VIDIOC_DQEVENT, &ev, "VIDIOC_DQEVENT")) {
+					print_event(&ev);
+				}
+			}
+		}
+	}
+
+	if (options[OptSleep]) {
+		sleep(secs);
+		printf("Test VIDIOC_QUERYCAP:\n");
+		if (ioctl(fd, VIDIOC_QUERYCAP, &vcap) == 0)
+			printf("\tDriver name   : %s\n", vcap.driver);
+		else
+			perror("VIDIOC_QUERYCAP");
 	}
 
 	close(fd);
