@@ -1,0 +1,8 @@
+all::
+	$(MAKE) $@
+
+install:: all
+	mkdir -p $(DESTDIR)$(PREFIX)/bin
+	install -m 755 qv4l2 $(DESTDIR)$(PREFIX)/bin
+
+include ../../Make.rules
