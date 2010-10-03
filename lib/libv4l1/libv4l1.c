@@ -1,7 +1,14 @@
 /*
 # libv4l1 userspace v4l1 api emulation for v4l2 devices
 
-#             (C) 2008 Hans de Goede <hdegoede@redhat.com>
+#             (C) 2008-2010 Hans de Goede <hdegoede@redhat.com>
+
+# Based in part on the kernels v4l1 ioctl compatibility code which is:
+
+#             (C) 2003-2009 Bill Dirks <bill@thedirks.org>, et al.
+
+# The code taken from the kernel has been relicensed from GPLv2+ to LGPLv2+
+# with permission from the authors see libv4l1-kernelcode-license.txt
 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU Lesser General Public License as published by
@@ -128,6 +135,19 @@ static unsigned int pixelformat_to_palette(unsigned int pixelformat)
 		return VIDEO_PALETTE_YUV422P;
 	}
 	return 0;
+}
+
+static int count_inputs(int fd)
+{
+	struct v4l2_input input2;
+	int i;
+	for (i = 0;; i++) {
+		memset(&input2, 0, sizeof(input2));
+		input2.index = i;
+		if (0 != v4l2_ioctl(fd, VIDIOC_ENUMINPUT, &input2))
+			break;
+		}
+	return i;
 }
 
 static int v4l1_set_format(int index, unsigned int width,
@@ -491,11 +511,37 @@ int v4l1_ioctl(int fd, unsigned long int request, ...)
 	switch (request) {
 	case VIDIOCGCAP: {
 		struct video_capability *cap = arg;
+		struct v4l2_framebuffer fbuf = { 0, };
+		struct v4l2_capability cap2 = { { 0 }, };
 
-		result = SYS_IOCTL(fd, request, arg);
+		result = v4l2_ioctl(fd, VIDIOC_QUERYCAP, &cap2);
+		if (result < 0)
+			break;
 
-		/* override kernel v4l1 compat min / max size with our own more
-		   accurate values */
+		if (cap2.capabilities & V4L2_CAP_VIDEO_OVERLAY) {
+			result = v4l2_ioctl(fd, VIDIOC_G_FBUF, &fbuf);
+			if (result < 0)
+				memset(&fbuf, 0, sizeof(fbuf));
+			result = 0;
+		}
+
+		memcpy(cap->name, cap2.card,
+		       min(sizeof(cap->name), sizeof(cap2.card)));
+
+		cap->name[sizeof(cap->name) - 1] = 0;
+
+		if (cap2.capabilities & V4L2_CAP_VIDEO_CAPTURE)
+			cap->type |= VID_TYPE_CAPTURE;
+		if (cap2.capabilities & V4L2_CAP_TUNER)
+			cap->type |= VID_TYPE_TUNER;
+		if (cap2.capabilities & V4L2_CAP_VBI_CAPTURE)
+			cap->type |= VID_TYPE_TELETEXT;
+		if (cap2.capabilities & V4L2_CAP_VIDEO_OVERLAY)
+			cap->type |= VID_TYPE_OVERLAY;
+		if (fbuf.capability & V4L2_FBUF_CAP_LIST_CLIPPING)
+			cap->type |= VID_TYPE_CLIPPING;
+
+		cap->channels  = count_inputs(fd);
 		cap->minwidth  = devices[index].min_width;
 		cap->minheight = devices[index].min_height;
 		cap->maxwidth  = devices[index].max_width;
@@ -521,14 +567,15 @@ int v4l1_ioctl(int fd, unsigned long int request, ...)
 
 	case VIDIOCGPICT: {
 		struct video_picture *pic = arg;
+		int i;
 
-		/* If our v4l2 pixformat has no corresponding v4l1 palette, and the
-		   app has not touched the pixformat sofar, try setting a palette which
-		   does (and which we emulate when necessary) so that applications
-		   which just query the current format and then take whatever they get
-		   will work */
+		/* If our v4l2 pixformat has no corresponding v4l1 palette, and
+		   the app has not touched the pixformat sofar, try setting a
+		   palette which does (and which we emulate when necessary) so
+		   that applications which just query the current format and
+		   then take whatever they get will work */
 		if (!(devices[index].flags & V4L1_PIX_FMT_TOUCHED) &&
-				!pixelformat_to_palette(devices[index].v4l2_pixfmt))
+		    !pixelformat_to_palette(devices[index].v4l2_pixfmt))
 			v4l1_set_format(index, devices[index].width,
 					devices[index].height,
 					VIDEO_PALETTE_RGB24,
@@ -537,15 +584,24 @@ int v4l1_ioctl(int fd, unsigned long int request, ...)
 
 		devices[index].flags |= V4L1_PIX_FMT_TOUCHED;
 
+		memset(pic, 0, sizeof(*pic));
 		pic->depth = devices[index].depth;
 		pic->palette = devices[index].v4l1_pal;
-		pic->hue = v4l2_get_control(devices[index].fd, V4L2_CID_HUE);
-		pic->colour = v4l2_get_control(devices[index].fd, V4L2_CID_SATURATION);
-		pic->contrast = v4l2_get_control(devices[index].fd, V4L2_CID_CONTRAST);
-		pic->whiteness = v4l2_get_control(devices[index].fd,
-				V4L2_CID_WHITENESS);
-		pic->brightness = v4l2_get_control(devices[index].fd,
-				V4L2_CID_BRIGHTNESS);
+		i = v4l2_get_control(devices[index].fd, V4L2_CID_HUE);
+		if (i >= 0)
+			pic->hue = i;
+		i = v4l2_get_control(devices[index].fd, V4L2_CID_SATURATION);
+		if (i >= 0)
+			pic->colour = i;
+		i = v4l2_get_control(devices[index].fd, V4L2_CID_CONTRAST);
+		if (i >= 0)
+			pic->contrast = i;
+		i = v4l2_get_control(devices[index].fd, V4L2_CID_WHITENESS);
+		if (i >= 0)
+			pic->whiteness = i;
+		i = v4l2_get_control(devices[index].fd, V4L2_CID_BRIGHTNESS);
+		if (i >= 0)
+			pic->brightness = i;
 
 		result = 0;
 		break;
@@ -573,14 +629,7 @@ int v4l1_ioctl(int fd, unsigned long int request, ...)
 	}
 
 	case VIDIOCGCHAN: {
-		struct v4l2_input input2;
 		struct video_channel *chan = arg;
-
-		if ((devices[index].flags & V4L1_SUPPORTS_ENUMINPUT) &&
-				(devices[index].flags & V4L1_SUPPORTS_ENUMSTD)) {
-			result = SYS_IOCTL(fd, request, arg);
-			break;
-		}
 
 		/* Set some defaults */
 		chan->tuners = 0;
@@ -588,52 +637,93 @@ int v4l1_ioctl(int fd, unsigned long int request, ...)
 		chan->type = VIDEO_TYPE_CAMERA;
 		chan->norm = 0;
 
-		/* In case of no ENUMSTD support, ignore the norm member of the
-		   channel struct */
 		if (devices[index].flags & V4L1_SUPPORTS_ENUMINPUT) {
-			input2.index = chan->channel;
+			struct v4l2_input input2 = { .index = chan->channel };
+
 			result = v4l2_ioctl(fd, VIDIOC_ENUMINPUT, &input2);
-			if (result == 0) {
-				snprintf(chan->name, sizeof(chan->name), "%s", (char *)input2.name);
-				if (input2.type == V4L2_INPUT_TYPE_TUNER) {
-					chan->tuners = 1;
-					chan->type = VIDEO_TYPE_TV;
-					chan->flags = VIDEO_VC_TUNER;
-				}
+			if (result < 0)
+				break;
+
+			snprintf(chan->name, sizeof(chan->name), "%s",
+				 (char *)input2.name);
+			if (input2.type == V4L2_INPUT_TYPE_TUNER) {
+				chan->tuners = 1;
+				chan->type = VIDEO_TYPE_TV;
+				chan->flags = VIDEO_VC_TUNER;
 			}
-			break;
+		} else {
+			/* No ENUMINPUT support, fake it. */
+			if (chan->channel == 0) {
+				snprintf(chan->name, sizeof(chan->name),
+					 "Camera");
+				result = 0;
+			} else {
+				errno  = EINVAL;
+				result = -1;
+				break;
+			}
 		}
 
-		/* No ENUMINPUT support, fake it (assume its a Camera in this case) */
-		if (chan->channel == 0) {
-			snprintf(chan->name, sizeof(chan->name), "Camera");
-			result = 0;
-		} else {
-			errno  = EINVAL;
-			result = -1;
+		/* In case of no ENUMSTD support, ignore the norm member of the
+		   channel struct */
+		if (devices[index].flags & V4L1_SUPPORTS_ENUMSTD) {
+			v4l2_std_id sid;
+
+			result = v4l2_ioctl(fd, VIDIOC_G_STD, &sid);
+			if (result < 0)
+				break;
+
+			if (sid & V4L2_STD_PAL)
+				chan->norm = VIDEO_MODE_PAL;
+			if (sid & V4L2_STD_NTSC)
+				chan->norm = VIDEO_MODE_NTSC;
+			if (sid & V4L2_STD_SECAM)
+				chan->norm = VIDEO_MODE_SECAM;
+			if (sid == V4L2_STD_ALL)
+				chan->norm = VIDEO_MODE_AUTO;
 		}
 		break;
 	}
 
 	case VIDIOCSCHAN: {
 		struct video_channel *chan = arg;
-		if ((devices[index].flags & V4L1_SUPPORTS_ENUMINPUT) &&
-				(devices[index].flags & V4L1_SUPPORTS_ENUMSTD)) {
-			result = SYS_IOCTL(fd, request, arg);
-			break;
-		}
-		/* In case of no ENUMSTD support, ignore the norm member of the
-		   channel struct */
+
 		if (devices[index].flags & V4L1_SUPPORTS_ENUMINPUT) {
 			result = v4l2_ioctl(fd, VIDIOC_S_INPUT, &chan->channel);
-			break;
-		}
-		/* No ENUMINPUT support, fake it (assume its a Camera in this case) */
-		if (chan->channel == 0) {
-			result = 0;
+			if (result < 0)
+				break;
 		} else {
-			errno  = EINVAL;
-			result = -1;
+			/* No ENUMINPUT support, assume a single input */
+			if (chan->channel != 0) {
+				errno  = EINVAL;
+				result = -1;
+				break;
+			}
+			result = 0;
+		}
+
+		/* In case of no ENUMSTD support, ignore the norm member of the
+		   channel struct */
+		if (devices[index].flags & V4L1_SUPPORTS_ENUMSTD) {
+			v4l2_std_id sid = 0;
+
+			switch (chan->norm) {
+			case VIDEO_MODE_PAL:
+				sid = V4L2_STD_PAL;
+				break;
+			case VIDEO_MODE_NTSC:
+				sid = V4L2_STD_NTSC;
+				break;
+			case VIDEO_MODE_SECAM:
+				sid = V4L2_STD_SECAM;
+				break;
+			case VIDEO_MODE_AUTO:
+				sid = V4L2_STD_ALL;
+				break;
+			}
+
+			if (sid)
+				result = v4l2_ioctl(fd, VIDIOC_S_STD, &sid);
 		}
 		break;
 	}
@@ -721,6 +811,360 @@ int v4l1_ioctl(int fd, unsigned long int request, ...)
 			devices[index].width  = fmt2->fmt.pix.width;
 			devices[index].height = fmt2->fmt.pix.height;
 		}
+		break;
+	}
+
+	case VIDIOCGFBUF: {
+		struct video_buffer *buffer = arg;
+		struct v4l2_framebuffer fbuf = { 0, };
+
+		result = v4l2_ioctl(fd, VIDIOC_G_FBUF, &fbuf);
+		if (result < 0)
+			break;
+
+		buffer->base = fbuf.base;
+		buffer->height = fbuf.fmt.height;
+		buffer->width = fbuf.fmt.width;
+
+		switch (fbuf.fmt.pixelformat) {
+		case V4L2_PIX_FMT_RGB332:
+			buffer->depth = 8;
+			break;
+		case V4L2_PIX_FMT_RGB555:
+			buffer->depth = 15;
+			break;
+		case V4L2_PIX_FMT_RGB565:
+			buffer->depth = 16;
+			break;
+		case V4L2_PIX_FMT_BGR24:
+			buffer->depth = 24;
+			break;
+		case V4L2_PIX_FMT_BGR32:
+			buffer->depth = 32;
+			break;
+		default:
+			buffer->depth = 0;
+		}
+
+		if (fbuf.fmt.bytesperline) {
+			buffer->bytesperline = fbuf.fmt.bytesperline;
+			if (!buffer->depth && buffer->width)
+				buffer->depth = ((fbuf.fmt.bytesperline << 3)
+						+ (buffer->width - 1))
+						/ buffer->width;
+		} else {
+			buffer->bytesperline =
+				(buffer->width * buffer->depth + 7) & 7;
+			buffer->bytesperline >>= 3;
+		}
+		break;
+	}
+
+	case VIDIOCSFBUF: {
+		struct video_buffer *buffer = arg;
+		struct v4l2_framebuffer fbuf = { 0, };
+
+		fbuf.base = buffer->base;
+		fbuf.fmt.height = buffer->height;
+		fbuf.fmt.width = buffer->width;
+
+		switch (buffer->depth) {
+		case 8:
+			fbuf.fmt.pixelformat = V4L2_PIX_FMT_RGB332;
+			break;
+		case 15:
+			fbuf.fmt.pixelformat = V4L2_PIX_FMT_RGB555;
+			break;
+		case 16:
+			fbuf.fmt.pixelformat = V4L2_PIX_FMT_RGB565;
+			break;
+		case 24:
+			fbuf.fmt.pixelformat = V4L2_PIX_FMT_BGR24;
+			break;
+		case 32:
+			fbuf.fmt.pixelformat = V4L2_PIX_FMT_BGR32;
+			break;
+		}
+
+		fbuf.fmt.bytesperline = buffer->bytesperline;
+		result = v4l2_ioctl(fd, VIDIOC_S_FBUF, &fbuf);
+		break;
+	}
+
+	case VIDIOCSTUNER: {
+		struct video_tuner *tun = arg;
+		struct v4l2_tuner t = { 0, };
+
+		t.index = tun->tuner;
+		result = v4l2_ioctl(fd, VIDIOC_S_TUNER, &t);
+
+		break;
+	}
+
+	case VIDIOCGTUNER: {
+		int i;
+		struct video_tuner *tun = arg;
+		struct v4l2_tuner tun2 = { 0, };
+		struct v4l2_standard std2 = { 0, };
+		v4l2_std_id sid;
+
+		result = v4l2_ioctl(fd, VIDIOC_G_TUNER, &tun2);
+		if (result < 0)
+			break;
+
+		memcpy(tun->name, tun2.name,
+			min(sizeof(tun->name), sizeof(tun2.name)));
+		tun->name[sizeof(tun->name) - 1] = 0;
+		tun->rangelow = tun2.rangelow;
+		tun->rangehigh = tun2.rangehigh;
+		tun->flags = 0;
+		tun->mode = VIDEO_MODE_AUTO;
+
+		for (i = 0; i < 64; i++) {
+			std2.index = i;
+			if (0 != v4l2_ioctl(fd, VIDIOC_ENUMSTD, &std2))
+				break;
+			if (std2.id & V4L2_STD_PAL)
+				tun->flags |= VIDEO_TUNER_PAL;
+			if (std2.id & V4L2_STD_NTSC)
+				tun->flags |= VIDEO_TUNER_NTSC;
+			if (std2.id & V4L2_STD_SECAM)
+				tun->flags |= VIDEO_TUNER_SECAM;
+		}
+
+		if (v4l2_ioctl(fd, VIDIOC_G_STD, &sid) == 0) {
+			if (sid & V4L2_STD_PAL)
+				tun->mode = VIDEO_MODE_PAL;
+			if (sid & V4L2_STD_NTSC)
+				tun->mode = VIDEO_MODE_NTSC;
+			if (sid & V4L2_STD_SECAM)
+				tun->mode = VIDEO_MODE_SECAM;
+		}
+		if (tun2.capability & V4L2_TUNER_CAP_LOW)
+			tun->flags |= VIDEO_TUNER_LOW;
+		if (tun2.rxsubchans & V4L2_TUNER_SUB_STEREO)
+			tun->flags |= VIDEO_TUNER_STEREO_ON;
+		tun->signal = tun2.signal;
+
+		break;
+	}
+
+	case VIDIOCSFREQ: {
+		unsigned long *freq = arg;
+		struct v4l2_frequency freq2 = { 0, };
+
+		result = v4l2_ioctl(fd, VIDIOC_G_FREQUENCY, &freq2);
+		if (result < 0)
+			break;
+
+		freq2.frequency = *freq;
+
+		result = v4l2_ioctl(fd, VIDIOC_S_FREQUENCY, &freq2);
+
+		break;
+	}
+
+	case VIDIOCGFREQ: {
+		unsigned long *freq = arg;
+		struct v4l2_frequency freq2 = { 0, };
+
+		freq2.tuner = 0;
+		result = v4l2_ioctl(fd, VIDIOC_G_FREQUENCY, &freq2);
+		if (result < 0)
+			break;
+		if (0 == result)
+			*freq = freq2.frequency;
+
+		break;
+	}
+
+	case VIDIOCCAPTURE: {
+		int *on = arg;
+		enum v4l2_buf_type captype = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+
+		if (0 == *on) {
+		/* dirty hack time.  But v4l1 has no STREAMOFF
+		* equivalent in the API, and this one at
+		* least comes close ... */
+			v4l2_ioctl(fd, VIDIOC_STREAMOFF, &captype);
+		}
+
+		result = v4l2_ioctl(fd, VIDIOC_OVERLAY, on);
+
+		break;
+	}
+
+	case VIDIOCSAUDIO: {
+		struct video_audio *aud = arg;
+		struct v4l2_audio aud2 = { 0, };
+		struct v4l2_tuner tun2 = { 0, };
+
+		aud2.index = aud->audio;
+		result = v4l2_ioctl(fd, VIDIOC_S_AUDIO, &aud2);
+		if (result < 0)
+			break;
+
+		v4l2_set_control(fd, V4L2_CID_AUDIO_VOLUME,
+			aud->volume);
+		v4l2_set_control(fd, V4L2_CID_AUDIO_BASS,
+			aud->bass);
+		v4l2_set_control(fd, V4L2_CID_AUDIO_TREBLE,
+			aud->treble);
+		v4l2_set_control(fd, V4L2_CID_AUDIO_BALANCE,
+			aud->balance);
+		v4l2_set_control(fd, V4L2_CID_AUDIO_MUTE,
+			!!(aud->flags & VIDEO_AUDIO_MUTE));
+
+		result = v4l2_ioctl(fd, VIDIOC_G_TUNER, &tun2);
+		if (result == 0) {
+			switch (aud->mode) {
+			default:
+			case VIDEO_SOUND_MONO:
+			case VIDEO_SOUND_LANG1:
+				tun2.audmode = V4L2_TUNER_MODE_MONO;
+				break;
+			case VIDEO_SOUND_STEREO:
+				tun2.audmode = V4L2_TUNER_MODE_STEREO;
+				break;
+			case VIDEO_SOUND_LANG2:
+				tun2.audmode = V4L2_TUNER_MODE_LANG2;
+				break;
+			}
+			result = v4l2_ioctl(fd, VIDIOC_S_TUNER, &tun2);
+		}
+		/* Ignore errors modifying the tuner settings. */
+		result = 0;
+		break;
+	}
+
+	case VIDIOCGAUDIO: {
+		int i;
+		struct video_audio *aud = arg;
+		struct v4l2_queryctrl qctrl2;
+		struct v4l2_audio aud2 = { 0, };
+		struct v4l2_tuner tun2;
+
+		result = v4l2_ioctl(fd, VIDIOC_G_AUDIO, &aud2);
+		if (result < 0)
+			break;
+
+		memcpy(aud->name, aud2.name,
+			min(sizeof(aud->name), sizeof(aud2.name)));
+		aud->name[sizeof(aud->name) - 1] = 0;
+		aud->audio = aud2.index;
+		aud->flags = 0;
+		i = v4l2_get_control(fd, V4L2_CID_AUDIO_VOLUME);
+		if (i >= 0) {
+			aud->volume = i;
+			aud->flags |= VIDEO_AUDIO_VOLUME;
+		}
+		i = v4l2_get_control(fd, V4L2_CID_AUDIO_BASS);
+		if (i >= 0) {
+			aud->bass = i;
+			aud->flags |= VIDEO_AUDIO_BASS;
+		}
+		i = v4l2_get_control(fd, V4L2_CID_AUDIO_TREBLE);
+		if (i >= 0) {
+			aud->treble = i;
+			aud->flags |= VIDEO_AUDIO_TREBLE;
+		}
+		i = v4l2_get_control(fd, V4L2_CID_AUDIO_BALANCE);
+		if (i >= 0) {
+			aud->balance = i;
+			aud->flags |= VIDEO_AUDIO_BALANCE;
+		}
+		i = v4l2_get_control(fd, V4L2_CID_AUDIO_MUTE);
+		if (i >= 0) {
+			if (i)
+				aud->flags |= VIDEO_AUDIO_MUTE;
+
+			aud->flags |= VIDEO_AUDIO_MUTABLE;
+		}
+		aud->step = 1;
+		qctrl2.id = V4L2_CID_AUDIO_VOLUME;
+		if (v4l2_ioctl(fd, VIDIOC_QUERYCTRL, &qctrl2) == 0 &&
+			!(qctrl2.flags & V4L2_CTRL_FLAG_DISABLED))
+			aud->step = qctrl2.step;
+		aud->mode = 0;
+
+		result = v4l2_ioctl(fd, VIDIOC_G_TUNER, &tun2);
+		if (result < 0) {
+			result = 0;
+			break;
+		}
+
+		if (tun2.rxsubchans & V4L2_TUNER_SUB_LANG2)
+			aud->mode = VIDEO_SOUND_LANG1 | VIDEO_SOUND_LANG2;
+		else if (tun2.rxsubchans & V4L2_TUNER_SUB_STEREO)
+			aud->mode = VIDEO_SOUND_STEREO;
+		else if (tun2.rxsubchans & V4L2_TUNER_SUB_MONO)
+			aud->mode = VIDEO_SOUND_MONO;
+
+		break;
+	}
+
+	case VIDIOCSVBIFMT: {
+		struct vbi_format *fmt = arg;
+		struct v4l2_format fmt2;
+
+		if (VIDEO_PALETTE_RAW != fmt->sample_format) {
+			result = -EINVAL;
+			break;
+		}
+
+		fmt2.type = V4L2_BUF_TYPE_VBI_CAPTURE;
+		fmt2.fmt.vbi.samples_per_line = fmt->samples_per_line;
+		fmt2.fmt.vbi.sampling_rate    = fmt->sampling_rate;
+		fmt2.fmt.vbi.sample_format    = V4L2_PIX_FMT_GREY;
+		fmt2.fmt.vbi.start[0]         = fmt->start[0];
+		fmt2.fmt.vbi.count[0]         = fmt->count[0];
+		fmt2.fmt.vbi.start[1]         = fmt->start[1];
+		fmt2.fmt.vbi.count[1]         = fmt->count[1];
+		fmt2.fmt.vbi.flags            = fmt->flags;
+
+		result  = v4l2_ioctl(fd, VIDIOC_TRY_FMT, fmt2);
+		if (result < 0)
+			break;
+
+		if (fmt2.fmt.vbi.samples_per_line != fmt->samples_per_line ||
+		    fmt2.fmt.vbi.sampling_rate    != fmt->sampling_rate    ||
+		    fmt2.fmt.vbi.sample_format    != V4L2_PIX_FMT_GREY     ||
+		    fmt2.fmt.vbi.start[0]         != fmt->start[0]         ||
+		    fmt2.fmt.vbi.count[0]         != fmt->count[0]         ||
+		    fmt2.fmt.vbi.start[1]         != fmt->start[1]         ||
+		    fmt2.fmt.vbi.count[1]         != fmt->count[1]         ||
+		    fmt2.fmt.vbi.flags            != fmt->flags) {
+			result = -EINVAL;
+			break;
+		}
+		result = v4l2_ioctl(fd, VIDIOC_S_FMT, fmt2);
+		break;
+	}
+
+	case VIDIOCGVBIFMT: {
+		struct vbi_format *fmt = arg;
+		struct v4l2_format fmt2 = { 0, };
+
+		fmt2.type = V4L2_BUF_TYPE_VBI_CAPTURE;
+		result = v4l2_ioctl(fd, VIDIOC_G_FMT, &fmt2);
+
+		if (result < 0)
+			break;
+
+		if (fmt2.fmt.vbi.sample_format != V4L2_PIX_FMT_GREY) {
+			result = -EINVAL;
+			break;
+		}
+
+		fmt->samples_per_line = fmt2.fmt.vbi.samples_per_line;
+		fmt->sampling_rate    = fmt2.fmt.vbi.sampling_rate;
+		fmt->sample_format    = VIDEO_PALETTE_RAW;
+		fmt->start[0]         = fmt2.fmt.vbi.start[0];
+		fmt->count[0]         = fmt2.fmt.vbi.count[0];
+		fmt->start[1]         = fmt2.fmt.vbi.start[1];
+		fmt->count[1]         = fmt2.fmt.vbi.count[1];
+		fmt->flags            = fmt2.fmt.vbi.flags & 0x03;
+
 		break;
 	}
 

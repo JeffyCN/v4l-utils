@@ -29,7 +29,7 @@
 #define ARRAY_SIZE(x) ((int)sizeof(x)/(int)sizeof((x)[0]))
 
 #define V4LCONVERT_ERROR_MSG_SIZE 256
-#define V4LCONVERT_MAX_FRAMESIZES 16
+#define V4LCONVERT_MAX_FRAMESIZES 256
 
 #define V4LCONVERT_ERR(...) \
 	snprintf(data->error_msg, V4LCONVERT_ERROR_MSG_SIZE, \
@@ -37,7 +37,6 @@
 
 /* Card flags */
 #define V4LCONVERT_IS_UVC                0x01
-#define V4LCONVERT_IS_SN9C20X            0x02
 
 /* Pixformat flags */
 #define V4LCONVERT_COMPRESSED            0x01 /* Compressed format */
@@ -144,6 +143,14 @@ void v4lconvert_spca505_to_yuv420(const unsigned char *src, unsigned char *dst,
 		int width, int height, int yvu);
 
 void v4lconvert_spca508_to_yuv420(const unsigned char *src, unsigned char *dst,
+		int width, int height, int yvu);
+
+void v4lconvert_cit_yyvyuy_to_yuv420(const unsigned char *src,
+		unsigned char *ydest,
+		int width, int height, int yvu);
+
+void v4lconvert_konica_yuv420_to_yuv420(const unsigned char *src,
+		unsigned char *ydest,
 		int width, int height, int yvu);
 
 int v4lconvert_cpia1_to_yuv420(struct v4lconvert_data *data,
