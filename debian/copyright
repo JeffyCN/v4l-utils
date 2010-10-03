@@ -9,7 +9,7 @@ Upstream Author:
 
 Copyright:
 
-    Copyright (C) 2008-2009 Hans de Goede
+    Copyright (C) 2008-2010 Hans de Goede
 
 Files: lib/libv4l2/log.c
 Copyright: 2008 Elmar Kleijn <elmar_kleijn@hotmail.com>
@@ -30,7 +30,7 @@ Files: lib/libv4lconvert/control/*:
 Copyright: 2008-2009 Elmar Kleijn <elmar_kleijn@hotmail.com>
            2008-2009 Sjoerd Piepenbrink <need4weed@gmail.com>
            2008-2009 Radjnies Bhansingh <radjnies@gmail.com>
-           2008-2009 Hans de Goede <hdegoede@redhat.com>
+           2008-2010 Hans de Goede <hdegoede@redhat.com>
 License: LGPL-2.1+
 
 Files: lib/libv4lconvert/processing/libv4lprocessing*, lib/libv4lconvert/processing/whitebalance.c
@@ -188,6 +188,11 @@ License:
 Files: debian/*
 Copyright: 2008, 2009, 2010 Gregor Jasny <gjasny@googlemail.com>
 License: GPL2+
+
+Files: lib/libv4l1.c
+Copyright: 2008-2010 Hans de Goede <hdegoede@redhat.com>
+           2003-2009 Bill Dirks <bill@thedirks.org>
+License: LGPL-2.1+
 
 Files: lib/*
 Copyright: 2008, 2009, 2010 Hans de Goede <hdegoede@redhat.com>
