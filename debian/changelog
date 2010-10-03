@@ -1,3 +1,11 @@
+v4l-utils (0.8.1-1) UNRELEASED; urgency=low
+
+  * New upstream version
+  * Bumped standards to version 3.9.1 (no changes needed)
+  * Updated copyright file 
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Sun, 03 Oct 2010 16:26:40 +0200
+
 v4l-utils (0.8.0-1) unstable; urgency=low
 
   * New upstream version
