@@ -56,6 +56,8 @@ static const struct v4lconvert_pixfmt supported_src_pixfmts[] = {
 	{ V4L2_PIX_FMT_SPCA501,      V4LCONVERT_NEEDS_CONVERSION },
 	{ V4L2_PIX_FMT_SPCA505,      V4LCONVERT_NEEDS_CONVERSION },
 	{ V4L2_PIX_FMT_SPCA508,      V4LCONVERT_NEEDS_CONVERSION },
+	{ V4L2_PIX_FMT_CIT_YYVYUY,   V4LCONVERT_NEEDS_CONVERSION },
+	{ V4L2_PIX_FMT_KONICA420,    V4LCONVERT_NEEDS_CONVERSION },
 	{ V4L2_PIX_FMT_CPIA1,        V4LCONVERT_NEEDS_CONVERSION },
 	{ V4L2_PIX_FMT_HM12,         V4LCONVERT_NEEDS_CONVERSION },
 	{ V4L2_PIX_FMT_MJPEG,        V4LCONVERT_COMPRESSED },
@@ -134,8 +136,6 @@ struct v4lconvert_data *v4lconvert_create(int fd)
 	if (SYS_IOCTL(data->fd, VIDIOC_QUERYCAP, &cap) == 0) {
 		if (!strcmp((char *)cap.driver, "uvcvideo"))
 			data->flags |= V4LCONVERT_IS_UVC;
-		else if (!strcmp((char *)cap.driver, "sn9c20x"))
-			data->flags |= V4LCONVERT_IS_SN9C20X;
 
 		if ((cap.capabilities & 0xff) & ~V4L2_CAP_VIDEO_CAPTURE)
 			always_needs_conversion = 0;
@@ -622,23 +622,21 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 		}
 
 		if (result) {
-			/* Pixart webcam's seem to regulary generate corrupt frames, which
-			   are best thrown away to avoid flashes in the video stream. Tell
-			   the upper layer this is an intermediate fault and it should try
-			   again with a new buffer by setting errno to EAGAIN */
-			if (src_pix_fmt == V4L2_PIX_FMT_PJPG ||
-					data->flags & V4LCONVERT_IS_SN9C20X) {
-				V4LCONVERT_ERR("decompressing JPEG: %s",
-						tinyjpeg_get_errorstring(data->jdec));
-				errno = EAGAIN;
-				return -1;
-			} else {
-				/* If the JPEG header checked out ok and we get an error during actual
-				   decompression, log the error, but don't return an errorcode to the
-				   application, so that the user gets what we managed to decompress */
-				fprintf(stderr, "libv4lconvert: Error decompressing JPEG: %s",
-						tinyjpeg_get_errorstring(data->jdec));
-			}
+			/* The JPEG header checked out ok but we got an error
+			   during decompression. Some webcams, esp pixart and
+			   sn9c20x based ones regulary generate corrupt frames,
+			   which are best thrown away to avoid flashes in the
+			   video stream. We use EPIPE to signal the upper layer
+			   we have some video data, but it is incomplete.
+
+			   The upper layer (usually libv4l2) should respond to
+			   this by trying a number of times to get a new frame
+			   and if that fails just passing up whatever we did
+			   manage to decompress. */
+			V4LCONVERT_ERR("decompressing JPEG: %s",
+					tinyjpeg_get_errorstring(data->jdec));
+			errno = EPIPE;
+			result = -1;
 		}
 		break;
 
@@ -646,6 +644,8 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 	case V4L2_PIX_FMT_SPCA501:
 	case V4L2_PIX_FMT_SPCA505:
 	case V4L2_PIX_FMT_SPCA508:
+	case V4L2_PIX_FMT_CIT_YYVYUY:
+	case V4L2_PIX_FMT_KONICA420:
 	case V4L2_PIX_FMT_SN9C20X_I420:
 	case V4L2_PIX_FMT_CPIA1:
 	case V4L2_PIX_FMT_OV511:
@@ -678,6 +678,12 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 			break;
 		case V4L2_PIX_FMT_SPCA508:
 			v4lconvert_spca508_to_yuv420(src, d, width, height, yvu);
+			break;
+		case V4L2_PIX_FMT_CIT_YYVYUY:
+			v4lconvert_cit_yyvyuy_to_yuv420(src, d, width, height, yvu);
+			break;
+		case V4L2_PIX_FMT_KONICA420:
+			v4lconvert_konica_yuv420_to_yuv420(src, d, width, height, yvu);
 			break;
 		case V4L2_PIX_FMT_SN9C20X_I420:
 			v4lconvert_sn9c20x_to_yuv420(src, d, width, height, yvu);
@@ -803,6 +809,7 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 		/* Deliberate fall through to raw bayer fmt code! */
 		src_pix_fmt = tmpfmt.fmt.pix.pixelformat;
 		src = tmpbuf;
+		src_size = width * height;
 		/* fall through */
 	}
 
@@ -825,6 +832,11 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 			v4lconvert_bayer_to_yuv420(src, dest, width, height, src_pix_fmt, 1);
 			break;
 		}
+		if (src_size < (width * height)) {
+			V4LCONVERT_ERR("short raw bayer data frame\n");
+			errno = EPIPE;
+			result = -1;
+		}
 		break;
 
 	case V4L2_PIX_FMT_RGB565:
@@ -842,6 +854,11 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 			v4lconvert_rgb565_to_yuv420(src, dest, fmt, 1);
 			break;
 		}
+		if (src_size < (width * height * 2)) {
+			V4LCONVERT_ERR("short rgb565 data frame\n");
+			errno = EPIPE;
+			result = -1;
+		}
 		break;
 
 	case V4L2_PIX_FMT_RGB24:
@@ -856,6 +873,11 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 			v4lconvert_rgb24_to_yuv420(src, dest, fmt, 0, 1);
 			break;
 		}
+		if (src_size < (width * height * 3)) {
+			V4LCONVERT_ERR("short rgb24 data frame\n");
+			errno = EPIPE;
+			result = -1;
+		}
 		break;
 
 	case V4L2_PIX_FMT_BGR24:
@@ -869,6 +891,11 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 		case V4L2_PIX_FMT_YVU420:
 			v4lconvert_rgb24_to_yuv420(src, dest, fmt, 1, 1);
 			break;
+		}
+		if (src_size < (width * height * 3)) {
+			V4LCONVERT_ERR("short bgr24 data frame\n");
+			errno = EPIPE;
+			result = -1;
 		}
 		break;
 
@@ -886,6 +913,11 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 			v4lconvert_swap_uv(src, dest, fmt);
 			break;
 		}
+		if (src_size < (width * height * 3 / 2)) {
+			V4LCONVERT_ERR("short yuv420 data frame\n");
+			errno = EPIPE;
+			result = -1;
+		}
 		break;
 
 	case V4L2_PIX_FMT_YVU420:
@@ -901,6 +933,11 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 		case V4L2_PIX_FMT_YUV420:
 			v4lconvert_swap_uv(src, dest, fmt);
 			break;
+		}
+		if (src_size < (width * height * 3 / 2)) {
+			V4LCONVERT_ERR("short yvu420 data frame\n");
+			errno = EPIPE;
+			result = -1;
 		}
 		break;
 
@@ -918,6 +955,11 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 		case V4L2_PIX_FMT_YVU420:
 			v4lconvert_yuyv_to_yuv420(src, dest, width, height, 1);
 			break;
+		}
+		if (src_size < (width * height * 2)) {
+			V4LCONVERT_ERR("short yuyv data frame\n");
+			errno = EPIPE;
+			result = -1;
 		}
 		break;
 
@@ -938,6 +980,11 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 			v4lconvert_yuyv_to_yuv420(src, dest, width, height, 0);
 			break;
 		}
+		if (src_size < (width * height * 2)) {
+			V4LCONVERT_ERR("short yvyu data frame\n");
+			errno = EPIPE;
+			result = -1;
+		}
 		break;
 
 	case V4L2_PIX_FMT_UYVY:
@@ -955,6 +1002,11 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 			v4lconvert_uyvy_to_yuv420(src, dest, width, height, 1);
 			break;
 		}
+		if (src_size < (width * height * 2)) {
+			V4LCONVERT_ERR("short uyvy data frame\n");
+			errno = EPIPE;
+			result = -1;
+		}
 		break;
 
 	default:
@@ -966,7 +1018,7 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 	fmt->fmt.pix.pixelformat = dest_pix_fmt;
 	v4lconvert_fixup_fmt(fmt);
 
-	return 0;
+	return result;
 }
 
 int v4lconvert_convert(struct v4lconvert_data *data,
