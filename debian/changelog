@@ -1,6 +1,6 @@
-v4l-utils (0.8.1-1) UNRELEASED; urgency=low
+v4l-utils (0.8.1-1) unstable; urgency=low
 
-  * New upstream version
+  * New upstream version (Closes: #598969)
   * Bumped standards to version 3.9.1 (no changes needed)
   * Updated copyright file 
 
