@@ -18,6 +18,8 @@ build-stamp:
 	# build shared libs and install
 	$(MAKE) PREFIX=/usr DESTDIR=$(CURDIR)/debian/tmp
 	$(MAKE) PREFIX=/usr DESTDIR=$(CURDIR)/debian/tmp install
+	# add comments to config file
+	sed 's/\(^[^#].*\)/#\1/' < $(CURDIR)/debian/tmp/etc/rc_maps.cfg.example > $(CURDIR)/debian/tmp/etc/rc_maps.cfg
 	# clean object files
 	$(MAKE) clean
 	# build static libs and install
@@ -50,8 +52,9 @@ binary-arch: build
 	dh_testdir
 	dh_testroot
 	dh_lintian -s
-	dh_installchangelogs -plibv4l-0 ChangeLog
-	dh_installdocs -plibv4l-0
+	dh_installudev -s
+	dh_installchangelogs -plibv4l-0 -pir-keytable ChangeLog
+	dh_installdocs -plibv4l-0 -pir-keytable
 	dh_install -s --sourcedir=debian/tmp
 	dh_link -s
 	dh_strip -s

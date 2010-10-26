@@ -142,3 +142,14 @@ Depends: libv4l-0 (= ${binary:Version}),
 Description: Graphical Qt v4l2 control panel
  Qt v4l2 control panel application. You can change all through the v4l2
  interface exposed device controls.
+
+Package: ir-keytable
+Section: utils
+Architecture: any
+Depends: ${shlibs:Depends},
+         ${misc:Depends}
+Description: Alter keymaps of Remote Controller devices
+ This package allows to change the keymap of controller receivers.
+ Those receivers are found as infrared receivers on DVB sticks or on
+ framegrabber cards. Via ir-keytable the mapping from a scancode to
+ the generated event can be customized and made persistent.

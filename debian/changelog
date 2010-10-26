@@ -1,3 +1,9 @@
+v4l-utils (0.8.1-2) unstable; urgency=low
+
+  * Add ir-keytable (Closes: #601279)
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Mon, 25 Oct 2010 13:42:51 +0200
+
 v4l-utils (0.8.1-1) unstable; urgency=low
 
   * New upstream version (Closes: #598969)

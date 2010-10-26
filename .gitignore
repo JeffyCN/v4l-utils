@@ -9,6 +9,7 @@
 /debian/libv4l-dev/
 /debian/v4l-utils/
 /debian/qv4l2/
+/debian/ir-keytable/
 # upstream
 *.o
 *.d
