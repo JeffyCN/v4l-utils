@@ -55,7 +55,7 @@ binary-arch: build
 	dh_installudev -s
 	dh_installchangelogs -plibv4l-0 -pir-keytable ChangeLog
 	dh_installdocs -plibv4l-0 -pir-keytable
-	dh_installman
+	dh_installman -s
 	dh_install -s --sourcedir=debian/tmp
 	dh_link -s
 	dh_strip -s
