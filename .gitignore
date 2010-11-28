@@ -10,6 +10,7 @@
 /debian/v4l-utils/
 /debian/qv4l2/
 /debian/ir-keytable/
+.pc
 # upstream
 *.o
 *.d
