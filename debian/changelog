@@ -1,8 +1,9 @@
 v4l-utils (0.8.1-2) unstable; urgency=low
 
   * Add ir-keytable (Closes: #601279)
+  * Cherry-picked new device table entries from upstream git
 
- -- Gregor Jasny <gjasny@googlemail.com>  Mon, 25 Oct 2010 13:42:51 +0200
+ -- Gregor Jasny <gjasny@googlemail.com>  Sun, 28 Nov 2010 18:35:47 +0100
 
 v4l-utils (0.8.1-1) unstable; urgency=low
 
