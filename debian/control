@@ -4,7 +4,7 @@ Priority: optional
 Maintainer: Gregor Jasny <gjasny@googlemail.com>
 Uploaders: Martin Pitt <mpitt@debian.org>,
            Loic Minier <lool@dooz.org>
-DM-Upload-Allowed: Yes
+DM-Upload-Allowed: yes
 Build-Depends: debhelper (>= 7),
                libqt4-dev,
                libsysfs-dev,
