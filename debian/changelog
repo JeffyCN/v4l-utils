@@ -1,7 +1,12 @@
 v4l-utils (0.8.1-2) unstable; urgency=low
 
+  [ Gregor Jasny ]
   * Add ir-keytable (Closes: #601279)
   * Cherry-picked new device table entries from upstream git
+
+  [ Martin Pitt ]
+  * debian/control: Add DM-Upload-Allowed flag, so that Gregor can upload by
+    himself once he becomes an official DM.
 
  -- Gregor Jasny <gjasny@googlemail.com>  Sun, 28 Nov 2010 18:35:47 +0100
 
