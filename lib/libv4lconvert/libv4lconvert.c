@@ -43,6 +43,7 @@ static void v4lconvert_get_framesizes(struct v4lconvert_data *data,
    v4lconvert_try_format for low resolutions */
 static const struct v4lconvert_pixfmt supported_src_pixfmts[] = {
 	SUPPORTED_DST_PIXFMTS,
+	{ V4L2_PIX_FMT_GREY,         0 },
 	{ V4L2_PIX_FMT_YUYV,         0 },
 	{ V4L2_PIX_FMT_YVYU,         0 },
 	{ V4L2_PIX_FMT_UYVY,         0 },
@@ -839,6 +840,23 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 		}
 		break;
 
+	case V4L2_PIX_FMT_GREY:
+		switch (dest_pix_fmt) {
+		case V4L2_PIX_FMT_RGB24:
+	        case V4L2_PIX_FMT_BGR24:
+			v4lconvert_grey_to_rgb24(src, dest, width, height);
+			break;
+		case V4L2_PIX_FMT_YUV420:
+		case V4L2_PIX_FMT_YVU420:
+			v4lconvert_grey_to_yuv420(src, dest, fmt);
+			break;
+		}
+		if (src_size < (width * height)) {
+			V4LCONVERT_ERR("short grey data frame\n");
+			errno = EPIPE;
+			result = -1;
+		}
+		break;
 	case V4L2_PIX_FMT_RGB565:
 		switch (dest_pix_fmt) {
 		case V4L2_PIX_FMT_RGB24:
@@ -863,6 +881,9 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 
 	case V4L2_PIX_FMT_RGB24:
 		switch (dest_pix_fmt) {
+		case V4L2_PIX_FMT_RGB24:
+			memcpy(dest, src, width * height * 3);
+			break;
 		case V4L2_PIX_FMT_BGR24:
 			v4lconvert_swap_rgb(src, dest, width, height);
 			break;
@@ -884,6 +905,9 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 		switch (dest_pix_fmt) {
 		case V4L2_PIX_FMT_RGB24:
 			v4lconvert_swap_rgb(src, dest, width, height);
+			break;
+		case V4L2_PIX_FMT_BGR24:
+			memcpy(dest, src, width * height * 3);
 			break;
 		case V4L2_PIX_FMT_YUV420:
 			v4lconvert_rgb24_to_yuv420(src, dest, fmt, 1, 0);
@@ -909,6 +933,9 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 			v4lconvert_yuv420_to_bgr24(src, dest, width,
 					height, 0);
 			break;
+		case V4L2_PIX_FMT_YUV420:
+			memcpy(dest, src, width * height * 3 / 2);
+			break;
 		case V4L2_PIX_FMT_YVU420:
 			v4lconvert_swap_uv(src, dest, fmt);
 			break;
@@ -932,6 +959,9 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 			break;
 		case V4L2_PIX_FMT_YUV420:
 			v4lconvert_swap_uv(src, dest, fmt);
+			break;
+		case V4L2_PIX_FMT_YVU420:
+			memcpy(dest, src, width * height * 3 / 2);
 			break;
 		}
 		if (src_size < (width * height * 3 / 2)) {
@@ -1097,7 +1127,13 @@ int v4lconvert_convert(struct v4lconvert_data *data,
 				my_src_fmt.fmt.pix.pixelformat,
 				my_dest_fmt.fmt.pix.pixelformat))
 		convert = 2;
-	else if (my_dest_fmt.fmt.pix.pixelformat != my_src_fmt.fmt.pix.pixelformat)
+	else if (my_dest_fmt.fmt.pix.pixelformat !=
+			my_src_fmt.fmt.pix.pixelformat ||
+		 /* Special case if we do not need to do conversion, but we
+		    are not doing any other step involving copying either,
+		    force going through convert_pixfmt to copy the data from
+		    source to dest */
+		 (!rotate90 && !hflip && !vflip && !crop))
 		convert = 1;
 
 	/* convert_pixfmt (only if convert == 2) -> processing -> convert_pixfmt ->

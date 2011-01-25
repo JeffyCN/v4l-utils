@@ -16,10 +16,12 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
 #include <linux/input.h>
 #include <sys/ioctl.h>
+#include <sys/types.h>
 #include <dirent.h>
 #include <argp.h>
 
@@ -28,8 +30,23 @@
 /* Default place where the keymaps will be stored */
 #define CFGDIR "/etc/rc_keymaps"
 
+struct input_keymap_entry_v2 {
+#define KEYMAP_BY_INDEX	(1 << 0)
+	u_int8_t  flags;
+	u_int8_t  len;
+	u_int16_t index;
+	u_int32_t keycode;
+	u_int8_t  scancode[32];
+};
+
+#ifndef EVIOCGKEYCODE_V2
+#define EVIOCGKEYCODE_V2	_IOR('E', 0x04, struct input_keymap_entry_v2)
+#define EVIOCSKEYCODE_V2	_IOW('E', 0x04, struct input_keymap_entry_v2)
+#endif
+
 struct keytable {
-	int codes[2];
+	u_int32_t codes[2];
+	struct input_keymap_entry_v2 keymap;
 	struct keytable *next;
 };
 
@@ -83,7 +100,7 @@ static int parse_code(char *string)
 	return -1;
 }
 
-const char *argp_program_version = "IR keytable control version 0.1.0";
+const char *argp_program_version = "IR keytable control version "V4L_UTILS_VERSION;
 const char *argp_program_bug_address = "Mauro Carvalho Chehab <mchehab@redhat.com>";
 
 static const char doc[] = "\nAllows get/set IR keycode/scancode tables\n"
@@ -101,6 +118,7 @@ static const struct argp_option options[] = {
 	{"verbose",	'v',	0,		0,	"enables debug messages", 0},
 	{"clear",	'c',	0,		0,	"clears the old table", 0},
 	{"sysdev",	's',	"SYSDEV",	0,	"ir class device to control", 0},
+	{"test",	't',	0,		0,	"test if IR is generating events", 0},
 	{"device",	'd',	"DEV",		0,	"ir device to control", 0},
 	{"read",	'r',	0,		0,	"reads the current scancode/keycode table", 0},
 	{"write",	'w',	"TABLE",	0,	"write (adds) the scancodes to the device scancode/keycode table from an specified file", 0},
@@ -118,19 +136,26 @@ static const char args_doc[] =
 /* Static vars to store the parameters */
 static char *devclass = "rc0";
 static char *devname = NULL;
-static int read = 0;
+static int readtable = 0;
 static int clear = 0;
 static int debug = 0;
+static int test = 0;
 static enum ir_protocols ch_proto = 0;
 
 struct keytable keys = {
-	{0, 0}, NULL
+	.codes = {0, 0},
+	.next = NULL
 };
 
 
 struct cfgfile cfg = {
 	NULL, NULL, NULL, NULL
 };
+
+/*
+ * Stores the input layer protocol version
+ */
+static int input_protocol_version = 0;
 
 /*
  * Values that are read only via sysfs node
@@ -337,6 +362,9 @@ static error_t parse_opt(int k, char *arg, struct argp_state *state)
 	case 'v':
 		debug++;
 		break;
+	case 't':
+		test++;
+		break;
 	case 'c':
 		clear++;
 		break;
@@ -347,7 +375,7 @@ static error_t parse_opt(int k, char *arg, struct argp_state *state)
 		devclass = arg;
 		break;
 	case 'r':
-		read++;
+		readtable++;
 		break;
 	case 'w': {
 		char *name = NULL;
@@ -1080,18 +1108,48 @@ static int set_proto(struct rc_device *rc_dev)
 	return rc;
 }
 
+static int get_input_protocol_version(int fd)
+{
+	if (ioctl(fd, EVIOCGVERSION, &input_protocol_version) < 0) {
+		fprintf(stderr,
+			"Unable to query evdev protocol version: %s\n",
+			strerror(errno));
+		return errno;
+	}
+	if (debug)
+		fprintf(stderr, "Input Protocol version: 0x%08x\n",
+			input_protocol_version);
+
+	return 0;
+}
+
 static void clear_table(int fd)
 {
 	int i, j;
-	int codes[2];
+	u_int32_t codes[2];
+	struct input_keymap_entry_v2 entry;
 
 	/* Clears old table */
-	for (j = 0; j < 256; j++) {
-		for (i = 0; i < 256; i++) {
-			codes[0] = (j << 8) | i;
-			codes[1] = KEY_RESERVED;
-			ioctl(fd, EVIOCSKEYCODE, codes);
+	if (input_protocol_version < 0x10001) {
+		for (j = 0; j < 256; j++) {
+			for (i = 0; i < 256; i++) {
+				codes[0] = (j << 8) | i;
+				codes[1] = KEY_RESERVED;
+				ioctl(fd, EVIOCSKEYCODE, codes);
+			}
 		}
+	} else {
+		memset(&entry, '\0', sizeof(entry));
+		i = 0;
+		do {
+			entry.flags = KEYMAP_BY_INDEX;
+			entry.keycode = KEY_RESERVED;
+			entry.index = 0;
+
+			i++;
+			if (debug)
+				fprintf(stderr, "Deleting entry %d\n", i);
+		} while (ioctl(fd, EVIOCSKEYCODE_V2, &entry) == 0);
 	}
 }
 
@@ -1133,7 +1191,67 @@ static void display_proto(struct rc_device *rc_dev)
 	fprintf(stderr, "\n");
 }
 
-static void display_table(struct rc_device *rc_dev, int fd)
+static void test_event(int fd)
+{
+	struct input_event ev[64];
+	int rd, i;
+
+	printf ("Testing events. Please, press CTRL-C to abort.\n");
+	while (1) {
+		rd = read(fd, ev, sizeof(ev));
+
+		if (rd < (int) sizeof(struct input_event)) {
+			perror("Error reading event");
+			return;
+		}
+
+		for (i = 0; i < rd / sizeof(struct input_event); i++) {
+			switch (ev[i].type) {
+			case EV_MSC:
+				if (ev[i].code != MSC_SCAN)
+					break;
+				printf("%ld.%06ld: event MSC: scancode = %02x\n",
+					ev[i].time.tv_sec, ev[i].time.tv_usec, ev[i].value);
+				break;
+			case EV_KEY: 			{
+				struct parse_key *p;
+				char *name = "";
+
+				printf("%ld.%06ld: event key %s: ",
+					ev[i].time.tv_sec, ev[i].time.tv_usec,
+					(ev[i].value == 0) ? "up" : "down"
+					);
+
+				for (p = keynames; p->name != NULL; p++) {
+					if (p->value == ev[i].code) {
+						name = p->name;
+						break;
+					}
+				}
+				printf("%s (0x%04x)\n", name, ev[i].code);
+
+				break;
+			}
+			case EV_REP:
+				printf("%ld.%06ld: event repeat: %d\n",
+					ev[i].time.tv_sec, ev[i].time.tv_usec,
+					ev[i].value);
+				break;
+			case EV_SYN:
+				printf("%ld.%06ld: event sync\n",
+					ev[i].time.tv_sec, ev[i].time.tv_usec);
+				break;
+			default:
+				printf("%ld.%06ld: event type %d: value: %d\n",
+					ev[i].time.tv_sec, ev[i].time.tv_usec,
+					ev[i].type, ev[i].value);
+				break;
+			}
+		}
+	}
+}
+
+static void display_table_v1(struct rc_device *rc_dev, int fd)
 {
 	unsigned int i, j;
 
@@ -1142,12 +1260,49 @@ static void display_table(struct rc_device *rc_dev, int fd)
 			int codes[2];
 
 			codes[0] = (j << 8) | i;
-			if (!ioctl(fd, EVIOCGKEYCODE, codes) && codes[1] != KEY_RESERVED)
+			if (ioctl(fd, EVIOCGKEYCODE, codes) == -1)
+				perror("EVIOCGKEYCODE");
+			else if (codes[1] != KEY_RESERVED)
 				prtcode(codes);
 		}
 	}
 	display_proto(rc_dev);
 }
+
+static void display_table_v2(struct rc_device *rc_dev, int fd)
+{
+	int i;
+	struct input_keymap_entry_v2 entry;
+	int codes[2];
+
+	memset(&entry, '\0', sizeof(entry));
+	i = 0;
+	do {
+		entry.flags = KEYMAP_BY_INDEX;
+		entry.index = i;
+		entry.len = sizeof(u_int32_t);
+
+		if (ioctl(fd, EVIOCGKEYCODE_V2, &entry) == -1)
+			break;
+
+		/* FIXME: Extend it to support scancodes > 32 bits */
+		codes[0] = ((u_int32_t *)entry.scancode)[0];
+		codes[1] = entry.keycode;
+
+		prtcode(codes);
+		i++;
+	} while (1);
+	display_proto(rc_dev);
+}
+
+static void display_table(struct rc_device *rc_dev, int fd)
+{
+	if (input_protocol_version < 0x10001)
+		display_table_v1(rc_dev, fd);
+	else
+		display_table_v2(rc_dev, fd);
+}
+
 
 int main(int argc, char *argv[])
 {
@@ -1159,7 +1314,7 @@ int main(int argc, char *argv[])
 	argp_parse(&argp, argc, argv, 0, 0, 0);
 
 	/* Just list all devices */
-	if (!clear && !read && !keys.next && !ch_proto && !cfg.next) {
+	if (!clear && !readtable && !keys.next && !ch_proto && !cfg.next && !test) {
 		static struct sysfs_names *names, *cur;
 
 		names = find_device(NULL);
@@ -1252,6 +1407,8 @@ int main(int argc, char *argv[])
 	}
 	if (dev_from_class)
 		free(devname);
+	if (get_input_protocol_version(fd))
+		return -1;
 
 	/*
 	 * First step: clear, if --clear is specified
@@ -1285,8 +1442,11 @@ int main(int argc, char *argv[])
 	/*
 	 * Fourth step: display current keytable
 	 */
-	if (read)
+	if (readtable)
 		display_table(&rc_dev, fd);
+
+	if (test)
+		test_event(fd);
 
 	return 0;
 }

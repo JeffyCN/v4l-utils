@@ -39,6 +39,7 @@
 #include <sys/klog.h>
 
 #include <linux/videodev2.h>
+#include <libv4l2.h>
 
 #include <list>
 #include <vector>
@@ -71,14 +72,15 @@ enum Option {
 	OptListInputs = 'n',
 	OptGetOutput = 'O',
 	OptSetOutput = 'o',
+	OptGetParm = 'P',
+	OptSetParm = 'p',
 	OptGetStandard = 'S',
 	OptSetStandard = 's',
 	OptGetTuner = 'T',
 	OptSetTuner = 't',
 	OptGetVideoFormat = 'V',
 	OptSetVideoFormat = 'v',
-	OptGetParm = 'P',
-	OptSetParm = 'p',
+	OptUseWrapper = 'w',
 
 	OptGetSlicedVbiOutFormat = 128,
 	OptGetOverlayFormat,
@@ -220,6 +222,7 @@ static struct option long_options[] = {
 	{"set-fmt-video-out", required_argument, 0, OptSetVideoOutFormat},
 	{"try-fmt-video-out", required_argument, 0, OptTryVideoOutFormat},
 	{"help", no_argument, 0, OptHelp},
+	{"wrapper", no_argument, 0, OptUseWrapper},
 	{"get-output", no_argument, 0, OptGetOutput},
 	{"set-output", required_argument, 0, OptSetOutput},
 	{"list-outputs", no_argument, 0, OptListOutputs},
@@ -369,6 +372,7 @@ static void usage(void)
 	       "                     set the video capture format [VIDIOC_S_FMT]\n"
 	       "                     pixelformat is either the format index as reported by\n"
 	       "                     --list-formats, or the fourcc value as a string\n"
+               "  -w, --wrapper      use the libv4l2 wrapper library.\n"
 	       "  --list-devices     list all v4l devices\n"
 	       "  --silent           only set the result code, do not print any messages\n"
 	       "  --verbose          turn on verbose ioctl status reporting\n"
@@ -507,6 +511,21 @@ static void usage(void)
 	       "  --streamon         turn the stream on [VIDIOC_STREAMON]\n"
 	       "  --log-status       log the board status in the kernel log [VIDIOC_LOG_STATUS]\n");
 	exit(0);
+}
+
+static inline int test_open(const char *file, int oflag)
+{
+ 	return options[OptUseWrapper] ? v4l2_open(file, oflag) : open(file, oflag);
+}
+
+static inline int test_close(int fd)
+{
+	return options[OptUseWrapper] ? v4l2_close(fd) : close(fd);
+}
+
+static inline int test_ioctl(int fd, int cmd, void *arg)
+{
+	return options[OptUseWrapper] ? v4l2_ioctl(fd, cmd, arg) : ioctl(fd, cmd, arg);
 }
 
 static std::string num2s(unsigned num)
@@ -742,10 +761,11 @@ static std::string safename(const char *name)
 static void print_qctrl(int fd, struct v4l2_queryctrl *queryctrl,
 		struct v4l2_ext_control *ctrl, int show_menus)
 {
-	struct v4l2_querymenu qmenu = { 0 };
+	struct v4l2_querymenu qmenu;
 	std::string s = name2var(queryctrl->name);
 	int i;
 
+	memset(&qmenu, 0, sizeof(qmenu));
 	qmenu.id = queryctrl->id;
 	switch (queryctrl->type) {
 	case V4L2_CTRL_TYPE_INTEGER:
@@ -794,9 +814,9 @@ static void print_qctrl(int fd, struct v4l2_queryctrl *queryctrl,
 	}
 	printf("\n");
 	if (queryctrl->type == V4L2_CTRL_TYPE_MENU && show_menus) {
-		for (i = 0; i <= queryctrl->maximum; i++) {
+		for (i = queryctrl->minimum; i <= queryctrl->maximum; i++) {
 			qmenu.index = i;
-			if (ioctl(fd, VIDIOC_QUERYMENU, &qmenu))
+			if (test_ioctl(fd, VIDIOC_QUERYMENU, &qmenu))
 				continue;
 			printf("\t\t\t\t%d: %s\n", i, qmenu.name);
 		}
@@ -805,10 +825,13 @@ static void print_qctrl(int fd, struct v4l2_queryctrl *queryctrl,
 
 static int print_control(int fd, struct v4l2_queryctrl &qctrl, int show_menus)
 {
-	struct v4l2_control ctrl = { 0 };
-	struct v4l2_ext_control ext_ctrl = { 0 };
-	struct v4l2_ext_controls ctrls = { 0 };
+	struct v4l2_control ctrl;
+	struct v4l2_ext_control ext_ctrl;
+	struct v4l2_ext_controls ctrls;
 
+	memset(&ctrl, 0, sizeof(ctrl));
+	memset(&ext_ctrl, 0, sizeof(ext_ctrl));
+	memset(&ctrls, 0, sizeof(ctrls));
 	if (qctrl.flags & V4L2_CTRL_FLAG_DISABLED)
 		return 1;
 	if (qctrl.type == V4L2_CTRL_TYPE_CTRL_CLASS) {
@@ -833,7 +856,7 @@ static int print_control(int fd, struct v4l2_queryctrl &qctrl, int show_menus)
 		    ext_ctrl.string = (char *)malloc(ext_ctrl.size);
 		    ext_ctrl.string[0] = 0;
 		}
-		if (ioctl(fd, VIDIOC_G_EXT_CTRLS, &ctrls)) {
+		if (test_ioctl(fd, VIDIOC_G_EXT_CTRLS, &ctrls)) {
 			printf("error %d getting ext_ctrl %s\n",
 					errno, qctrl.name);
 			return 0;
@@ -841,7 +864,7 @@ static int print_control(int fd, struct v4l2_queryctrl &qctrl, int show_menus)
 	}
 	else {
 		ctrl.id = qctrl.id;
-		if (ioctl(fd, VIDIOC_G_CTRL, &ctrl)) {
+		if (test_ioctl(fd, VIDIOC_G_CTRL, &ctrl)) {
 			printf("error %d getting ctrl %s\n",
 					errno, qctrl.name);
 			return 0;
@@ -856,10 +879,12 @@ static int print_control(int fd, struct v4l2_queryctrl &qctrl, int show_menus)
 
 static void list_controls(int fd, int show_menus)
 {
-	struct v4l2_queryctrl qctrl = { V4L2_CTRL_FLAG_NEXT_CTRL };
+	struct v4l2_queryctrl qctrl;
 	int id;
 
-	while (ioctl(fd, VIDIOC_QUERYCTRL, &qctrl) == 0) {
+	memset(&qctrl, 0, sizeof(qctrl));
+	qctrl.id = V4L2_CTRL_FLAG_NEXT_CTRL;
+	while (test_ioctl(fd, VIDIOC_QUERYCTRL, &qctrl) == 0) {
 			print_control(fd, qctrl, show_menus);
 		qctrl.id |= V4L2_CTRL_FLAG_NEXT_CTRL;
 	}
@@ -867,21 +892,23 @@ static void list_controls(int fd, int show_menus)
 		return;
 	for (id = V4L2_CID_USER_BASE; id < V4L2_CID_LASTP1; id++) {
 		qctrl.id = id;
-		if (ioctl(fd, VIDIOC_QUERYCTRL, &qctrl) == 0)
+		if (test_ioctl(fd, VIDIOC_QUERYCTRL, &qctrl) == 0)
 			print_control(fd, qctrl, show_menus);
 	}
 	for (qctrl.id = V4L2_CID_PRIVATE_BASE;
-			ioctl(fd, VIDIOC_QUERYCTRL, &qctrl) == 0; qctrl.id++) {
+			test_ioctl(fd, VIDIOC_QUERYCTRL, &qctrl) == 0; qctrl.id++) {
 		print_control(fd, qctrl, show_menus);
 	}
 }
 
 static void find_controls(int fd)
 {
-	struct v4l2_queryctrl qctrl = { V4L2_CTRL_FLAG_NEXT_CTRL };
+	struct v4l2_queryctrl qctrl;
 	int id;
 
-	while (ioctl(fd, VIDIOC_QUERYCTRL, &qctrl) == 0) {
+	memset(&qctrl, 0, sizeof(qctrl));
+	qctrl.id = V4L2_CTRL_FLAG_NEXT_CTRL;
+	while (test_ioctl(fd, VIDIOC_QUERYCTRL, &qctrl) == 0) {
 		if (qctrl.type != V4L2_CTRL_TYPE_CTRL_CLASS &&
 		    !(qctrl.flags & V4L2_CTRL_FLAG_DISABLED)) {
 			ctrl_str2q[name2var(qctrl.name)] = qctrl;
@@ -893,14 +920,14 @@ static void find_controls(int fd)
 		return;
 	for (id = V4L2_CID_USER_BASE; id < V4L2_CID_LASTP1; id++) {
 		qctrl.id = id;
-		if (ioctl(fd, VIDIOC_QUERYCTRL, &qctrl) == 0 &&
+		if (test_ioctl(fd, VIDIOC_QUERYCTRL, &qctrl) == 0 &&
 		    !(qctrl.flags & V4L2_CTRL_FLAG_DISABLED)) {
 			ctrl_str2q[name2var(qctrl.name)] = qctrl;
 			ctrl_id2str[qctrl.id] = name2var(qctrl.name);
 		}
 	}
 	for (qctrl.id = V4L2_CID_PRIVATE_BASE;
-			ioctl(fd, VIDIOC_QUERYCTRL, &qctrl) == 0; qctrl.id++) {
+			test_ioctl(fd, VIDIOC_QUERYCTRL, &qctrl) == 0; qctrl.id++) {
 		if (!(qctrl.flags & V4L2_CTRL_FLAG_DISABLED)) {
 			ctrl_str2q[name2var(qctrl.name)] = qctrl;
 			ctrl_id2str[qctrl.id] = name2var(qctrl.name);
@@ -1152,7 +1179,7 @@ static void print_video_formats(int fd, enum v4l2_buf_type type)
 
 	fmt.index = 0;
 	fmt.type = type;
-	while (ioctl(fd, VIDIOC_ENUM_FMT, &fmt) >= 0) {
+	while (test_ioctl(fd, VIDIOC_ENUM_FMT, &fmt) >= 0) {
 		printf("\tIndex       : %d\n", fmt.index);
 		printf("\tType        : %s\n", buftype2s(type).c_str());
 		printf("\tPixel Format: '%s'", fcc2s(fmt.pixelformat).c_str());
@@ -1173,7 +1200,7 @@ static void print_video_formats_ext(int fd, enum v4l2_buf_type type)
 
 	fmt.index = 0;
 	fmt.type = type;
-	while (ioctl(fd, VIDIOC_ENUM_FMT, &fmt) >= 0) {
+	while (test_ioctl(fd, VIDIOC_ENUM_FMT, &fmt) >= 0) {
 		printf("\tIndex       : %d\n", fmt.index);
 		printf("\tType        : %s\n", buftype2s(type).c_str());
 		printf("\tPixel Format: '%s'", fcc2s(fmt.pixelformat).c_str());
@@ -1183,14 +1210,14 @@ static void print_video_formats_ext(int fd, enum v4l2_buf_type type)
 		printf("\tName        : %s\n", fmt.description);
 		frmsize.pixel_format = fmt.pixelformat;
 		frmsize.index = 0;
-		while (ioctl(fd, VIDIOC_ENUM_FRAMESIZES, &frmsize) >= 0) {
+		while (test_ioctl(fd, VIDIOC_ENUM_FRAMESIZES, &frmsize) >= 0) {
 			print_frmsize(frmsize, "\t");
 			if (frmsize.type == V4L2_FRMSIZE_TYPE_DISCRETE) {
 				frmival.index = 0;
 				frmival.pixel_format = fmt.pixelformat;
 				frmival.width = frmsize.discrete.width;
 				frmival.height = frmsize.discrete.height;
-				while (ioctl(fd, VIDIOC_ENUM_FRAMEINTERVALS, &frmival) >= 0) {
+				while (test_ioctl(fd, VIDIOC_ENUM_FRAMEINTERVALS, &frmival) >= 0) {
 					print_frmival(frmival, "\t\t");
 					frmival.index++;
 				}
@@ -1236,15 +1263,15 @@ static std::string txsubchans2s(int txsubchans)
 	std::string s;
 
 	if (txsubchans & V4L2_TUNER_SUB_MONO)
-		s += "mono";
+		s += "mono ";
 	if (txsubchans & V4L2_TUNER_SUB_STEREO)
-		s += "stereo";
+		s += "stereo ";
 	if (txsubchans & V4L2_TUNER_SUB_LANG1)
-		s += "bilingual";
+		s += "bilingual ";
 	if (txsubchans & V4L2_TUNER_SUB_SAP)
-		s += "+sap";
+		s += "sap ";
 	if (txsubchans & V4L2_TUNER_SUB_RDS)
-		s += "+rds";
+		s += "rds ";
 	return s;
 }
 
@@ -1398,21 +1425,23 @@ static v4l2_std_id parse_ntsc(const char *ntsc)
 	return 0;
 }
 
-static int doioctl(int fd, unsigned long int request, void *parm, const char *name)
+static int doioctl_name(int fd, unsigned long int request, void *parm, const char *name)
 {
-	int retVal = ioctl(fd, request, parm);
+	int retval = test_ioctl(fd, request, parm);
 
-	if (retVal < 0) {
+	if (retval < 0) {
 		app_result = -1;
 	}
-	if (options[OptSilent]) return retVal;
-	if (retVal < 0)
+	if (options[OptSilent]) return retval;
+	if (retval < 0)
 		printf("%s: failed: %s\n", name, strerror(errno));
 	else if (verbose)
 		printf("%s: ok\n", name);
 
-	return retVal;
+	return retval;
 }
+
+#define doioctl(n, r, p) doioctl_name(n, r, p, #r)
 
 static bool is_v4l_dev(const char *name)
 {
@@ -1512,7 +1541,7 @@ static void list_devices()
 
 		if (fd < 0)
 			continue;
-		doioctl(fd, VIDIOC_QUERYCAP, &vcap, "VIDIOC_QUERYCAP");
+		doioctl(fd, VIDIOC_QUERYCAP, &vcap);
 		close(fd);
 		bus_info = (const char *)vcap.bus_info;
 		if (cards[bus_info].empty())
@@ -1640,7 +1669,7 @@ static void do_crop(int fd, unsigned int set_crop, struct v4l2_rect &vcrop, v4l2
 	struct v4l2_crop in_crop;
 
 	in_crop.type = type;
-	if (doioctl(fd, VIDIOC_G_CROP, &in_crop, "VIDIOC_G_CROP") == 0) {
+	if (doioctl(fd, VIDIOC_G_CROP, &in_crop) == 0) {
 		if (set_crop & CropWidth)
 			in_crop.c.width = vcrop.width;
 		if (set_crop & CropHeight)
@@ -1649,7 +1678,7 @@ static void do_crop(int fd, unsigned int set_crop, struct v4l2_rect &vcrop, v4l2
 			in_crop.c.left = vcrop.left;
 		if (set_crop & CropTop)
 			in_crop.c.top = vcrop.top;
-		doioctl(fd, VIDIOC_S_CROP, &in_crop, "VIDIOC_S_CROP");
+		doioctl(fd, VIDIOC_S_CROP, &in_crop);
 	}
 }
 
@@ -1822,7 +1851,7 @@ static __u32 find_pixel_format(int fd, unsigned index)
 
 	fmt.index = index;
 	fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	if (doioctl(fd, VIDIOC_ENUM_FMT, &fmt, "VIDIOC_ENUM_FMT"))
+	if (doioctl(fd, VIDIOC_ENUM_FMT, &fmt))
 		return 0;
 	return fmt.pixelformat;
 }
@@ -2426,7 +2455,7 @@ int main(int argc, char **argv)
 	}
 
 	verbose = options[OptVerbose];
-	doioctl(fd, VIDIOC_QUERYCAP, &vcap, "VIDIOC_QUERYCAP");
+	doioctl(fd, VIDIOC_QUERYCAP, &vcap);
 	capabilities = vcap.capabilities;
 	find_controls(fd);
 	for (ctrl_get_list::iterator iter = get_ctrls.begin(); iter != get_ctrls.end(); ++iter) {
@@ -2476,11 +2505,15 @@ int main(int argc, char **argv)
 	/* Information Opts */
 
 	if (options[OptGetDriverInfo]) {
-		printf("Driver Info:\n");
+		printf("Driver Info (%susing libv4l2):\n",
+				options[OptUseWrapper] ? "" : "not ");
 		printf("\tDriver name   : %s\n", vcap.driver);
 		printf("\tCard type     : %s\n", vcap.card);
 		printf("\tBus info      : %s\n", vcap.bus_info);
-		printf("\tDriver version: %d\n", vcap.version);
+		printf("\tDriver version: %d.%d.%d\n",
+				vcap.version >> 16,
+				(vcap.version >> 8) & 0xff,
+				vcap.version & 0xff);
 		printf("\tCapabilities  : 0x%08X\n", vcap.capabilities);
 		printf("%s", cap2s(vcap.capabilities).c_str());
 	}
@@ -2489,11 +2522,11 @@ int main(int argc, char **argv)
 
 	if (options[OptStreamOff]) {
 		int dummy = 0;
-		doioctl(fd, VIDIOC_STREAMOFF, &dummy, "VIDIOC_STREAMOFF");
+		doioctl(fd, VIDIOC_STREAMOFF, &dummy);
 	}
 
 	if (options[OptSetPriority]) {
-		if (doioctl(fd, VIDIOC_S_PRIORITY, &prio, "VIDIOC_S_PRIORITY") >= 0) {
+		if (doioctl(fd, VIDIOC_S_PRIORITY, &prio) >= 0) {
 			printf("Priority set: %d\n", prio);
 		}
 	}
@@ -2502,19 +2535,20 @@ int main(int argc, char **argv)
 		double fac = 16;
 
 		if (capabilities & V4L2_CAP_MODULATOR) {
-			if (doioctl(fd, VIDIOC_G_MODULATOR, &modulator, "VIDIOC_G_MODULATOR") == 0)
+			vf.type = V4L2_TUNER_RADIO;
+			if (doioctl(fd, VIDIOC_G_MODULATOR, &modulator) == 0) {
 				fac = (modulator.capability & V4L2_TUNER_CAP_LOW) ? 16000 : 16;
+			}
 		} else {
 			vf.type = V4L2_TUNER_ANALOG_TV;
-			if (doioctl(fd, VIDIOC_G_TUNER, &tuner, "VIDIOC_G_TUNER") == 0) {
+			if (doioctl(fd, VIDIOC_G_TUNER, &tuner) == 0) {
 				fac = (tuner.capability & V4L2_TUNER_CAP_LOW) ? 16000 : 16;
 				vf.type = tuner.type;
 			}
 		}
 		vf.tuner = 0;
 		vf.frequency = __u32(freq * fac);
-		if (doioctl(fd, VIDIOC_S_FREQUENCY, &vf,
-			"VIDIOC_S_FREQUENCY") == 0)
+		if (doioctl(fd, VIDIOC_S_FREQUENCY, &vf) == 0)
 			printf("Frequency set to %d (%f MHz)\n", vf.frequency,
 					vf.frequency / fac);
 	}
@@ -2522,22 +2556,22 @@ int main(int argc, char **argv)
 	if (options[OptSetStandard]) {
 		if (std & (1ULL << 63)) {
 			vs.index = std & 0xffff;
-			if (ioctl(fd, VIDIOC_ENUMSTD, &vs) >= 0) {
+			if (test_ioctl(fd, VIDIOC_ENUMSTD, &vs) >= 0) {
 				std = vs.id;
 			}
 		}
-		if (doioctl(fd, VIDIOC_S_STD, &std, "VIDIOC_S_STD") == 0)
+		if (doioctl(fd, VIDIOC_S_STD, &std) == 0)
 			printf("Standard set to %08llx\n", (unsigned long long)std);
 	}
 
         if (options[OptSetDvPreset]){
-		if (doioctl(fd, VIDIOC_S_DV_PRESET, &dv_preset, "VIDIOC_S_DV_PRESET") >= 0) {
+		if (doioctl(fd, VIDIOC_S_DV_PRESET, &dv_preset) >= 0) {
 			printf("Preset set: %d\n", dv_preset.preset);
 		}
 	}
 
         if (options[OptSetDvBtTimings]){
-		if (doioctl(fd, VIDIOC_S_DV_TIMINGS, &dv_timings, "VIDIOC_S_DV_TIMINGS") >= 0) {
+		if (doioctl(fd, VIDIOC_S_DV_TIMINGS, &dv_timings) >= 0) {
 			printf("BT timings set\n");
 		}
 	}
@@ -2549,7 +2583,7 @@ int main(int argc, char **argv)
 		parm.parm.capture.timeperframe.denominator =
 			fps * parm.parm.capture.timeperframe.numerator;
 
-		if (doioctl(fd, VIDIOC_S_PARM, &parm, "VIDIOC_S_PARM") == 0) {
+		if (doioctl(fd, VIDIOC_S_PARM, &parm) == 0) {
 			struct v4l2_fract *tf = &parm.parm.capture.timeperframe;
 
 			if (!tf->denominator || !tf->numerator)
@@ -2567,7 +2601,7 @@ int main(int argc, char **argv)
 		parm.parm.output.timeperframe.denominator =
 			fps * parm.parm.output.timeperframe.numerator;
 
-		if (doioctl(fd, VIDIOC_S_PARM, &parm, "VIDIOC_S_PARM") == 0) {
+		if (doioctl(fd, VIDIOC_S_PARM, &parm) == 0) {
 			struct v4l2_fract *tf = &parm.parm.output.timeperframe;
 
 			if (!tf->denominator || !tf->numerator)
@@ -2579,27 +2613,27 @@ int main(int argc, char **argv)
 	}
 
 	if (options[OptSetInput]) {
-		if (doioctl(fd, VIDIOC_S_INPUT, &input, "VIDIOC_S_INPUT") == 0) {
+		if (doioctl(fd, VIDIOC_S_INPUT, &input) == 0) {
 			printf("Video input set to %d", input);
 			vin.index = input;
-			if (ioctl(fd, VIDIOC_ENUMINPUT, &vin) >= 0)
+			if (test_ioctl(fd, VIDIOC_ENUMINPUT, &vin) >= 0)
 				printf(" (%s: %s)", vin.name, status2s(vin.status).c_str());
 			printf("\n");
 		}
 	}
 
 	if (options[OptSetOutput]) {
-		if (doioctl(fd, VIDIOC_S_OUTPUT, &output, "VIDIOC_S_OUTPUT") == 0)
+		if (doioctl(fd, VIDIOC_S_OUTPUT, &output) == 0)
 			printf("Output set to %d\n", output);
 	}
 
 	if (options[OptSetAudioInput]) {
-		if (doioctl(fd, VIDIOC_S_AUDIO, &vaudio, "VIDIOC_S_AUDIO") == 0)
+		if (doioctl(fd, VIDIOC_S_AUDIO, &vaudio) == 0)
 			printf("Audio input set to %d\n", vaudio.index);
 	}
 
 	if (options[OptSetAudioOutput]) {
-		if (doioctl(fd, VIDIOC_S_AUDOUT, &vaudout, "VIDIOC_S_AUDOUT") == 0)
+		if (doioctl(fd, VIDIOC_S_AUDOUT, &vaudout) == 0)
 			printf("Audio output set to %d\n", vaudout.index);
 	}
 
@@ -2607,9 +2641,9 @@ int main(int argc, char **argv)
 		struct v4l2_tuner vt;
 
 		memset(&vt, 0, sizeof(struct v4l2_tuner));
-		if (doioctl(fd, VIDIOC_G_TUNER, &vt, "VIDIOC_G_TUNER") == 0) {
+		if (doioctl(fd, VIDIOC_G_TUNER, &vt) == 0) {
 			vt.audmode = mode;
-			doioctl(fd, VIDIOC_S_TUNER, &vt, "VIDIOC_S_TUNER");
+			doioctl(fd, VIDIOC_S_TUNER, &vt);
 		}
 	}
 
@@ -2617,9 +2651,9 @@ int main(int argc, char **argv)
 		struct v4l2_modulator mt;
 
 		memset(&mt, 0, sizeof(struct v4l2_modulator));
-		if (doioctl(fd, VIDIOC_G_MODULATOR, &mt, "VIDIOC_G_MODULATOR") == 0) {
+		if (doioctl(fd, VIDIOC_G_MODULATOR, &mt) == 0) {
 			mt.txsubchans = txsubchans;
-			doioctl(fd, VIDIOC_S_MODULATOR, &mt, "VIDIOC_S_MODULATOR");
+			doioctl(fd, VIDIOC_S_MODULATOR, &mt);
 		}
 	}
 
@@ -2627,7 +2661,7 @@ int main(int argc, char **argv)
 		struct v4l2_format in_vfmt;
 
 		in_vfmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-		if (doioctl(fd, VIDIOC_G_FMT, &in_vfmt, "VIDIOC_G_FMT") == 0) {
+		if (doioctl(fd, VIDIOC_G_FMT, &in_vfmt) == 0) {
 			if (set_fmts & FmtWidth)
 				in_vfmt.fmt.pix.width = vfmt.fmt.pix.width;
 			if (set_fmts & FmtHeight)
@@ -2640,9 +2674,9 @@ int main(int argc, char **argv)
 				}
 			}
 			if (options[OptSetVideoFormat])
-				ret = doioctl(fd, VIDIOC_S_FMT, &in_vfmt, "VIDIOC_S_FMT");
+				ret = doioctl(fd, VIDIOC_S_FMT, &in_vfmt);
 			else
-				ret = doioctl(fd, VIDIOC_TRY_FMT, &in_vfmt, "VIDIOC_TRY_FMT");
+				ret = doioctl(fd, VIDIOC_TRY_FMT, &in_vfmt);
 			if (ret == 0 && verbose)
 				printfmt(in_vfmt);
 		}
@@ -2652,16 +2686,16 @@ int main(int argc, char **argv)
 		struct v4l2_format in_vfmt;
 
 		in_vfmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
-		if (doioctl(fd, VIDIOC_G_FMT, &in_vfmt, "VIDIOC_G_FMT") == 0) {
+		if (doioctl(fd, VIDIOC_G_FMT, &in_vfmt) == 0) {
 			if (set_fmts_out & FmtWidth)
 				in_vfmt.fmt.pix.width = vfmt_out.fmt.pix.width;
 			if (set_fmts_out & FmtHeight)
 				in_vfmt.fmt.pix.height = vfmt_out.fmt.pix.height;
 
 			if (options[OptSetVideoOutFormat])
-				ret = doioctl(fd, VIDIOC_S_FMT, &in_vfmt, "VIDIOC_S_FMT");
+				ret = doioctl(fd, VIDIOC_S_FMT, &in_vfmt);
 			else
-				ret = doioctl(fd, VIDIOC_TRY_FMT, &in_vfmt, "VIDIOC_TRY_FMT");
+				ret = doioctl(fd, VIDIOC_TRY_FMT, &in_vfmt);
 			if (ret == 0 && verbose)
 				printfmt(in_vfmt);
 		}
@@ -2670,9 +2704,9 @@ int main(int argc, char **argv)
 	if (options[OptSetSlicedVbiFormat] || options[OptTrySlicedVbiFormat]) {
 		vbi_fmt.type = V4L2_BUF_TYPE_SLICED_VBI_CAPTURE;
 		if (options[OptSetSlicedVbiFormat])
-			ret = doioctl(fd, VIDIOC_S_FMT, &vbi_fmt, "VIDIOC_S_FMT");
+			ret = doioctl(fd, VIDIOC_S_FMT, &vbi_fmt);
 		else
-			ret = doioctl(fd, VIDIOC_TRY_FMT, &vbi_fmt, "VIDIOC_TRY_FMT");
+			ret = doioctl(fd, VIDIOC_TRY_FMT, &vbi_fmt);
 		if (ret == 0 && verbose)
 			printfmt(vbi_fmt);
 	}
@@ -2680,9 +2714,9 @@ int main(int argc, char **argv)
 	if (options[OptSetSlicedVbiOutFormat] || options[OptTrySlicedVbiOutFormat]) {
 		vbi_fmt_out.type = V4L2_BUF_TYPE_SLICED_VBI_OUTPUT;
 		if (options[OptSetSlicedVbiOutFormat])
-			ret = doioctl(fd, VIDIOC_S_FMT, &vbi_fmt_out, "VIDIOC_S_FMT");
+			ret = doioctl(fd, VIDIOC_S_FMT, &vbi_fmt_out);
 		else
-			ret = doioctl(fd, VIDIOC_TRY_FMT, &vbi_fmt_out, "VIDIOC_TRY_FMT");
+			ret = doioctl(fd, VIDIOC_TRY_FMT, &vbi_fmt_out);
 		if (ret == 0 && verbose)
 			printfmt(vbi_fmt_out);
 	}
@@ -2691,7 +2725,7 @@ int main(int argc, char **argv)
 		struct v4l2_format fmt;
 
 		fmt.type = V4L2_BUF_TYPE_VIDEO_OVERLAY;
-		if (doioctl(fd, VIDIOC_G_FMT, &fmt, "VIDIOC_G_FMT") == 0) {
+		if (doioctl(fd, VIDIOC_G_FMT, &fmt) == 0) {
 			if (set_overlay_fmt & FmtChromaKey)
 				fmt.fmt.win.chromakey = overlay_fmt.fmt.win.chromakey;
 			if (set_overlay_fmt & FmtGlobalAlpha)
@@ -2707,9 +2741,9 @@ int main(int argc, char **argv)
 			if (set_overlay_fmt & FmtField)
 				fmt.fmt.win.field = overlay_fmt.fmt.win.field;
 			if (options[OptSetOverlayFormat])
-				ret = doioctl(fd, VIDIOC_S_FMT, &fmt, "VIDIOC_S_FMT");
+				ret = doioctl(fd, VIDIOC_S_FMT, &fmt);
 			else
-				ret = doioctl(fd, VIDIOC_TRY_FMT, &fmt, "VIDIOC_TRY_FMT");
+				ret = doioctl(fd, VIDIOC_TRY_FMT, &fmt);
 			if (ret == 0 && verbose)
 				printfmt(fmt);
 		}
@@ -2719,7 +2753,7 @@ int main(int argc, char **argv)
 		struct v4l2_format fmt;
 
 		fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_OVERLAY;
-		if (doioctl(fd, VIDIOC_G_FMT, &fmt, "VIDIOC_G_FMT") == 0) {
+		if (doioctl(fd, VIDIOC_G_FMT, &fmt) == 0) {
 			if (set_overlay_fmt_out & FmtChromaKey)
 				fmt.fmt.win.chromakey = overlay_fmt_out.fmt.win.chromakey;
 			if (set_overlay_fmt_out & FmtGlobalAlpha)
@@ -2735,9 +2769,9 @@ int main(int argc, char **argv)
 			if (set_overlay_fmt_out & FmtField)
 				fmt.fmt.win.field = overlay_fmt_out.fmt.win.field;
 			if (options[OptSetOutputOverlayFormat])
-				ret = doioctl(fd, VIDIOC_S_FMT, &fmt, "VIDIOC_S_FMT");
+				ret = doioctl(fd, VIDIOC_S_FMT, &fmt);
 			else
-				ret = doioctl(fd, VIDIOC_TRY_FMT, &fmt, "VIDIOC_TRY_FMT");
+				ret = doioctl(fd, VIDIOC_TRY_FMT, &fmt);
 			if (ret == 0 && verbose)
 				printfmt(fmt);
 		}
@@ -2746,19 +2780,19 @@ int main(int argc, char **argv)
 	if (options[OptSetFBuf]) {
 		struct v4l2_framebuffer fb;
 
-		if (doioctl(fd, VIDIOC_G_FBUF, &fb, "VIDIOC_G_FBUF") == 0) {
+		if (doioctl(fd, VIDIOC_G_FBUF, &fb) == 0) {
 			fb.flags &= ~set_fbuf;
 			fb.flags |= fbuf.flags;
-			doioctl(fd, VIDIOC_S_FBUF, &fb, "VIDIOC_S_FBUF");
+			doioctl(fd, VIDIOC_S_FBUF, &fb);
 		}
 	}
 
 	if (options[OptSetJpegComp]) {
-		doioctl(fd, VIDIOC_S_JPEGCOMP, &jpegcomp, "VIDIOC_S_JPEGCOMP");
+		doioctl(fd, VIDIOC_S_JPEGCOMP, &jpegcomp);
 	}
 
 	if (options[OptOverlay]) {
-		doioctl(fd, VIDIOC_OVERLAY, &overlay, "VIDIOC_OVERLAY");
+		doioctl(fd, VIDIOC_OVERLAY, &overlay);
 	}
 
 	if (options[OptSetCrop]) {
@@ -2778,14 +2812,16 @@ int main(int argc, char **argv)
 	}
 
 	if (options[OptSetCtrl] && !set_ctrls.empty()) {
-		struct v4l2_ext_controls ctrls = { 0 };
+		struct v4l2_ext_controls ctrls;
 		class2ctrls_map class2ctrls;
 		bool use_ext_ctrls = false;
 
+		memset(&ctrls, 0, sizeof(ctrls));
 		for (ctrl_set_map::iterator iter = set_ctrls.begin();
 				iter != set_ctrls.end(); ++iter) {
-			struct v4l2_ext_control ctrl = { 0 };
+			struct v4l2_ext_control ctrl;
 
+			memset(&ctrl, 0, sizeof(ctrl));
 			ctrl.id = ctrl_str2q[iter->first].id;
 			if (ctrl_str2q[iter->first].type == V4L2_CTRL_TYPE_INTEGER64)
 				use_ext_ctrls = true;
@@ -2818,7 +2854,7 @@ int main(int argc, char **argv)
 
 					ctrl.id = iter->second[i].id;
 					ctrl.value = iter->second[i].value;
-					if (doioctl(fd, VIDIOC_S_CTRL, &ctrl, "VIDIOC_S_CTRL")) {
+					if (doioctl(fd, VIDIOC_S_CTRL, &ctrl)) {
 						fprintf(stderr, "%s: %s\n",
 								ctrl_id2str[ctrl.id].c_str(),
 								strerror(errno));
@@ -2830,7 +2866,7 @@ int main(int argc, char **argv)
 				ctrls.ctrl_class = iter->first;
 				ctrls.count = iter->second.size();
 				ctrls.controls = &iter->second[0];
-				if (doioctl(fd, VIDIOC_S_EXT_CTRLS, &ctrls, "VIDIOC_S_EXT_CTRLS")) {
+				if (doioctl(fd, VIDIOC_S_EXT_CTRLS, &ctrls)) {
 					if (ctrls.error_idx >= ctrls.count) {
 						fprintf(stderr, "Error setting MPEG controls: %s\n",
 								strerror(errno));
@@ -2849,13 +2885,13 @@ int main(int argc, char **argv)
 
 	if (options[OptGetVideoFormat]) {
 		vfmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-		if (doioctl(fd, VIDIOC_G_FMT, &vfmt, "VIDIOC_G_FMT") == 0)
+		if (doioctl(fd, VIDIOC_G_FMT, &vfmt) == 0)
 			printfmt(vfmt);
 	}
 
 	if (options[OptGetVideoOutFormat]) {
 		vfmt_out.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
-		if (doioctl(fd, VIDIOC_G_FMT, &vfmt_out, "VIDIOC_G_FMT") == 0)
+		if (doioctl(fd, VIDIOC_G_FMT, &vfmt_out) == 0)
 			printfmt(vfmt_out);
 	}
 
@@ -2863,7 +2899,7 @@ int main(int argc, char **argv)
 		struct v4l2_format fmt;
 
 		fmt.type = V4L2_BUF_TYPE_VIDEO_OVERLAY;
-		if (doioctl(fd, VIDIOC_G_FMT, &fmt, "VIDIOC_G_FMT") == 0)
+		if (doioctl(fd, VIDIOC_G_FMT, &fmt) == 0)
 			printfmt(fmt);
 	}
 
@@ -2871,43 +2907,43 @@ int main(int argc, char **argv)
 		struct v4l2_format fmt;
 
 		fmt.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_OVERLAY;
-		if (doioctl(fd, VIDIOC_G_FMT, &fmt, "VIDIOC_G_FMT") == 0)
+		if (doioctl(fd, VIDIOC_G_FMT, &fmt) == 0)
 			printfmt(fmt);
 	}
 
 	if (options[OptGetSlicedVbiFormat]) {
 		vbi_fmt.type = V4L2_BUF_TYPE_SLICED_VBI_CAPTURE;
-		if (doioctl(fd, VIDIOC_G_FMT, &vbi_fmt, "VIDIOC_G_FMT") == 0)
+		if (doioctl(fd, VIDIOC_G_FMT, &vbi_fmt) == 0)
 			printfmt(vbi_fmt);
 	}
 
 	if (options[OptGetSlicedVbiOutFormat]) {
 		vbi_fmt_out.type = V4L2_BUF_TYPE_SLICED_VBI_OUTPUT;
-		if (doioctl(fd, VIDIOC_G_FMT, &vbi_fmt_out, "VIDIOC_G_FMT") == 0)
+		if (doioctl(fd, VIDIOC_G_FMT, &vbi_fmt_out) == 0)
 			printfmt(vbi_fmt_out);
 	}
 
 	if (options[OptGetVbiFormat]) {
 		raw_fmt.type = V4L2_BUF_TYPE_VBI_CAPTURE;
-		if (doioctl(fd, VIDIOC_G_FMT, &raw_fmt, "VIDIOC_G_FMT") == 0)
+		if (doioctl(fd, VIDIOC_G_FMT, &raw_fmt) == 0)
 			printfmt(raw_fmt);
 	}
 
 	if (options[OptGetVbiOutFormat]) {
 		raw_fmt_out.type = V4L2_BUF_TYPE_VBI_OUTPUT;
-		if (doioctl(fd, VIDIOC_G_FMT, &raw_fmt_out, "VIDIOC_G_FMT") == 0)
+		if (doioctl(fd, VIDIOC_G_FMT, &raw_fmt_out) == 0)
 			printfmt(raw_fmt_out);
 	}
 
 	if (options[OptGetFBuf]) {
 		struct v4l2_framebuffer fb;
-		if (doioctl(fd, VIDIOC_G_FBUF, &fb, "VIDIOC_G_FBUF") == 0)
+		if (doioctl(fd, VIDIOC_G_FBUF, &fb) == 0)
 			printfbuf(fb);
 	}
 
 	if (options[OptGetJpegComp]) {
 		struct v4l2_jpegcompression jc;
-		if (doioctl(fd, VIDIOC_G_JPEGCOMP, &jc, "VIDIOC_G_JPEGCOMP") == 0)
+		if (doioctl(fd, VIDIOC_G_JPEGCOMP, &jc) == 0)
 			printjpegcomp(jc);
 	}
 
@@ -2915,7 +2951,7 @@ int main(int argc, char **argv)
 		struct v4l2_cropcap cropcap;
 
 		cropcap.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-		if (doioctl(fd, VIDIOC_CROPCAP, &cropcap, "VIDIOC_CROPCAP") == 0)
+		if (doioctl(fd, VIDIOC_CROPCAP, &cropcap) == 0)
 			printcropcap(cropcap);
 	}
 
@@ -2923,7 +2959,7 @@ int main(int argc, char **argv)
 		struct v4l2_cropcap cropcap;
 
 		cropcap.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
-		if (doioctl(fd, VIDIOC_CROPCAP, &cropcap, "VIDIOC_CROPCAP") == 0)
+		if (doioctl(fd, VIDIOC_CROPCAP, &cropcap) == 0)
 			printcropcap(cropcap);
 	}
 
@@ -2931,7 +2967,7 @@ int main(int argc, char **argv)
 		struct v4l2_cropcap cropcap;
 
 		cropcap.type = V4L2_BUF_TYPE_VIDEO_OVERLAY;
-		if (doioctl(fd, VIDIOC_CROPCAP, &cropcap, "VIDIOC_CROPCAP") == 0)
+		if (doioctl(fd, VIDIOC_CROPCAP, &cropcap) == 0)
 			printcropcap(cropcap);
 	}
 
@@ -2939,7 +2975,7 @@ int main(int argc, char **argv)
 		struct v4l2_cropcap cropcap;
 
 		cropcap.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_OVERLAY;
-		if (doioctl(fd, VIDIOC_CROPCAP, &cropcap, "VIDIOC_CROPCAP") == 0)
+		if (doioctl(fd, VIDIOC_CROPCAP, &cropcap) == 0)
 			printcropcap(cropcap);
 	}
 
@@ -2947,7 +2983,7 @@ int main(int argc, char **argv)
 		struct v4l2_crop crop;
 
 		crop.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-		if (doioctl(fd, VIDIOC_G_CROP, &crop, "VIDIOC_G_CROP") == 0)
+		if (doioctl(fd, VIDIOC_G_CROP, &crop) == 0)
 			printcrop(crop);
 	}
 
@@ -2955,7 +2991,7 @@ int main(int argc, char **argv)
 		struct v4l2_crop crop;
 
 		crop.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
-		if (doioctl(fd, VIDIOC_G_CROP, &crop, "VIDIOC_G_CROP") == 0)
+		if (doioctl(fd, VIDIOC_G_CROP, &crop) == 0)
 			printcrop(crop);
 	}
 
@@ -2963,7 +2999,7 @@ int main(int argc, char **argv)
 		struct v4l2_crop crop;
 
 		crop.type = V4L2_BUF_TYPE_VIDEO_OVERLAY;
-		if (doioctl(fd, VIDIOC_G_CROP, &crop, "VIDIOC_G_CROP") == 0)
+		if (doioctl(fd, VIDIOC_G_CROP, &crop) == 0)
 			printcrop(crop);
 	}
 
@@ -2971,25 +3007,25 @@ int main(int argc, char **argv)
 		struct v4l2_crop crop;
 
 		crop.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_OVERLAY;
-		if (doioctl(fd, VIDIOC_G_CROP, &crop, "VIDIOC_G_CROP") == 0)
+		if (doioctl(fd, VIDIOC_G_CROP, &crop) == 0)
 			printcrop(crop);
 	}
 
 	if (options[OptGetInput]) {
-		if (doioctl(fd, VIDIOC_G_INPUT, &input, "VIDIOC_G_INPUT") == 0) {
+		if (doioctl(fd, VIDIOC_G_INPUT, &input) == 0) {
 			printf("Video input : %d", input);
 			vin.index = input;
-			if (ioctl(fd, VIDIOC_ENUMINPUT, &vin) >= 0)
+			if (test_ioctl(fd, VIDIOC_ENUMINPUT, &vin) >= 0)
 				printf(" (%s: %s)", vin.name, status2s(vin.status).c_str());
 			printf("\n");
 		}
 	}
 
 	if (options[OptGetOutput]) {
-		if (doioctl(fd, VIDIOC_G_OUTPUT, &output, "VIDIOC_G_OUTPUT") == 0) {
+		if (doioctl(fd, VIDIOC_G_OUTPUT, &output) == 0) {
 			printf("Video output: %d", output);
 			vout.index = output;
-			if (ioctl(fd, VIDIOC_ENUMOUTPUT, &vout) >= 0) {
+			if (test_ioctl(fd, VIDIOC_ENUMOUTPUT, &vout) >= 0) {
 				printf(" (%s)", vout.name);
 			}
 			printf("\n");
@@ -2997,12 +3033,12 @@ int main(int argc, char **argv)
 	}
 
 	if (options[OptGetAudioInput]) {
-		if (doioctl(fd, VIDIOC_G_AUDIO, &vaudio, "VIDIOC_G_AUDIO") == 0)
+		if (doioctl(fd, VIDIOC_G_AUDIO, &vaudio) == 0)
 			printf("Audio input : %d (%s)\n", vaudio.index, vaudio.name);
 	}
 
 	if (options[OptGetAudioOutput]) {
-		if (doioctl(fd, VIDIOC_G_AUDOUT, &vaudout, "VIDIOC_G_AUDOUT") == 0)
+		if (doioctl(fd, VIDIOC_G_AUDOUT, &vaudout) == 0)
 			printf("Audio output: %d (%s)\n", vaudout.index, vaudout.name);
 	}
 
@@ -3010,39 +3046,39 @@ int main(int argc, char **argv)
 		double fac = 16;
 
 		if (capabilities & V4L2_CAP_MODULATOR) {
-			if (doioctl(fd, VIDIOC_G_MODULATOR, &modulator, "VIDIOC_G_MODULATOR") == 0)
+			if (doioctl(fd, VIDIOC_G_MODULATOR, &modulator) == 0)
 				fac = (modulator.capability & V4L2_TUNER_CAP_LOW) ? 16000 : 16;
 		} else {
 			vf.type = V4L2_TUNER_ANALOG_TV;
-			if (doioctl(fd, VIDIOC_G_TUNER, &tuner, "VIDIOC_G_TUNER") == 0) {
+			if (doioctl(fd, VIDIOC_G_TUNER, &tuner) == 0) {
 				fac = (tuner.capability & V4L2_TUNER_CAP_LOW) ? 16000 : 16;
 				vf.type = tuner.type;
 			}
 		}
-		if (doioctl(fd, VIDIOC_G_TUNER, &tuner, "VIDIOC_G_TUNER") == 0) {
+		if (doioctl(fd, VIDIOC_G_TUNER, &tuner) == 0) {
 			fac = (tuner.capability & V4L2_TUNER_CAP_LOW) ? 16000 : 16;
 		}
 		vf.tuner = 0;
-		if (doioctl(fd, VIDIOC_G_FREQUENCY, &vf, "VIDIOC_G_FREQUENCY") == 0)
+		if (doioctl(fd, VIDIOC_G_FREQUENCY, &vf) == 0)
 			printf("Frequency: %d (%f MHz)\n", vf.frequency,
 					vf.frequency / fac);
 	}
 
 	if (options[OptGetStandard]) {
-		if (doioctl(fd, VIDIOC_G_STD, &std, "VIDIOC_G_STD") == 0) {
+		if (doioctl(fd, VIDIOC_G_STD, &std) == 0) {
 			printf("Video Standard = 0x%08llx\n", (unsigned long long)std);
 			print_v4lstd((unsigned long long)std);
 		}
 	}
 
 	if (options[OptGetDvPreset]) {
-		if (doioctl(fd, VIDIOC_G_DV_PRESET, &dv_preset, "VIDIOC_G_DV_PRESET") >= 0) {
+		if (doioctl(fd, VIDIOC_G_DV_PRESET, &dv_preset) >= 0) {
 			printf("DV preset: %d\n", dv_preset.preset);
 		}
 	}
 
 	if (options[OptGetDvBtTimings]) {
-		if (doioctl(fd, VIDIOC_G_DV_TIMINGS, &dv_timings, "VIDIOC_G_DV_TIMINGS") >= 0) {
+		if (doioctl(fd, VIDIOC_G_DV_TIMINGS, &dv_timings) >= 0) {
 			struct v4l2_bt_timings *bt;
 
 			printf("DV timings:\n");
@@ -3080,14 +3116,14 @@ int main(int argc, char **argv)
 	}
 
         if (options[OptQueryStandard]) {
-		if (doioctl(fd, VIDIOC_QUERYSTD, &std, "VIDIOC_QUERYSTD") == 0) {
+		if (doioctl(fd, VIDIOC_QUERYSTD, &std) == 0) {
 			printf("Video Standard = 0x%08llx\n", (unsigned long long)std);
 			print_v4lstd((unsigned long long)std);
 		}
 	}
 
         if (options[OptQueryDvPreset]) {
-                doioctl(fd, VIDIOC_QUERY_DV_PRESET, &dv_preset, "VIDIOC_QUERY_DV_PRESET");
+                doioctl(fd, VIDIOC_QUERY_DV_PRESET, &dv_preset);
                 if (dv_preset.preset != V4L2_DV_INVALID) {
                         printf("Preset: %d\n", dv_preset.preset);
                 } else {
@@ -3098,7 +3134,7 @@ int main(int argc, char **argv)
         if (options[OptGetParm]) {
 		memset(&parm, 0, sizeof(parm));
 		parm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-		if (doioctl(fd, VIDIOC_G_PARM, &parm, "VIDIOC_G_PARM") == 0) {
+		if (doioctl(fd, VIDIOC_G_PARM, &parm) == 0) {
 			const struct v4l2_fract &tf = parm.parm.capture.timeperframe;
 
 			printf("Streaming Parameters %s:\n", buftype2s(parm.type).c_str());
@@ -3120,7 +3156,7 @@ int main(int argc, char **argv)
 	if (options[OptGetOutputParm]) {
 		memset(&parm, 0, sizeof(parm));
 		parm.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
-		if (doioctl(fd, VIDIOC_G_PARM, &parm, "VIDIOC_G_PARM") == 0) {
+		if (doioctl(fd, VIDIOC_G_PARM, &parm) == 0) {
 			const struct v4l2_fract &tf = parm.parm.output.timeperframe;
 
 			printf("Streaming Parameters %s:\n", buftype2s(parm.type).c_str());
@@ -3140,14 +3176,16 @@ int main(int argc, char **argv)
 	}
 
 	if (options[OptGetCtrl] && !get_ctrls.empty()) {
-		struct v4l2_ext_controls ctrls = { 0 };
+		struct v4l2_ext_controls ctrls;
 		class2ctrls_map class2ctrls;
 		bool use_ext_ctrls = false;
 
+		memset(&ctrls, 0, sizeof(ctrls));
 		for (ctrl_get_list::iterator iter = get_ctrls.begin();
 				iter != get_ctrls.end(); ++iter) {
-			struct v4l2_ext_control ctrl = { 0 };
+			struct v4l2_ext_control ctrl;
 
+			memset(&ctrl, 0, sizeof(ctrl));
 			ctrl.id = ctrl_str2q[*iter].id;
 			if (ctrl_str2q[*iter].type == V4L2_CTRL_TYPE_INTEGER64)
 				use_ext_ctrls = true;
@@ -3168,7 +3206,7 @@ int main(int argc, char **argv)
 					struct v4l2_control ctrl;
 
 					ctrl.id = iter->second[i].id;
-					doioctl(fd, VIDIOC_G_CTRL, &ctrl, "VIDIOC_G_CTRL");
+					doioctl(fd, VIDIOC_G_CTRL, &ctrl);
 					printf("%s: %d\n", ctrl_id2str[ctrl.id].c_str(), ctrl.value);
 				}
 				continue;
@@ -3177,7 +3215,7 @@ int main(int argc, char **argv)
 				ctrls.ctrl_class = iter->first;
 				ctrls.count = iter->second.size();
 				ctrls.controls = &iter->second[0];
-				doioctl(fd, VIDIOC_G_EXT_CTRLS, &ctrls, "VIDIOC_G_EXT_CTRLS");
+				doioctl(fd, VIDIOC_G_EXT_CTRLS, &ctrls);
 				for (unsigned i = 0; i < iter->second.size(); i++) {
 					struct v4l2_ext_control ctrl = iter->second[i];
 
@@ -3195,7 +3233,7 @@ int main(int argc, char **argv)
 		struct v4l2_tuner vt;
 
 		memset(&vt, 0, sizeof(struct v4l2_tuner));
-		if (doioctl(fd, VIDIOC_G_TUNER, &vt, "VIDIOC_G_TUNER") == 0) {
+		if (doioctl(fd, VIDIOC_G_TUNER, &vt) == 0) {
 			printf("Tuner:\n");
 			printf("\tName                 : %s\n", vt.name);
 			printf("\tCapabilities         : %s\n", tcap2s(vt.capability).c_str());
@@ -3216,7 +3254,7 @@ int main(int argc, char **argv)
 		struct v4l2_modulator mt;
 
 		memset(&mt, 0, sizeof(struct v4l2_modulator));
-		if (doioctl(fd, VIDIOC_G_MODULATOR, &mt, "VIDIOC_G_MODULATOR") == 0) {
+		if (doioctl(fd, VIDIOC_G_MODULATOR, &mt) == 0) {
 			printf("Modulator:\n");
 			printf("\tName                 : %s\n", mt.name);
 			printf("\tCapabilities         : %s\n", tcap2s(mt.capability).c_str());
@@ -3232,7 +3270,7 @@ int main(int argc, char **argv)
 	}
 
 	if (options[OptGetPriority]) {
-		if (doioctl(fd, VIDIOC_G_PRIORITY, &prio, "VIDIOC_G_PRIORITY") == 0)
+		if (doioctl(fd, VIDIOC_G_PRIORITY, &prio) == 0)
 			printf("Priority: %d\n", prio);
 	}
 
@@ -3240,7 +3278,7 @@ int main(int argc, char **argv)
 		static char buf[40960];
 		int len;
 
-		if (doioctl(fd, VIDIOC_LOG_STATUS, NULL, "VIDIOC_LOG_STATUS") == 0) {
+		if (doioctl(fd, VIDIOC_LOG_STATUS, NULL) == 0) {
 			printf("\nStatus Log:\n\n");
 			len = klogctl(3, buf, sizeof(buf) - 1);
 			if (len >= 0) {
@@ -3268,7 +3306,7 @@ int main(int argc, char **argv)
 	if (options[OptListInputs]) {
 		vin.index = 0;
 		printf("ioctl: VIDIOC_ENUMINPUT\n");
-		while (ioctl(fd, VIDIOC_ENUMINPUT, &vin) >= 0) {
+		while (test_ioctl(fd, VIDIOC_ENUMINPUT, &vin) >= 0) {
 			if (vin.index)
 				printf("\n");
 			printf("\tInput       : %d\n", vin.index);
@@ -3287,7 +3325,7 @@ int main(int argc, char **argv)
 	if (options[OptListOutputs]) {
 		vout.index = 0;
 		printf("ioctl: VIDIOC_ENUMOUTPUT\n");
-		while (ioctl(fd, VIDIOC_ENUMOUTPUT, &vout) >= 0) {
+		while (test_ioctl(fd, VIDIOC_ENUMOUTPUT, &vout) >= 0) {
 			if (vout.index)
 				printf("\n");
 			printf("\tOutput      : %d\n", vout.index);
@@ -3305,7 +3343,7 @@ int main(int argc, char **argv)
 		struct v4l2_audio vaudio;	/* list audio inputs */
 		vaudio.index = 0;
 		printf("ioctl: VIDIOC_ENUMAUDIO\n");
-		while (ioctl(fd, VIDIOC_ENUMAUDIO, &vaudio) >= 0) {
+		while (test_ioctl(fd, VIDIOC_ENUMAUDIO, &vaudio) >= 0) {
 			if (vaudio.index)
 				printf("\n");
 			printf("\tInput   : %d\n", vaudio.index);
@@ -3318,7 +3356,7 @@ int main(int argc, char **argv)
 		struct v4l2_audioout vaudio;	/* list audio outputs */
 		vaudio.index = 0;
 		printf("ioctl: VIDIOC_ENUMAUDOUT\n");
-		while (ioctl(fd, VIDIOC_ENUMAUDOUT, &vaudio) >= 0) {
+		while (test_ioctl(fd, VIDIOC_ENUMAUDOUT, &vaudio) >= 0) {
 			if (vaudio.index)
 				printf("\n");
 			printf("\tOutput  : %d\n", vaudio.index);
@@ -3330,7 +3368,7 @@ int main(int argc, char **argv)
 	if (options[OptListStandards]) {
 		printf("ioctl: VIDIOC_ENUMSTD\n");
 		vs.index = 0;
-		while (ioctl(fd, VIDIOC_ENUMSTD, &vs) >= 0) {
+		while (test_ioctl(fd, VIDIOC_ENUMSTD, &vs) >= 0) {
 			if (vs.index)
 				printf("\n");
 			printf("\tIndex       : %d\n", vs.index);
@@ -3363,7 +3401,7 @@ int main(int argc, char **argv)
 		if (frmsize.pixel_format < 256)
 			frmsize.pixel_format = find_pixel_format(fd, frmsize.pixel_format);
 		frmsize.index = 0;
-		while (ioctl(fd, VIDIOC_ENUM_FRAMESIZES, &frmsize) >= 0) {
+		while (test_ioctl(fd, VIDIOC_ENUM_FRAMESIZES, &frmsize) >= 0) {
 			print_frmsize(frmsize, "");
 			frmsize.index++;
 		}
@@ -3374,7 +3412,7 @@ int main(int argc, char **argv)
 		if (frmival.pixel_format < 256)
 			frmival.pixel_format = find_pixel_format(fd, frmival.pixel_format);
 		frmival.index = 0;
-		while (ioctl(fd, VIDIOC_ENUM_FRAMEINTERVALS, &frmival) >= 0) {
+		while (test_ioctl(fd, VIDIOC_ENUM_FRAMEINTERVALS, &frmival) >= 0) {
 			print_frmival(frmival, "");
 			frmival.index++;
 		}
@@ -3384,7 +3422,7 @@ int main(int argc, char **argv)
 		struct v4l2_sliced_vbi_cap cap;
 
 		cap.type = V4L2_BUF_TYPE_SLICED_VBI_CAPTURE;
-		if (doioctl(fd, VIDIOC_G_SLICED_VBI_CAP, &cap, "VIDIOC_G_SLICED_VBI_CAP") == 0) {
+		if (doioctl(fd, VIDIOC_G_SLICED_VBI_CAP, &cap) == 0) {
 			print_sliced_vbi_cap(cap);
 		}
 	}
@@ -3393,7 +3431,7 @@ int main(int argc, char **argv)
 		struct v4l2_sliced_vbi_cap cap;
 
 		cap.type = V4L2_BUF_TYPE_SLICED_VBI_OUTPUT;
-		if (doioctl(fd, VIDIOC_G_SLICED_VBI_CAP, &cap, "VIDIOC_G_SLICED_VBI_CAP") == 0) {
+		if (doioctl(fd, VIDIOC_G_SLICED_VBI_CAP, &cap) == 0) {
 			print_sliced_vbi_cap(cap);
 		}
 	}
@@ -3409,7 +3447,7 @@ int main(int argc, char **argv)
 	if (options[OptListDvPresets]) {
 		dv_enum_preset.index = 0;
 		printf("ioctl: VIDIOC_ENUM_DV_PRESETS\n");
-		while (ioctl(fd, VIDIOC_ENUM_DV_PRESETS, &dv_enum_preset) >= 0) {
+		while (test_ioctl(fd, VIDIOC_ENUM_DV_PRESETS, &dv_enum_preset) >= 0) {
 			if (dv_enum_preset.index)
 				printf("\n");
 			printf("\tIndex   : %d\n", dv_enum_preset.index);
@@ -3422,25 +3460,29 @@ int main(int argc, char **argv)
 	}
 	if (options[OptStreamOn]) {
 		int dummy = 0;
-		doioctl(fd, VIDIOC_STREAMON, &dummy, "VIDIOC_STREAMON");
+		doioctl(fd, VIDIOC_STREAMON, &dummy);
 	}
 
 	if (options[OptWaitForEvent]) {
-		struct v4l2_event_subscription sub = { wait_for_event };
+		struct v4l2_event_subscription sub;
 		struct v4l2_event ev;
 
-		if (!doioctl(fd, VIDIOC_SUBSCRIBE_EVENT, &sub, "VIDIOC_SUBSCRIBE_EVENT")) {
-			if (!doioctl(fd, VIDIOC_DQEVENT, &ev, "VIDIOC_DQEVENT")) {
+		memset(&sub, 0, sizeof(sub));
+		sub.type = wait_for_event;
+		if (!doioctl(fd, VIDIOC_SUBSCRIBE_EVENT, &sub)) {
+			if (!doioctl(fd, VIDIOC_DQEVENT, &ev)) {
 				print_event(&ev);
 			}
 		}
 	}
 
 	if (options[OptPollForEvent]) {
-		struct v4l2_event_subscription sub = { poll_for_event };
+		struct v4l2_event_subscription sub;
 		struct v4l2_event ev;
 
-		if (!doioctl(fd, VIDIOC_SUBSCRIBE_EVENT, &sub, "VIDIOC_SUBSCRIBE_EVENT")) {
+		memset(&sub, 0, sizeof(sub));
+		sub.type = poll_for_event;
+		if (!doioctl(fd, VIDIOC_SUBSCRIBE_EVENT, &sub)) {
 			fd_set fds;
 
 			fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
@@ -3452,7 +3494,7 @@ int main(int argc, char **argv)
 				res = select(fd + 1, NULL, NULL, &fds, NULL);
 				if (res <= 0)
 					break;
-				if (!doioctl(fd, VIDIOC_DQEVENT, &ev, "VIDIOC_DQEVENT")) {
+				if (!doioctl(fd, VIDIOC_DQEVENT, &ev)) {
 					print_event(&ev);
 				}
 			}
@@ -3462,7 +3504,7 @@ int main(int argc, char **argv)
 	if (options[OptSleep]) {
 		sleep(secs);
 		printf("Test VIDIOC_QUERYCAP:\n");
-		if (ioctl(fd, VIDIOC_QUERYCAP, &vcap) == 0)
+		if (test_ioctl(fd, VIDIOC_QUERYCAP, &vcap) == 0)
 			printf("\tDriver name   : %s\n", vcap.driver);
 		else
 			perror("VIDIOC_QUERYCAP");

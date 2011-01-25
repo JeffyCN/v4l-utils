@@ -174,23 +174,40 @@ void ApplicationWindow::capFrame()
 	unsigned i;
 	int s = 0;
 	int err = 0;
+	bool again;
 
 	switch (m_capMethod) {
 	case methodRead:
 		s = read(m_frameData, m_capSrcFormat.fmt.pix.sizeimage);
-		err = v4lconvert_convert(m_convertData, &m_capSrcFormat, &m_capDestFormat,
-				m_frameData, m_capSrcFormat.fmt.pix.sizeimage,
+		if (s < 0) {
+			if (errno != EAGAIN) {
+				error("read");
+				m_capStartAct->setChecked(false);
+			}
+			return;
+		}
+		if (useWrapper())
+			memcpy(m_capImage->bits(), m_frameData, s);
+		else
+			err = v4lconvert_convert(m_convertData, &m_capSrcFormat, &m_capDestFormat,
+				m_frameData, s,
 				m_capImage->bits(), m_capDestFormat.fmt.pix.sizeimage);
 		break;
 
 	case methodMmap:
-		if (!dqbuf_mmap_cap(buf)) {
+		if (!dqbuf_mmap_cap(buf, again)) {
 			error("dqbuf");
 			m_capStartAct->setChecked(false);
 			return;
 		}
+		if (again)
+			return;
 
-		err = v4lconvert_convert(m_convertData, &m_capSrcFormat, &m_capDestFormat,
+		if (useWrapper())
+			memcpy(m_capImage->bits(), (unsigned char *)m_buffers[buf.index].start,
+					buf.bytesused);
+		else
+			err = v4lconvert_convert(m_convertData, &m_capSrcFormat, &m_capDestFormat,
 				(unsigned char *)m_buffers[buf.index].start, buf.bytesused,
 				m_capImage->bits(), m_capDestFormat.fmt.pix.sizeimage);
 
@@ -198,24 +215,33 @@ void ApplicationWindow::capFrame()
 		break;
 
 	case methodUser:
-		if (!dqbuf_user_cap(buf)) {
+		if (!dqbuf_user_cap(buf, again)) {
 			error("dqbuf");
 			m_capStartAct->setChecked(false);
 			return;
 		}
+		if (again)
+			return;
 
 		for (i = 0; i < m_nbuffers; ++i)
 			if (buf.m.userptr == (unsigned long)m_buffers[i].start
 					&& buf.length == m_buffers[i].length)
 				break;
 
-		err = v4lconvert_convert(m_convertData, &m_capSrcFormat, &m_capDestFormat,
+		if (useWrapper())
+			memcpy(m_capImage->bits(), (unsigned char *)buf.m.userptr,
+					buf.bytesused);
+		else
+			err = v4lconvert_convert(m_convertData, &m_capSrcFormat, &m_capDestFormat,
 				(unsigned char *)buf.m.userptr, buf.bytesused,
 				m_capImage->bits(), m_capDestFormat.fmt.pix.sizeimage);
 
 		qbuf(buf);
 		break;
 	}
+	if (err == -1)
+		error(v4lconvert_get_error_message(m_convertData));
+
 	m_capture->setImage(*m_capImage);
 	if (m_capture->frame() == 1)
 		refresh();
@@ -239,7 +265,7 @@ bool ApplicationWindow::startCapture(unsigned buffer_size)
 			break;
 		}
 
-		if (req.count < 3) {
+		if (req.count < 2) {
 			error("Too few buffers");
 			reqbufs_mmap_cap(req);
 			break;
@@ -293,7 +319,7 @@ bool ApplicationWindow::startCapture(unsigned buffer_size)
 			break;
 		}
 
-		if (req.count < 3) {
+		if (req.count < 2) {
 			error("Too few buffers");
 			reqbufs_user_cap(req);
 			break;
@@ -410,6 +436,11 @@ void ApplicationWindow::capStart(bool start)
 	}
 	m_capMethod = m_genTab->capMethod();
 	g_fmt_cap(m_capSrcFormat);
+	if (useWrapper()) {
+		m_capSrcFormat.fmt.pix.pixelformat = V4L2_PIX_FMT_RGB24;
+		s_fmt(m_capSrcFormat);
+		g_fmt_cap(m_capSrcFormat);
+	}
 	m_frameData = new unsigned char[m_capSrcFormat.fmt.pix.sizeimage];
 	m_capDestFormat = m_capSrcFormat;
 	m_capDestFormat.fmt.pix.pixelformat = V4L2_PIX_FMT_RGB24;
@@ -421,11 +452,13 @@ void ApplicationWindow::capStart(bool start)
 			break;
 		}
 	}
-	v4lconvert_try_format(m_convertData, &m_capDestFormat, &m_capSrcFormat);
-	// v4lconvert_try_format sometimes modifies the source format if it thinks
-	// that there is a better format available. Restore our selected source
-	// format since we do not want that happening.
-	g_fmt_cap(m_capSrcFormat);
+	if (!useWrapper()) {
+		v4lconvert_try_format(m_convertData, &m_capDestFormat, &m_capSrcFormat);
+		// v4lconvert_try_format sometimes modifies the source format if it thinks
+		// that there is a better format available. Restore our selected source
+		// format since we do not want that happening.
+		g_fmt_cap(m_capSrcFormat);
+	}
 	m_capture->setMinimumSize(m_capDestFormat.fmt.pix.width, m_capDestFormat.fmt.pix.height);
 	m_capImage = new QImage(m_capDestFormat.fmt.pix.width, m_capDestFormat.fmt.pix.height, dstFmt);
 	m_capImage->fill(0);
@@ -518,11 +551,31 @@ ApplicationWindow *g_mw;
 int main(int argc, char **argv)
 {
 	QApplication a(argc, argv);
+	QString device = "/dev/video0";
+	bool raw = false;
+	bool help = false;
+	int i;
 
 	a.setWindowIcon(QIcon(":/qv4l2.png"));
 	g_mw = new ApplicationWindow();
 	g_mw->setWindowTitle("V4L2 Test Bench");
-	g_mw->setDevice(a.argc() > 1 ? a.argv()[1] : "/dev/video0", true);
+	for (i = 1; i < argc; i++) {
+		const char *arg = a.argv()[i];
+
+		if (!strcmp(arg, "-r"))
+			raw = true;
+		else if (!strcmp(arg, "-h"))
+			help = true;
+		else if (arg[0] != '-')
+			device = arg;
+	}
+	if (help) {
+		printf("qv4l2 [-r] [-h] [device node]\n\n"
+		       "-h\tthis help message\n"
+		       "-r\topen device node in raw mode\n");
+		return 0;
+	}
+	g_mw->setDevice(device, raw);
 	g_mw->show();
 	a.connect(&a, SIGNAL(lastWindowClosed()), &a, SLOT(quit()));
 	return a.exec();

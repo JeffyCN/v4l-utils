@@ -12,7 +12,7 @@ sync-with-kernel:
 	cp -a $(KERNEL_DIR)/include/linux/videodev2.h include/linux
 	cp -a $(KERNEL_DIR)/include/linux/ivtv.h include/linux
 	cp -a $(KERNEL_DIR)/include/media/v4l2-chip-ident.h include/media
-	make -C utils $@
+	$(MAKE) -C utils $@
 
 clean::
 	rm -f include/*/*~
@@ -31,7 +31,7 @@ archive: clean tag archive-no-tag
 
 export: clean
 	tar --transform s/^\./v4l-utils-$(V4L_UTILS_VERSION)/g \
-		--exclude=.git -zcvf \
-		/tmp/v4l-utils-$(V4L_UTILS_VERSION).tar.gz .
+		--exclude=.git -jcvf \
+		/tmp/v4l-utils-$(V4L_UTILS_VERSION).tar.bz2 .
 
 include Make.rules
