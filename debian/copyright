@@ -11,6 +11,22 @@ Copyright:
 
     Copyright (C) 2008-2010 Hans de Goede
 
+Files: contrib/cx231xx/parse_cx231xx.pl
+Copyright: 2010 Mauro Carvalho Chehab <mchehab@redhat.com>
+License: GPL-2
+
+Files: contrib/saa7134/parse_saa7134.pl
+Copyright: 2008 Mauro Carvalho Chehab <mchehab@redhat.com>
+License: GPL-2
+
+Files: contrib/sn9c201/parse_sn9c201.pl
+Copyright: 2010 Mauro Carvalho Chehab <mchehab@redhat.com>
+License: GPL-2
+
+contrib/usb_parse/parse_usb.pl
+Copyright: 2010 Mauro Carvalho Chehab <mchehab@redhat.com>
+License: GPL-2
+
 Files: lib/libv4l2/log.c
 Copyright: 2008 Elmar Kleijn <elmar_kleijn@hotmail.com>
            2008 Sjoerd Piepenbrink <need4weed@gmail.com>
@@ -186,7 +202,7 @@ License:
     is based directly on figure 4-8 in P&M.
 
 Files: debian/*
-Copyright: 2008, 2009, 2010 Gregor Jasny <gjasny@googlemail.com>
+Copyright: 2008, 2009, 2010, 2011 Gregor Jasny <gjasny@googlemail.com>
 License: GPL2+
 
 Files: lib/libv4l1.c
@@ -223,8 +239,12 @@ Files: utils/qv4l2-qt*
 Copyright: 2006 Hans Verkuil <hverkuil@xs4all.nl>
 License: GPL-2+
 
-Files: utils/v4l2-compliance/v4l2-compliance.cpp
-Copyright: 2008, 2010  Hans Verkuil <hverkuil@xs4all.nl>
+Files: v4l2-compliance/*.cpp
+Copyright: 2011 Hans Verkuil <hverkuil@xs4all.nl>
+License: GPL-2+
+
+Files: utils/v4l2-compliance/v4l2-compliance.* utils/v4l2-compliance/v4l2-test-debug.cpp
+Copyright: 2008, 2010 Hans Verkuil <hverkuil@xs4all.nl>
 License: GPL-2+
 
 Files: utils/v4l2-ctl/cx18-ctl.c
