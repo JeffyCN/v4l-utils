@@ -323,9 +323,13 @@ static const struct v4lcontrol_flags_info v4lcontrol_flags[] = {
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
 	{ 0x064e, 0xa116, 0, "ASUSTeK Computer INC.", "K50AD",
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
+	/* 2 reports:
+	   Unknown laptop model -> System Vendor: "  IDEALMAX"
+	   Síragon SL-6120      -> System Vendor: "PEGA PC"
+	   So we just put NULL in the dmi_system_vendor field. */
 	{ 0x064e, 0xa116, 0, "To be filled by O.E.M.", "H34",
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED, 0,
-		"  IDEALMAX", "H34" },
+		NULL, "H34" },
 	{ 0x064e, 0xa136, 0, "ASUSTeK Computer Inc.        ", "UL30A     ",
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
 	{ 0x064e, 0xa136, 0, "ASUSTeK Computer Inc.        ", "UL30VT    ",
@@ -362,6 +366,8 @@ static const struct v4lcontrol_flags_info v4lcontrol_flags[] = {
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
 	{ 0x13d3, 0x5111, 0, "ASUSTeK Computer INC.", "T101MT",
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
+	{ 0x13d3, 0x5120, 0, "ASUSTeK Computer Inc.        ", "N73JG",
+		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
 	{ 0x13d3, 0x5122, 0, "ASUSTeK Computer Inc.        ", "N43JF",
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
 	{ 0x13d3, 0x5122, 0, "ASUSTeK Computer Inc.        ", "N61Da",
@@ -371,6 +377,8 @@ static const struct v4lcontrol_flags_info v4lcontrol_flags[] = {
 	{ 0x13d3, 0x5122, 0, "ASUSTeK Computer Inc.        ", "N61Jq",
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
 	{ 0x13d3, 0x5122, 0, "ASUSTeK Computer INC.", "N61Jv",
+		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
+	{ 0x13d3, 0x5122, 0, "ASUSTeK Computer Inc.        ", "N73JF",
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
 	{ 0x13d3, 0x5122, 0, "ASUSTeK Computer Inc.        ", "N73JQ",
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
@@ -471,7 +479,7 @@ static const struct v4lcontrol_flags_info v4lcontrol_flags[] = {
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
 	{ 0x174f, 0xa311, 0, "ASUSTeK Computer Inc.        ", "A3V       ",
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
-	{ 0x17ef, 0x4816, 0, "LENOVO", "3093W11",
+	{ 0x17ef, 0x4816, 0, "LENOVO", NULL,
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED, 0, NULL, NULL, NULL,
 		"ThinkPad X201 Tablet" },
 	{ 0x1d4d, 0x1002, 0, "ASUSTeK Computer Inc.        ", "B50A      ",

@@ -57,7 +57,6 @@
 #include <sys/types.h>
 #include <sys/mman.h>
 #include "../libv4lconvert/libv4lsyscall-priv.h"
-#include <linux/videodev.h>
 #include <linux/videodev2.h>
 #include <libv4l2.h>
 #include "libv4l1.h"
@@ -322,11 +321,6 @@ int v4l1_open(const char *file, int oflag, ...)
 	if (SYS_IOCTL(fd, VIDIOC_QUERYCAP, &cap2))
 		return fd;
 
-	/* IMPROVEME */
-	/* we only support simple video capture devices which do not do overlay */
-	if ((cap2.capabilities & 0x0F) != V4L2_CAP_VIDEO_CAPTURE)
-		return fd;
-
 	/* If no log file was set by the app, see if one was specified through the
 	   environment */
 	if (!v4l1_log_file) {
@@ -400,7 +394,7 @@ int v4l1_open(const char *file, int oflag, ...)
 		devices[index].flags |= V4L1_SUPPORTS_ENUMINPUT;
 
 	standard2.index = 0;
-	if (v4l2_ioctl(fd, VIDIOC_ENUMSTD, &input2) == 0)
+	if (v4l2_ioctl(fd, VIDIOC_ENUMSTD, &standard2) == 0)
 		devices[index].flags |= V4L1_SUPPORTS_ENUMSTD;
 
 	V4L1_LOG("open: %d\n", fd);

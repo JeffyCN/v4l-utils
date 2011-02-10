@@ -111,6 +111,8 @@ static const char doc[] = "\nAllows get/set IR keycode/scancode tables\n"
 	"  TABLE    - a file wit a set of scancode=keycode value pairs\n"
 	"  SCANKEY  - a set of scancode1=keycode1,scancode2=keycode2.. value pairs\n"
 	"  PROTOCOL - protocol name (nec, rc-5, rc-6, other) to be enabled\n"
+	"  DELAY    - Delay before repeating a keystroke\n"
+	"  PERIOD   - Period to repeat a keystroke\n"
 	"  CFGFILE  - configuration file that associates a driver/table name with a keymap file\n"
 	"\nOptions can be combined together.";
 
@@ -124,6 +126,8 @@ static const struct argp_option options[] = {
 	{"write",	'w',	"TABLE",	0,	"write (adds) the scancodes to the device scancode/keycode table from an specified file", 0},
 	{"set-key",	'k',	"SCANKEY",	0,	"Change scan/key pairs", 0},
 	{"protocol",	'p',	"PROTOCOL",	0,	"Protocol to enable (the other ones will be disabled). To enable more than one, use the option more than one time", 0},
+	{"delay",	'D',	"DELAY",	0,	"Sets the delay before repeating a keystroke", 0},
+	{"period",	'P',	"PERIOD",	0,	"Sets the period to repeat a keystroke", 0},
 	{"auto-load",	'a',	"CFGFILE",	0,	"Auto-load a table, based on a configuration file. Only works with sysdev.", 0},
 	{ 0, 0, 0, 0, 0, 0 }
 };
@@ -140,6 +144,8 @@ static int readtable = 0;
 static int clear = 0;
 static int debug = 0;
 static int test = 0;
+static int delay = 0;
+static int period = 0;
 static enum ir_protocols ch_proto = 0;
 
 struct keytable keys = {
@@ -367,6 +373,12 @@ static error_t parse_opt(int k, char *arg, struct argp_state *state)
 		break;
 	case 'c':
 		clear++;
+		break;
+	case 'D':
+		delay = atoi(arg);
+		break;
+	case 'P':
+		period = atoi(arg);
 		break;
 	case 'd':
 		devname = arg;
@@ -1078,7 +1090,7 @@ static int get_attribs(struct rc_device *rc_dev, char *sysfs_name)
 
 static int set_proto(struct rc_device *rc_dev)
 {
-	int rc;
+	int rc = 0;
 
 	if (rc_dev->version == VERSION_2) {
 		rc = v2_set_protocols(rc_dev);
@@ -1303,6 +1315,74 @@ static void display_table(struct rc_device *rc_dev, int fd)
 		display_table_v2(rc_dev, fd);
 }
 
+static int set_rate(int fd, unsigned int delay, unsigned int period)
+{
+	unsigned int rep[2] = { delay, period };
+
+	if (ioctl(fd, EVIOCSREP, rep) < 0) {
+		perror("evdev ioctl");
+		return -1;
+	}
+
+	printf("Changed Repeat delay to %d ms and repeat period to %d ms\n", delay, period);
+	return 0;
+}
+
+static int get_rate(int fd, unsigned int *delay, unsigned int *period)
+{
+	unsigned int rep[2];
+
+	if (ioctl(fd, EVIOCGREP, rep) < 0) {
+		perror("evdev ioctl");
+		return -1;
+	}
+	*delay = rep[0];
+	*period = rep[1];
+	printf("Repeat delay = %d ms, repeat period = %d ms\n", *delay, *period);
+	return 0;
+}
+
+static void show_evdev_attribs(int fd)
+{
+	unsigned int delay, period;
+
+	printf("\t");
+	get_rate(fd, &delay, &period);
+}
+
+static int show_sysfs_attribs(struct rc_device *rc_dev)
+{
+	static struct sysfs_names *names, *cur;
+	int fd;
+
+	names = find_device(NULL);
+	if (!names)
+		return -1;
+	for (cur = names; cur->next; cur = cur->next) {
+		if (cur->name) {
+			if (get_attribs(rc_dev, cur->name))
+				return -1;
+			fprintf(stderr, "Found %s (%s) with:\n",
+				rc_dev->sysfs_name,
+				rc_dev->input_name);
+			fprintf(stderr, "\tDriver %s, table %s\n",
+				rc_dev->drv_name,
+				rc_dev->keytable_name);
+			fprintf(stderr, "\tSupported protocols: ");
+			show_proto(rc_dev->supported);
+			fprintf(stderr, "\n\t");
+			display_proto(rc_dev);
+			fd = open(rc_dev->input_name, O_RDONLY);
+			if (fd > 0) {
+				show_evdev_attribs(fd);
+				close(fd);
+			} else {
+				printf("\tExtra capabilities: <access denied>\n");
+			}
+		}
+	}
+	return 0;
+}
 
 int main(int argc, char *argv[])
 {
@@ -1314,28 +1394,10 @@ int main(int argc, char *argv[])
 	argp_parse(&argp, argc, argv, 0, 0, 0);
 
 	/* Just list all devices */
-	if (!clear && !readtable && !keys.next && !ch_proto && !cfg.next && !test) {
-		static struct sysfs_names *names, *cur;
-
-		names = find_device(NULL);
-		if (!names)
+	if (!clear && !readtable && !keys.next && !ch_proto && !cfg.next && !test && !delay && !period) {
+		if (show_sysfs_attribs(&rc_dev))
 			return -1;
-		for (cur = names; cur->next; cur = cur->next) {
-			if (cur->name) {
-				if (get_attribs(&rc_dev, cur->name))
-					return -1;
-				fprintf(stderr, "Found %s (%s) with:\n",
-					rc_dev.sysfs_name,
-					rc_dev.input_name);
-				fprintf(stderr, "\tDriver %s, table %s\n",
-					rc_dev.drv_name,
-					rc_dev.keytable_name);
-				fprintf(stderr, "\tSupported protocols: ");
-				show_proto(rc_dev.supported);
-				fprintf(stderr, "\t");
-				display_proto(&rc_dev);
-			}
-		}
+
 		return 0;
 	}
 
@@ -1444,6 +1506,19 @@ int main(int argc, char *argv[])
 	 */
 	if (readtable)
 		display_table(&rc_dev, fd);
+
+	/*
+	 * Fiveth step: change repeat rate/delay
+	 */
+	if (delay || period) {
+		unsigned int new_delay, new_period;
+		get_rate(fd, &new_delay, &new_period);
+		if (delay)
+			new_delay = delay;
+		if (period)
+			new_period = period;
+		set_rate(fd, new_delay, new_period);
+	}
 
 	if (test)
 		test_event(fd);
