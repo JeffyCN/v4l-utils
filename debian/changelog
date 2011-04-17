@@ -1,3 +1,11 @@
+v4l-utils (0.8.3-2) unstable; urgency=low
+
+  * Add versioned conflict for ivtv-utils (Closes: #620684)
+  * Fix description as linitian suggests
+  * Raise debhelper compatibility level to 8
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Sun, 17 Apr 2011 17:39:35 +0200
+
 v4l-utils (0.8.3-1) unstable; urgency=low
 
   * New Upstream version
