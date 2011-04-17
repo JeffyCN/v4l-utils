@@ -124,7 +124,7 @@ Architecture: any
 Depends: libv4l-0 (= ${binary:Version}),
          ${shlibs:Depends},
          ${misc:Depends}
-Conflicts: ivtv-utils
+Conflicts: ivtv-utils (<< 1.4.1-2)
 Description: Collection of command line video4linux utilities
  v4l-utils contains the following video4linux command line utilities:
  .
