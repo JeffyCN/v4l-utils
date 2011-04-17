@@ -62,7 +62,7 @@ binary-arch: build
 	dh_strip -s
 	dh_compress -s
 	dh_fixperms -s
-	dh_makeshlibs -s
+	dh_makeshlibs -s -Xv4l1compat -Xv4l2convert
 	dh_installdeb -s
 	dh_shlibdeps -s
 	dh_gencontrol -s

@@ -5,7 +5,7 @@ Maintainer: Gregor Jasny <gjasny@googlemail.com>
 Uploaders: Martin Pitt <mpitt@debian.org>,
            Loic Minier <lool@dooz.org>
 DM-Upload-Allowed: yes
-Build-Depends: debhelper (>= 7),
+Build-Depends: debhelper (>= 8),
                libqt4-dev,
                libsysfs-dev,
                linux-libc-dev (>= 2.6.19),
