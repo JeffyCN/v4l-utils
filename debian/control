@@ -151,7 +151,7 @@ Depends: ${shlibs:Depends},
          ${misc:Depends}
 Recommends: udev
 Description: Alter keymaps of Remote Controller devices
- This package allows to change the keymap of controller receivers.
+ This package allows one to change the keymap of controller receivers.
  Those receivers are found as infrared receivers on DVB sticks or on
  framegrabber cards. Via ir-keytable the mapping from a scancode to
  the generated event can be customized and made persistent.
