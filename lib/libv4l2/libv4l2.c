@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+# Foundation, Inc., 51 Franklin Street, Suite 500, Boston, MA  02110-1335  USA
  */
 
 /* MAKING CHANGES TO THIS FILE??   READ THIS FIRST!!!
@@ -78,8 +78,11 @@
 #define V4L2_IS_UVC			0x1000
 #define V4L2_STREAM_TOUCHED		0x2000
 #define V4L2_USE_READ_FOR_READ		0x4000
+#define V4L2_SUPPORTS_TIMEPERFRAME	0x8000
 
 #define V4L2_MMAP_OFFSET_MAGIC      0xABCDEF00u
+
+static void v4l2_adjust_src_fmt_to_fps(int index, int fps);
 
 static pthread_mutex_t v4l2_open_mutex = PTHREAD_MUTEX_INITIALIZER;
 static struct v4l2_dev_info devices[V4L2_MAX_DEVICES] = {
@@ -519,6 +522,17 @@ static int v4l2_buffers_mapped(int index)
 	return i != devices[index].no_frames;
 }
 
+static void v4l2_update_fps(int index, struct v4l2_streamparm *parm)
+{
+	if ((devices[index].flags & V4L2_SUPPORTS_TIMEPERFRAME) &&
+	    parm->parm.capture.timeperframe.numerator != 0) {
+		int fps = parm->parm.capture.timeperframe.denominator;
+		fps += parm->parm.capture.timeperframe.numerator - 1;
+		fps /= parm->parm.capture.timeperframe.numerator;
+		devices[index].fps = fps;
+	} else
+		devices[index].fps = 0;
+}
 
 int v4l2_open(const char *file, int oflag, ...)
 {
@@ -560,6 +574,7 @@ int v4l2_fd_open(int fd, int v4l2_flags)
 	char *lfname;
 	struct v4l2_capability cap;
 	struct v4l2_format fmt;
+	struct v4l2_streamparm parm;
 	struct v4lconvert_data *convert;
 
 	/* If no log file was set by the app, see if one was specified through the
@@ -594,6 +609,11 @@ int v4l2_fd_open(int fd, int v4l2_flags)
 		return -1;
 	}
 
+	/* Check for framerate setting support */
+	parm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	if (SYS_IOCTL(fd, VIDIOC_G_PARM, &parm))
+		parm.type = 0;
+
 	/* init libv4lconvert */
 	convert = v4lconvert_create(fd);
 	if (!convert)
@@ -626,6 +646,9 @@ int v4l2_fd_open(int fd, int v4l2_flags)
 	}
 	if (!strcmp((char *)cap.driver, "uvcvideo"))
 		devices[index].flags |= V4L2_IS_UVC;
+	if ((parm.type == V4L2_BUF_TYPE_VIDEO_CAPTURE) &&
+	    (parm.parm.capture.capability & V4L2_CAP_TIMEPERFRAME))
+		devices[index].flags |= V4L2_SUPPORTS_TIMEPERFRAME;
 	devices[index].open_count = 1;
 	devices[index].src_fmt = fmt;
 	devices[index].dest_fmt = fmt;
@@ -656,6 +679,12 @@ int v4l2_fd_open(int fd, int v4l2_flags)
 
 	if (index >= devices_used)
 		devices_used = index + 1;
+
+	/* Note we always tell v4lconvert to optimize src fmt selection for
+	   our default fps, the only exception is the app explictly selecting
+	   a framerate using the S_PARM ioctl after a S_FMT */
+	v4lconvert_set_fps(devices[index].convert, V4L2_DEFAULT_FPS);
+	v4l2_update_fps(index, &parm);
 
 	V4L2_LOG("open: %d\n", fd);
 
@@ -772,12 +801,22 @@ static int v4l2_check_buffer_change_ok(int index)
 	return 0;
 }
 
-static int v4l2_pix_fmt_identical(struct v4l2_format *a, struct v4l2_format *b)
+static int v4l2_pix_fmt_compat(struct v4l2_format *a, struct v4l2_format *b)
 {
 	if (a->fmt.pix.width == b->fmt.pix.width &&
 			a->fmt.pix.height == b->fmt.pix.height &&
 			a->fmt.pix.pixelformat == b->fmt.pix.pixelformat &&
 			a->fmt.pix.field == b->fmt.pix.field)
+		return 1;
+
+	return 0;
+}
+
+static int v4l2_pix_fmt_identical(struct v4l2_format *a, struct v4l2_format *b)
+{
+	if (v4l2_pix_fmt_compat(a, b) &&
+	    a->fmt.pix.bytesperline == b->fmt.pix.bytesperline &&
+	    a->fmt.pix.sizeimage == b->fmt.pix.sizeimage)
 		return 1;
 
 	return 0;
@@ -793,7 +832,7 @@ static void v4l2_set_src_and_dest_format(int index,
 	dest_fmt->fmt.pix.field = src_fmt->fmt.pix.field;
 	dest_fmt->fmt.pix.colorspace = src_fmt->fmt.pix.colorspace;
 	/* When we're not converting use bytesperline and imagesize from src_fmt */
-	if (v4l2_pix_fmt_identical(src_fmt, dest_fmt)) {
+	if (v4l2_pix_fmt_compat(src_fmt, dest_fmt)) {
 		dest_fmt->fmt.pix.bytesperline = src_fmt->fmt.pix.bytesperline;
 		dest_fmt->fmt.pix.sizeimage = src_fmt->fmt.pix.sizeimage;
 	}
@@ -876,6 +915,14 @@ int v4l2_ioctl(int fd, unsigned long int request, ...)
 			is_capture_request = 1;
 			stream_needs_locking = 1;
 		}
+		break;
+	case VIDIOC_S_PARM:
+		if (((struct v4l2_streamparm *)arg)->type == V4L2_BUF_TYPE_VIDEO_CAPTURE) {
+			is_capture_request = 1;
+			if (devices[index].flags & V4L2_SUPPORTS_TIMEPERFRAME)
+				stream_needs_locking = 1;
+		}
+		break;
 	}
 
 	if (!is_capture_request) {
@@ -950,7 +997,13 @@ int v4l2_ioctl(int fd, unsigned long int request, ...)
 		break;
 
 	case VIDIOC_TRY_FMT:
-		result = v4lconvert_try_format(devices[index].convert, arg, NULL);
+		if (devices[index].flags & V4L2_DISABLE_CONVERSION) {
+			result = SYS_IOCTL(devices[index].fd, VIDIOC_TRY_FMT,
+					   arg);
+		} else {
+			result = v4lconvert_try_format(devices[index].convert,
+						       arg, NULL);
+		}
 		break;
 
 	case VIDIOC_S_FMT: {
@@ -960,7 +1013,7 @@ int v4l2_ioctl(int fd, unsigned long int request, ...)
 		/* Don't be lazy on uvc cams, as this triggers a bug in the uvcvideo
 		   driver in kernel <= 2.6.28 (with certain cams) */
 		if (!(devices[index].flags & V4L2_IS_UVC) &&
-				v4l2_pix_fmt_identical(&devices[index].dest_fmt, dest_fmt)) {
+				v4l2_pix_fmt_compat(&devices[index].dest_fmt, dest_fmt)) {
 			*dest_fmt = devices[index].dest_fmt;
 			result = 0;
 			break;
@@ -1006,7 +1059,7 @@ int v4l2_ioctl(int fd, unsigned long int request, ...)
 		/* Maybe after try format has adjusted width/height etc, to whats
 		   available nothing has changed (on the cam side) ? */
 		if (!(devices[index].flags & V4L2_IS_UVC) &&
-				v4l2_pix_fmt_identical(&devices[index].src_fmt, &src_fmt)) {
+				v4l2_pix_fmt_compat(&devices[index].src_fmt, &src_fmt)) {
 			v4l2_set_src_and_dest_format(index, &devices[index].src_fmt,
 					dest_fmt);
 			result = 0;
@@ -1038,6 +1091,15 @@ int v4l2_ioctl(int fd, unsigned long int request, ...)
 		}
 
 		v4l2_set_src_and_dest_format(index, &src_fmt, dest_fmt);
+
+		if (devices[index].flags & V4L2_SUPPORTS_TIMEPERFRAME) {
+			struct v4l2_streamparm parm = {
+				.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
+			};
+			if (SYS_IOCTL(fd, VIDIOC_G_PARM, &parm) == 0)
+				v4l2_update_fps(index, &parm);
+		}
+
 		break;
 	}
 
@@ -1186,6 +1248,27 @@ int v4l2_ioctl(int fd, unsigned long int request, ...)
 			result = v4l2_streamoff(index);
 		break;
 
+	case VIDIOC_S_PARM: {
+		struct v4l2_streamparm *parm = arg;
+
+		/* See if libv4lconvert wishes to use a different src_fmt
+		   for the new framerate and set that first */
+		if ((devices[index].flags & V4L2_SUPPORTS_TIMEPERFRAME) &&
+		    parm->parm.capture.timeperframe.numerator != 0) {
+			int fps = parm->parm.capture.timeperframe.denominator;
+			fps += parm->parm.capture.timeperframe.numerator - 1;
+			fps /= parm->parm.capture.timeperframe.numerator;
+			v4l2_adjust_src_fmt_to_fps(index, fps);
+		}
+
+		result = SYS_IOCTL(devices[index].fd, VIDIOC_S_PARM, parm);
+		if (result)
+			break;
+
+		v4l2_update_fps(index, parm);
+		break;
+	}
+
 	default:
 		result = SYS_IOCTL(fd, request, arg);
 		break;
@@ -1201,6 +1284,70 @@ int v4l2_ioctl(int fd, unsigned long int request, ...)
 	return result;
 }
 
+static void v4l2_adjust_src_fmt_to_fps(int index, int fps)
+{
+	struct v4l2_pix_format req_pix_fmt;
+	struct v4l2_format src_fmt;
+	struct v4l2_format dest_fmt = devices[index].dest_fmt;
+	struct v4l2_format orig_src_fmt = devices[index].src_fmt;
+	struct v4l2_format orig_dest_fmt = devices[index].dest_fmt;
+	int r;
+
+	if (fps == devices[index].fps)
+		return;
+
+	if (v4l2_check_buffer_change_ok(index))
+		return;
+
+	v4lconvert_set_fps(devices[index].convert, fps);
+	r = v4lconvert_try_format(devices[index].convert, &dest_fmt, &src_fmt);
+	v4lconvert_set_fps(devices[index].convert, V4L2_DEFAULT_FPS);
+	if (r)
+		return;
+
+	if (orig_src_fmt.fmt.pix.pixelformat == src_fmt.fmt.pix.pixelformat ||
+	    !v4l2_pix_fmt_compat(&orig_dest_fmt, &dest_fmt))
+		return;
+
+	req_pix_fmt = src_fmt.fmt.pix;
+	if (SYS_IOCTL(devices[index].fd, VIDIOC_S_FMT, &src_fmt))
+		return;
+
+	v4l2_set_src_and_dest_format(index, &src_fmt, &dest_fmt);
+
+	/* Check we've gotten what try_fmt promised us and that the
+	   new dest fmt matches the original, if this is true we're done. */
+	if (src_fmt.fmt.pix.width == req_pix_fmt.width &&
+	    src_fmt.fmt.pix.height == req_pix_fmt.height &&
+	    src_fmt.fmt.pix.pixelformat == req_pix_fmt.pixelformat &&
+	    v4l2_pix_fmt_identical(&orig_dest_fmt, &dest_fmt)) {
+		if (v4l2_log_file) {
+			int pixfmt = src_fmt.fmt.pix.pixelformat;
+			fprintf(v4l2_log_file,
+				"new src fmt for fps change: %c%c%c%c\n",
+				pixfmt & 0xff, (pixfmt >> 8) & 0xff,
+				(pixfmt >> 16) & 0xff, pixfmt >> 24);
+		}
+		return;
+	}
+
+	/* Not identical!! */
+	V4L2_LOG_WARN("dest fmt changed after adjusting src fmt for fps "
+		      "change, restoring original src fmt");
+	src_fmt = orig_src_fmt;
+	dest_fmt = orig_dest_fmt;
+	req_pix_fmt = src_fmt.fmt.pix;
+	if (SYS_IOCTL(devices[index].fd, VIDIOC_S_FMT, &src_fmt)) {
+		V4L2_LOG_ERR("restoring src fmt: %s\n", strerror(errno));
+		return;
+	}
+	v4l2_set_src_and_dest_format(index, &src_fmt, &dest_fmt);
+	if (src_fmt.fmt.pix.width != req_pix_fmt.width ||
+	    src_fmt.fmt.pix.height != req_pix_fmt.height ||
+	    src_fmt.fmt.pix.pixelformat != req_pix_fmt.pixelformat ||
+	    !v4l2_pix_fmt_identical(&orig_dest_fmt, &dest_fmt))
+		V4L2_LOG_ERR("dest fmt different after restoring src fmt");
+}
 
 ssize_t v4l2_read(int fd, void *dest, size_t n)
 {
