@@ -4,8 +4,8 @@ all: $(TARGETS)
 
 -include *.d
 
-v4l2-sysfs-path: v4l2-sysfs-path.o ../libv4l2util/libv4l2util.a
-	$(CC) $(LDFLAGS) -o $@ $^ -lsysfs
+v4l2-sysfs-path: v4l2-sysfs-path.o ../libmedia_dev/libmedia_dev.a
+	$(CC) $(LDFLAGS) -o $@ $^
 
 install: $(TARGETS)
 	mkdir -p $(DESTDIR)$(PREFIX)/bin

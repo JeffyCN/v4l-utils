@@ -258,11 +258,9 @@ void GeneralTab::inputChanged(int input)
 {
 	s_input(input);
 
-	v4l2_audio vaudio;
-	if (m_audioInput && g_audio(vaudio)) {
-		m_audioInput->setCurrentIndex(vaudio.index);
+	if (m_audioInput)
 		updateAudioInput();
-	}
+
 	updateVideoInput();
 }
 
@@ -328,8 +326,9 @@ void GeneralTab::vidCapFormatChanged(int idx)
 
 	g_fmt_cap(fmt);
 	fmt.fmt.pix.pixelformat = desc.pixelformat;
-	try_fmt(fmt);
-	s_fmt(fmt);
+	if (try_fmt(fmt))
+		s_fmt(fmt);
+
 	updateVidCapFormat();
 }
 
@@ -340,10 +339,10 @@ void GeneralTab::frameWidthChanged()
 
 	g_fmt_cap(fmt);
 	fmt.fmt.pix.width = val;
-	if (try_fmt(fmt) && s_fmt(fmt)) {
-		m_width = fmt.fmt.pix.width;
-		m_frameWidth->setValue(m_width);
-	}
+	if (try_fmt(fmt))
+		s_fmt(fmt);
+
+	updateVidCapFormat();
 }
 
 void GeneralTab::frameHeightChanged()
@@ -353,10 +352,10 @@ void GeneralTab::frameHeightChanged()
 
 	g_fmt_cap(fmt);
 	fmt.fmt.pix.height = val;
-	if (try_fmt(fmt) && s_fmt(fmt)) {
-		m_height = fmt.fmt.pix.height;
-		m_frameHeight->setValue(m_height);
-	}
+	if (try_fmt(fmt))
+		s_fmt(fmt);
+
+	updateVidCapFormat();
 }
 
 void GeneralTab::frameSizeChanged(int idx)
@@ -364,25 +363,24 @@ void GeneralTab::frameSizeChanged(int idx)
 	v4l2_frmsizeenum frmsize;
 
 	if (enum_framesizes(frmsize, m_pixelformat, idx)) {
-		m_width = frmsize.discrete.width;
-		m_height = frmsize.discrete.height;
-
 		v4l2_format fmt;
 
 		g_fmt_cap(fmt);
-		fmt.fmt.pix.width = m_width;
-		fmt.fmt.pix.height = m_height;
-		try_fmt(fmt);
-		s_fmt(fmt);
+		fmt.fmt.pix.width = frmsize.discrete.width;
+		fmt.fmt.pix.height = frmsize.discrete.height;
+		if (try_fmt(fmt))
+			s_fmt(fmt);
 	}
+	updateVidCapFormat();
 }
 
 void GeneralTab::frameIntervalChanged(int idx)
 {
 	v4l2_frmivalenum frmival;
 
-	if (enum_frameintervals(frmival, m_pixelformat, m_width, m_height, idx)) {
-		// TODO
+	if (enum_frameintervals(frmival, m_pixelformat, m_width, m_height, idx)
+	    && frmival.type == V4L2_FRMIVAL_TYPE_DISCRETE) {
+		set_interval(frmival.discrete);
 	}
 }
 
@@ -396,8 +394,8 @@ void GeneralTab::vidOutFormatChanged(int idx)
 
 	g_fmt_out(fmt);
 	fmt.fmt.pix.pixelformat = desc.pixelformat;
-	try_fmt(fmt);
-	s_fmt(fmt);
+	if (try_fmt(fmt))
+		s_fmt(fmt);
 	updateVidOutFormat();
 }
 
@@ -515,7 +513,10 @@ void GeneralTab::updateFreq()
 	v4l2_frequency f;
 
 	g_frequency(f);
+	/* m_freq listens to valueChanged block it to avoid recursion */
+	m_freq->blockSignals(true);
 	m_freq->setValue(f.frequency);
+	m_freq->blockSignals(false);
 }
 
 void GeneralTab::updateFreqChannel()
@@ -534,6 +535,9 @@ void GeneralTab::updateVidCapFormat()
 
 	g_fmt_cap(fmt);
 	m_pixelformat = fmt.fmt.pix.pixelformat;
+	m_width       = fmt.fmt.pix.width;
+	m_height      = fmt.fmt.pix.height;
+	updateFrameSize();
 	if (enum_fmt_cap(desc, true)) {
 		do {
 			if (desc.pixelformat == fmt.fmt.pix.pixelformat)
@@ -543,10 +547,9 @@ void GeneralTab::updateVidCapFormat()
 	if (desc.pixelformat != fmt.fmt.pix.pixelformat)
 		return;
 	m_vidCapFormats->setCurrentIndex(desc.index);
-	updateFrameSize(fmt.fmt.pix.width, fmt.fmt.pix.height);
 }
 
-void GeneralTab::updateFrameSize(unsigned w, unsigned h)
+void GeneralTab::updateFrameSize()
 {
 	v4l2_frmsizeenum frmsize;
 	bool ok = false;
@@ -558,14 +561,15 @@ void GeneralTab::updateFrameSize(unsigned w, unsigned h)
 		do {
 			m_frameSize->addItem(QString("%1x%2")
 				.arg(frmsize.discrete.width).arg(frmsize.discrete.height));
-			if (frmsize.discrete.width == w && frmsize.discrete.height == h)
+			if (frmsize.discrete.width == m_width &&
+			    frmsize.discrete.height == m_height)
 				m_frameSize->setCurrentIndex(frmsize.index);
 		} while (enum_framesizes(frmsize));
 
 		m_frameWidth->setEnabled(false);
 		m_frameHeight->setEnabled(false);
 		m_frameSize->setEnabled(true);
-		updateFrameInterval(w, h);
+		updateFrameInterval();
 		return;
 	}
 	if (!ok) {
@@ -582,26 +586,32 @@ void GeneralTab::updateFrameSize(unsigned w, unsigned h)
 	m_frameWidth->setMinimum(frmsize.stepwise.min_width);
 	m_frameWidth->setMaximum(frmsize.stepwise.max_width);
 	m_frameWidth->setSingleStep(frmsize.stepwise.step_width);
-	m_frameWidth->setValue(w);
+	m_frameWidth->setValue(m_width);
 	m_frameHeight->setMinimum(frmsize.stepwise.min_height);
 	m_frameHeight->setMaximum(frmsize.stepwise.max_height);
 	m_frameHeight->setSingleStep(frmsize.stepwise.step_height);
-	m_frameHeight->setValue(h);
-	updateFrameInterval(w, h);
+	m_frameHeight->setValue(m_height);
+	updateFrameInterval();
 }
 
-void GeneralTab::updateFrameInterval(unsigned w, unsigned h)
+void GeneralTab::updateFrameInterval()
 {
 	v4l2_frmivalenum frmival;
-	bool ok = false;
+	v4l2_fract curr;
+	bool curr_ok, ok;
 
 	m_frameInterval->clear();
 
-	ok = enum_frameintervals(frmival, m_pixelformat, w, h);
+	ok = enum_frameintervals(frmival, m_pixelformat, m_width, m_height);
+	curr_ok = get_interval(curr);
 	if (ok && frmival.type == V4L2_FRMIVAL_TYPE_DISCRETE) {
 		do {
 			m_frameInterval->addItem(QString("%1 fps")
 				.arg((double)frmival.discrete.denominator / frmival.discrete.numerator));
+			if (curr_ok &&
+			    frmival.discrete.numerator == curr.numerator &&
+			    frmival.discrete.denominator == curr.denominator)
+				m_frameInterval->setCurrentIndex(frmival.index);
 		} while (enum_frameintervals(frmival));
 	}
 }

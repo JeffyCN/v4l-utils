@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+# Foundation, Inc., 51 Franklin Street, Suite 500, Boston, MA  02110-1335  USA
  */
 
 #ifndef __LIBV4L2_PRIV_H
@@ -33,6 +33,7 @@
 #define V4L2_DEFAULT_NREADBUFFERS 4
 #define V4L2_FRAME_BUF_SIZE (4096 * 4096)
 #define V4L2_IGNORE_FIRST_FRAME_ERRORS 3
+#define V4L2_DEFAULT_FPS 30
 
 #define V4L2_LOG_ERR(...) 			\
 	do { 					\
@@ -73,6 +74,7 @@ struct v4l2_dev_info {
 	pthread_mutex_t stream_lock;
 	unsigned int no_frames;
 	unsigned int nreadbuffers;
+	int fps;
 	int first_frame;
 	struct v4lconvert_data *convert;
 	unsigned char *convert_mmap_buf;

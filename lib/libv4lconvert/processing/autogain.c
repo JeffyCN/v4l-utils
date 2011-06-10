@@ -13,7 +13,7 @@
 #
 # You should have received a copy of the GNU Lesser General Public License
 # along with this program; if not, write to the Free Software
-# Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+# Foundation, Inc., 51 Franklin Street, Suite 500, Boston, MA  02110-1335  USA
  */
 
 #include <errno.h>
@@ -87,7 +87,7 @@ static int autogain_calculate_lookup_tables(
 	   as most exposure controls tend to jump with big steps in the low
 	   range, causing oscilation, so we prefer to use gain when exposure
 	   has hit this value */
-	exposure_low = expoctrl.maximum / 10;
+	exposure_low = (expoctrl.maximum - expoctrl.minimum) / 10;
 	/* If we have a fine grained exposure control only avoid the last 10 steps */
 	steps = exposure_low / expoctrl.step;
 	if (steps > 10)
