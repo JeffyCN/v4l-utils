@@ -6,10 +6,12 @@ Uploaders: Martin Pitt <mpitt@debian.org>,
            Loic Minier <lool@dooz.org>
 DM-Upload-Allowed: yes
 Build-Depends: debhelper (>= 8),
+               libjpeg-dev,
                libqt4-dev,
                libsysfs-dev,
                linux-libc-dev (>= 2.6.19),
-               gcc-multilib [amd64]
+               gcc-multilib [amd64],
+               ia32-libs-dev [amd64]
 Standards-Version: 3.9.1
 Vcs-Browser: http://anonscm.debian.org/gitweb/?p=collab-maint/libv4l.git
 Vcs-Git: git://git.debian.org/git/collab-maint/libv4l.git
