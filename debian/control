@@ -8,7 +8,6 @@ DM-Upload-Allowed: yes
 Build-Depends: debhelper (>= 8),
                libjpeg-dev,
                libqt4-dev,
-               libsysfs-dev,
                linux-libc-dev (>= 2.6.19),
                gcc-multilib [amd64],
                ia32-libs-dev [amd64]
