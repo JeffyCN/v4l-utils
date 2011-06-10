@@ -1,3 +1,16 @@
+v4l-utils (0.8.4-1) unstable; urgency=low
+
+  * Imported Upstream version 0.8.4
+  * Change VCS Browser URL due to alioth migration
+  * Add libjpeg dependency
+  * Bumped standards to version 3.9.2 (no changes needed)
+  * Install qv4l2 desktop file and icons
+  * Remove unnecessary dependency on libsysfs (Closes: #627652)
+  * Generate Libs.private fields in pkgconfig files from already defined Makefile variables.
+  * Updated copyright file
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Fri, 10 Jun 2011 21:03:52 +0200
+
 v4l-utils (0.8.3-2) unstable; urgency=low
 
   * Add versioned conflict for ivtv-utils (Closes: #620684)
