@@ -1,2 +1,3 @@
+generate-correct-private-libs-lines-for-pkgconfig.diff
 remove-sysfs-dependency.diff
 qv4l2-install-fixed-size-icons.diff
