@@ -1,3 +1,9 @@
+v4l-utils (0.8.4-2) unstable; urgency=low
+
+  * Add missing get/set fps functions to symbol file
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Sun, 12 Jun 2011 19:17:10 +0200
+
 v4l-utils (0.8.4-1) unstable; urgency=low
 
   * Imported Upstream version 0.8.4
