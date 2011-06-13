@@ -5,7 +5,7 @@ Maintainer: Gregor Jasny <gjasny@googlemail.com>
 Uploaders: Martin Pitt <mpitt@debian.org>,
            Loic Minier <lool@dooz.org>
 DM-Upload-Allowed: yes
-Build-Depends: debhelper (>= 8),
+Build-Depends: debhelper (>= 8.1.3),
                libjpeg-dev,
                libqt4-dev,
                linux-libc-dev (>= 2.6.19),
@@ -21,6 +21,8 @@ Section: libs
 Architecture: any
 Depends: ${shlibs:Depends},
          ${misc:Depends}
+Pre-Depends: ${misc:Pre-Depends}
+Multi-Arch: same
 Description: Collection of video4linux support libraries
  libv4l is a collection of libraries which adds a thin abstraction layer on
  top of video4linux2 devices. The purpose of this (thin) layer is to make it
