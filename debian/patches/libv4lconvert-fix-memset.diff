@@ -1,0 +1,21 @@
+Origin: upstream, commit:d777defcb30d567253c7d45462b73596786827e7
+Author: Hans Verkuil <hans.verkuil@cisco.com>
+Subject: libv4lconvert.c: fix memset bug discovered by v4l2-compliance.
+ The size of the reserved array is 4 * sizeof(u32) = 16. So only the first
+ element is now zeroed. Use sizeof(reserved) instead.
+ .
+ Signed-off-by: Hans Verkuil <hans.verkuil@cisco.com>
+
+diff --git a/lib/libv4lconvert/libv4lconvert.c b/lib/libv4lconvert/libv4lconvert.c
+index 6935e65..a15f234 100644
+--- a/lib/libv4lconvert/libv4lconvert.c
++++ b/lib/libv4lconvert/libv4lconvert.c
+@@ -247,7 +247,7 @@ int v4lconvert_enum_fmt(struct v4lconvert_data *data, struct v4l2_fmtdesc *fmt)
+ 	fmt->description[2] = (faked_fmts[i] >> 16) & 0xff;
+ 	fmt->description[3] = faked_fmts[i] >> 24;
+ 	fmt->description[4] = '\0';
+-	memset(fmt->reserved, 0, 4);
++	memset(fmt->reserved, 0, sizeof(fmt->reserved));
+ 
+ 	return 0;
+ }

@@ -1,0 +1,25 @@
+Origin: upstream, commit:fb59fc6ccded210fe384d76239c8504152f9a59b
+Author: Cédric Schieli <cschieli@gmail.com>
+Subject: keytable: fix segfault when RC driver's module_name is null
+ Some dvb-usb drivers do not set a proper module_name in their rc.core struct
+ (e.g. the ttusb2 module and various dib0700 submodules as of 2.6.39).
+ Auto-load mode was segfaulting if trying to match those drivers with a * value.
+ . 
+ Signed-off-by: Cédric Schieli <cschieli@gmail.com>
+
+diff --git a/utils/keytable/keytable.c b/utils/keytable/keytable.c
+index c406a18..13df13b 100644
+--- a/utils/keytable/keytable.c
++++ b/utils/keytable/keytable.c
+@@ -1427,9 +1427,9 @@ int main(int argc, char *argv[])
+ 		int rc;
+ 
+ 		for (cur = &cfg; cur->next; cur = cur->next) {
+-			if (strcasecmp(cur->driver, rc_dev.drv_name) && strcasecmp(cur->driver, "*"))
++			if ((!rc_dev.drv_name || strcasecmp(cur->driver, rc_dev.drv_name)) && strcasecmp(cur->driver, "*"))
+ 				continue;
+-			if (strcasecmp(cur->table, rc_dev.keytable_name) && strcasecmp(cur->table, "*"))
++			if ((!rc_dev.keytable_name || strcasecmp(cur->table, rc_dev.keytable_name)) && strcasecmp(cur->table, "*"))
+ 				continue;
+ 			break;
+ 		}

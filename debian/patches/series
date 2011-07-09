@@ -1,3 +1,6 @@
 generate-correct-private-libs-lines-for-pkgconfig.diff
 remove-sysfs-dependency.diff
 qv4l2-install-fixed-size-icons.diff
+libv4lconvert-fix-memset.diff
+ir-keytable-fix-scancode-parsing.diff
+ir-keytable-fix-segfault.diff
