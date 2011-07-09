@@ -1,3 +1,11 @@
+v4l-utils (0.8.4-3) unstable; urgency=low
+
+  * Cherry picked upstream patches
+  * Stop commenting entries in ir-keytable config file
+    and prefix the individual files names with /lib/udev/rc_keymaps
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Sat, 09 Jul 2011 19:09:36 +0200
+
 v4l-utils (0.8.4-2) unstable; urgency=low
 
   * Add missing get/set fps functions to symbol file
