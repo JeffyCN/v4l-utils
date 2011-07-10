@@ -54,8 +54,8 @@ binary-arch: build
 	dh_testroot
 	dh_lintian -s
 	dh_installudev -s
-	dh_installchangelogs -plibv4l-0 -pir-keytable ChangeLog
-	dh_installdocs -plibv4l-0 -pir-keytable
+	dh_installchangelogs -s -Nlib32v4l-0 -Nlib32v4l-dev ChangeLog
+	dh_installdocs -s -Nlib32v4l-0 -Nlib32v4l-dev
 	dh_installman -s
 	dh_install -s --sourcedir=debian/tmp
 	dh_link -s
