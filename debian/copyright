@@ -20,6 +20,10 @@ Files: contrib/em28xx/parse_em28xx.pl
 Copyright: 2008-2011 Mauro Carvalho Chehab <mchehab@redhat.com>
 License: GPL-2
 
+Files: contrib/em28xx/parse_em28xx_drxk.pl
+Copyright: 2011 Mauro Carvalho Chehab <mchehab@redhat.com>
+License: GPL-2
+
 Files: contrib/em28xx/rewrite_eeprom.pl
 Copyright: 2009 Mauro Carvalho Chehab <mchehab@redhat.com>
            2009 Douglas Schilling Landgraf <dougsland@redhat.com>
@@ -121,6 +125,11 @@ License: LGPL-2.1+
 Files: lib/libv4lconvert/rgbyuv.c
 Copyright: 2008 Hans de Goede <hdegoede@redhat.com>
            2009 Mauro Carvalho Chehab <mchehab@redhat.com>
+License: LGPL-2.1+
+
+Files: lib/libv4lconvert/se401.c
+Copyright: 2011 Hans de Goede <hdegoede@redhat.com>
+           Jeroen B. Vreeken <pe1rxq@amsat.org>
 License: LGPL-2.1+
 
 Files: lib/libv4lconvert/sn9c10x.c
