@@ -233,6 +233,9 @@ static const struct v4lcontrol_flags_info v4lcontrol_flags[] = {
 		"FUJITSU", "LIFEBOOK T730" },
 	{ 0x04f2, 0xb16b, 0, "ASUSTeK Computer Inc.        ", "U20A      ",
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
+	{ 0x04f2, 0xb16b, 0, "ASUSTeK Computer Inc.        ", "U80A     ",
+		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
+	/* HDG: not sure if this one is needed, the one above is */
 	{ 0x04f2, 0xb16b, 0, "ASUSTeK Computer Inc.        ", "U80A      ",
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
 	{ 0x04f2, 0xb16b, 0, "ASUSTeK Computer Inc.        ", "U80V      ",
@@ -288,6 +291,8 @@ static const struct v4lcontrol_flags_info v4lcontrol_flags[] = {
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
 	{ 0x04f2, 0xb1e5, 0, "ASUSTeK Computer Inc.        ", "K52Jc",
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
+	{ 0x04f2, 0xb1e5, 0, "ASUSTeK Computer Inc.        ", "K52JT",
+		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
 	{ 0x04f2, 0xb1e5, 0, "ASUSTeK Computer Inc.        ", "K52N",
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
 	{ 0x04f2, 0xb1e5, 0, "ASUSTeK Computer Inc.        ", "P52F",
@@ -309,6 +314,8 @@ static const struct v4lcontrol_flags_info v4lcontrol_flags[] = {
 	{ 0x064e, 0xa116, 0, "ASUSTeK Computer Inc.        ", "K40IJ     ",
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
 	{ 0x064e, 0xa116, 0, "ASUSTeK Computer Inc.        ", "K40IN      ",
+		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
+	{ 0x064e, 0xa116, 0, "ASUSTeK Computer Inc.        ", "K50ID     ",
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
 	{ 0x064e, 0xa116, 0, "ASUSTeK Computer Inc.        ", "K50IJ     ",
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
@@ -377,6 +384,8 @@ static const struct v4lcontrol_flags_info v4lcontrol_flags[] = {
 	{ 0x064e, 0xa136, 0, "ASUSTeK Computer Inc.        ", "UL30A     ",
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
 	{ 0x064e, 0xa136, 0, "ASUSTeK Computer Inc.        ", "UL30VT    ",
+		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
+	{ 0x064e, 0xa136, 0, "ASUSTeK Computer Inc.        ", "U35F",
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
 	{ 0x064e, 0xa136, 0, "ASUSTeK Computer Inc.        ", "U35JC",
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
@@ -613,6 +622,17 @@ static const struct v4lcontrol_flags_info v4lcontrol_flags[] = {
 	/* vicam based cams */
 	{ 0x04c1, 0x009d, 0,    NULL, NULL, V4LCONTROL_WANTS_WB_AUTOGAIN, 1500 },
 	{ 0x0602, 0x1001, 0,    NULL, NULL, V4LCONTROL_WANTS_WB_AUTOGAIN, 1500 },
+	/* se401 cams, mirrored and need wb + autogain */
+	{ 0x03e8, 0x0004, 0,    NULL, NULL,
+		V4LCONTROL_HFLIPPED | V4LCONTROL_WANTS_WB_AUTOGAIN },
+	{ 0x0471, 0x030b, 0,    NULL, NULL,
+		V4LCONTROL_HFLIPPED | V4LCONTROL_WANTS_WB_AUTOGAIN },
+	{ 0x047d, 0x5001, 0,    NULL, NULL,
+		V4LCONTROL_HFLIPPED | V4LCONTROL_WANTS_WB_AUTOGAIN },
+	{ 0x047d, 0x5002, 0,    NULL, NULL,
+		V4LCONTROL_HFLIPPED | V4LCONTROL_WANTS_WB_AUTOGAIN },
+	{ 0x047d, 0x5003, 0,    NULL, NULL,
+		V4LCONTROL_HFLIPPED | V4LCONTROL_WANTS_WB_AUTOGAIN },
 };
 
 static const struct v4l2_queryctrl fake_controls[];

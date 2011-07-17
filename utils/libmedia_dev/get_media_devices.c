@@ -42,6 +42,7 @@ struct media_device_entry {
 	char *device;
 	char *node;
 	enum device_type type;
+	enum bus_type bus;
 	unsigned major, minor;		/* Device major/minor */
 };
 
@@ -66,10 +67,10 @@ typedef int (*fill_data_t)(struct media_device_entry *md);
 static void get_uevent_info(struct media_device_entry *md_ptr, char *dname)
 {
 	FILE *fd;
-	char file[560], *name, *p;
+	char file[PATH_MAX], *name, *p;
 	char s[1024];
 
-	sprintf(file, "%s/%s/uevent", dname, md_ptr->node);
+	snprintf(file, PATH_MAX, "%s/%s/uevent", dname, md_ptr->node);
 	fd = fopen(file, "r");
 	if (!fd)
 		return;
@@ -90,6 +91,31 @@ static void get_uevent_info(struct media_device_entry *md_ptr, char *dname)
 	fclose(fd);
 }
 
+static enum bus_type get_bus(char *device)
+{
+	char file[PATH_MAX];
+	char s[1024];
+	FILE *f;
+
+	if (!strcmp(device, "/sys/devices/virtual"))
+		return MEDIA_BUS_VIRTUAL;
+
+	snprintf(file, PATH_MAX, "%s/modalias", device);
+	f = fopen(file, "r");
+	if (!f)
+		return MEDIA_BUS_UNKNOWN;
+	if (!fgets(s, sizeof(s), f))
+		return MEDIA_BUS_UNKNOWN;
+	fclose(f);
+
+	if (!strncmp(s, "pci", 3))
+		return MEDIA_BUS_PCI;
+	if (!strncmp(s, "usb", 3))
+		return MEDIA_BUS_USB;
+
+	return MEDIA_BUS_UNKNOWN;
+}
+
 static int get_class(char *class,
 		     struct media_device_entry **md,
 		     unsigned int *md_size,
@@ -97,65 +123,68 @@ static int get_class(char *class,
 {
 	DIR		*dir;
 	struct dirent	*entry;
-	char		dname[512];
-	char		fname[512];
-	char		link[1024];
+	char		dname[PATH_MAX];
+	char		fname[PATH_MAX];
+	char		link[PATH_MAX];
 	char		virt_dev[60];
 	int		err = -2;
 	struct		media_device_entry *md_ptr = NULL;
-	int		size;
-	char		*p, *class_node, *device;
+	char		*p, *device;
+	enum bus_type	bus;
 	static int	virtual = 0;
 
-	sprintf(dname, "/sys/class/%s", class);
+	snprintf(dname, PATH_MAX, "/sys/class/%s", class);
 	dir = opendir(dname);
 	if (!dir) {
-		perror(dname);
 		return 0;
 	}
 	for (entry = readdir(dir); entry; entry = readdir(dir)) {
-		sprintf(fname, "%s/%s", dname, entry->d_name);
-
-		size = readlink(fname, link, sizeof(link));
-		if (size > 0) {
-			link[size] = '\0';
-
-			/* Keep just the name of the cass node */
-			p = strrchr(fname, '/');
-			if (!p)
-				goto error;
-			class_node = p + 1;
-
-			/* Canonicalize the device name */
-
-			/* remove the ../../devices/ from the name */
-			p = strstr(link, DEVICE_STR);
-			if (!p)
-				goto error;
-			device = p + sizeof(DEVICE_STR);
+		/* Skip . and .. */
+		if (entry->d_name[0] == '.')
+			continue;
+		/* Canonicalize the device name */
+		snprintf(fname, PATH_MAX, "%s/%s", dname, entry->d_name);
+		if (realpath(fname, link)) {
+			device = link;
 
 			/* Remove the subsystem/class_name from the string */
-			p = strstr(link, class);
+			p = strstr(device, class);
 			if (!p)
-				goto error;
+				continue;
 			*(p - 1) = '\0';
 
-			/* Remove USB sub-devices from the path */
-			if (strstr(device, "usb")) {
-				do {
-					p = strrchr(device, '/');
-					if (!p)
-						goto error;
-					if (!strpbrk(p, ":."))
-						break;
-					*p = '\0';
-				} while (1);
-			}
+			bus = get_bus(device);
 
-			/* Don't group virtual devices */
-			if (!strcmp(device, "virtual")) {
+			/* remove the /sys/devices/ from the name */
+			device += 13;
+
+			switch (bus) {
+			case MEDIA_BUS_PCI:
+				/* Remove the device function nr */
+				p = strrchr(device, '.');
+				if (!p)
+					continue;
+				*p = '\0';
+				break;
+			case MEDIA_BUS_USB:
+				/* Remove USB interface from the path */
+				p = strrchr(device, '/');
+				if (!p)
+					continue;
+				/* In case we have a device where the driver
+				   attaches directly to the usb device rather
+				   then to an interface */
+				if (!strchr(p, ':'))
+					break;
+				*p = '\0';
+				break;
+			case MEDIA_BUS_VIRTUAL:
+				/* Don't group virtual devices */
 				sprintf(virt_dev, "virtual%d", virtual++);
 				device = virt_dev;
+				break;
+			case MEDIA_BUS_UNKNOWN:
+				break;
 			}
 
 			/* Add one more element to the devices struct */
@@ -168,10 +197,8 @@ static int get_class(char *class,
 			/* Cleans previous data and fills it with device/node */
 			memset(md_ptr, 0, sizeof(*md_ptr));
 			md_ptr->type = UNKNOWN;
-			md_ptr->device = malloc(strlen(device) + 1);
-			strcpy(md_ptr->device, device);
-			md_ptr->node = malloc(strlen(class_node) + 1);
-			strcpy(md_ptr->node, class_node);
+			md_ptr->device = strdup(device);
+			md_ptr->node = strdup(entry->d_name);
 
 			/* Retrieve major and minor information */
 			get_uevent_info(md_ptr, dname);
@@ -203,7 +230,7 @@ static int add_v4l_class(struct media_device_entry *md)
 static int add_snd_class(struct media_device_entry *md)
 {
 	unsigned c = 65535, d = 65535;
-	char *new;
+	char node[64];
 
 	if (strstr(md->node, "timer")) {
 		md->type = MEDIA_SND_TIMER;
@@ -232,18 +259,13 @@ static int add_snd_class(struct media_device_entry *md)
 		return 0;
 
 	/* Reformat device to be useful for alsa userspace library */
-	if (d == 65535) {
-		if (asprintf(&new, "hw:%u", c) > 0) {
-			free(md->node);
-			md->node = new;
-		}
-		return 0;
-	}
+	if (d == 65535)
+		snprintf(node, sizeof(node), "hw:%u", c);
+	else
+		snprintf(node, sizeof(node), "hw:%u,%u", c, d);
 
-	if (asprintf(&new, "hw:%u,%u", c, d) > 0) {
-		free(md->node);
-		md->node = new;
-	}
+	free(md->node);
+	md->node = strdup(node);
 
 	return 0;
 };

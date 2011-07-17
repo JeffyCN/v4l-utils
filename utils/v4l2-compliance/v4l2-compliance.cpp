@@ -159,6 +159,36 @@ std::string cap2s(unsigned cap)
 	return s;
 }
 
+std::string buftype2s(int type)
+{
+	switch (type) {
+	case V4L2_BUF_TYPE_VIDEO_CAPTURE:
+		return "Video Capture";
+	case V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE:
+		return "Video Capture Multiplanar";
+	case V4L2_BUF_TYPE_VIDEO_OUTPUT:
+		return "Video Output";
+	case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
+		return "Video Output Multiplanar";
+	case V4L2_BUF_TYPE_VIDEO_OVERLAY:
+		return "Video Overlay";
+	case V4L2_BUF_TYPE_VBI_CAPTURE:
+		return "VBI Capture";
+	case V4L2_BUF_TYPE_VBI_OUTPUT:
+		return "VBI Output";
+	case V4L2_BUF_TYPE_SLICED_VBI_CAPTURE:
+		return "Sliced VBI Capture";
+	case V4L2_BUF_TYPE_SLICED_VBI_OUTPUT:
+		return "Sliced VBI Output";
+	case V4L2_BUF_TYPE_VIDEO_OUTPUT_OVERLAY:
+		return "Video Output Overlay";
+	case V4L2_BUF_TYPE_PRIVATE:
+		return "Private";
+	default:
+		return std::string("Unknown");
+	}
+}
+
 const char *ok(int res)
 {
 	static char buf[100];
@@ -210,50 +240,41 @@ static int testCap(struct node *node)
 	struct v4l2_capability vcap;
 	__u32 caps;
 
-	if (doioctl(node, VIDIOC_QUERYCAP, &vcap))
-		return fail("VIDIOC_QUERYCAP not implemented\n");
-	if (check_ustring(vcap.driver, sizeof(vcap.driver)))
-		return fail("invalid driver name\n");
-	if (check_ustring(vcap.card, sizeof(vcap.card)))
-		return fail("invalid card name\n");
+	// Must always be there
+	fail_on_test(doioctl(node, VIDIOC_QUERYCAP, &vcap));
+	fail_on_test(check_ustring(vcap.driver, sizeof(vcap.driver)));
+	fail_on_test(check_ustring(vcap.card, sizeof(vcap.card)));
 	if (check_ustring(vcap.bus_info, sizeof(vcap.bus_info))) {
-		if (vcap.bus_info[0])
-			return fail("invalid bus_info\n");
-		else
-			warn("VIDIOC_QUERYCAP: empty bus_info\n");
+		fail_on_test(vcap.bus_info[0]);
+		warn("VIDIOC_QUERYCAP: empty bus_info\n");
 	}
-	if (check_0(vcap.reserved, sizeof(vcap.reserved)))
-		return fail("non-zero reserved fields\n");
+	fail_on_test(check_0(vcap.reserved, sizeof(vcap.reserved)));
 	caps = vcap.capabilities;
-	if (caps == 0)
-		return fail("no capabilities set\n");
-	if (node->is_video && !(caps & (V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_VIDEO_OUTPUT |
-				        V4L2_CAP_VIDEO_OVERLAY | V4L2_CAP_VIDEO_OUTPUT_OVERLAY)))
-		return fail("video node without the relevant capabilities\n");
-	if (node->is_radio && !(caps & (V4L2_CAP_RADIO | V4L2_CAP_MODULATOR)))
-		return fail("radio node without the relevant capabilities\n");
-	if (node->is_radio && (caps & V4L2_CAP_AUDIO))
-		return fail("radio node cannot have CAP_AUDIO set\n");
-	if (node->is_vbi && !(caps & (V4L2_CAP_VBI_CAPTURE | V4L2_CAP_SLICED_VBI_CAPTURE |
-				      V4L2_CAP_VBI_OUTPUT | V4L2_CAP_SLICED_VBI_OUTPUT)))
-		return fail("vbi node without the relevant capabilities\n");
+	fail_on_test(vcap.capabilities == 0);
+	fail_on_test(node->is_video && !(caps & (V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_VIDEO_OUTPUT |
+				        V4L2_CAP_VIDEO_OVERLAY | V4L2_CAP_VIDEO_OUTPUT_OVERLAY)));
+	fail_on_test(node->is_radio && !(caps & (V4L2_CAP_RADIO | V4L2_CAP_MODULATOR)));
+	// V4L2_CAP_AUDIO is invalid for radio
+	fail_on_test(node->is_radio && (caps & V4L2_CAP_AUDIO));
+	fail_on_test(node->is_vbi && !(caps & (V4L2_CAP_VBI_CAPTURE | V4L2_CAP_SLICED_VBI_CAPTURE |
+				      V4L2_CAP_VBI_OUTPUT | V4L2_CAP_SLICED_VBI_OUTPUT)));
+	// You can't have both set due to missing buffer type in VIDIOC_G/S_FBUF
+	fail_on_test((caps & (V4L2_CAP_VIDEO_OVERLAY | V4L2_CAP_VIDEO_OUTPUT_OVERLAY)) ==
+			(V4L2_CAP_VIDEO_OVERLAY | V4L2_CAP_VIDEO_OUTPUT_OVERLAY));
+
 	return 0;
 }
 
 static int check_prio(struct node *node, struct node *node2, enum v4l2_priority match)
 {
 	enum v4l2_priority prio;
-	int err;
 
-	err = doioctl(node, VIDIOC_G_PRIORITY, &prio);
-	if (err)
-		return fail("VIDIOC_G_PRIORITY failed\n");
-	if (prio != match)
-		return fail("wrong priority returned (%d, expected %d)\n", prio, match);
-	if (doioctl(node2, VIDIOC_G_PRIORITY, &prio))
-		return fail("second VIDIOC_G_PRIORITY failed\n");
-	if (prio != match)
-		return fail("wrong priority returned on second fh (%d, expected %d)\n", prio, match);
+	// Must be able to get priority
+	fail_on_test(doioctl(node, VIDIOC_G_PRIORITY, &prio));
+	// Must match the expected prio
+	fail_on_test(prio != match);
+	fail_on_test(doioctl(node2, VIDIOC_G_PRIORITY, &prio));
+	fail_on_test(prio != match);
 	return 0;
 }
 
@@ -267,19 +288,18 @@ static int testPrio(struct node *node, struct node *node2)
 		return err;
 
 	prio = V4L2_PRIORITY_RECORD;
-	if (doioctl(node, VIDIOC_S_PRIORITY, &prio))
-		return fail("VIDIOC_S_PRIORITY RECORD failed\n");
-	if (check_prio(node, node2, V4L2_PRIORITY_RECORD))
-		return fail("expected priority RECORD");
+	// Must be able to change priority
+	fail_on_test(doioctl(node, VIDIOC_S_PRIORITY, &prio));
+	// Must match the new prio
+	fail_on_test(check_prio(node, node2, V4L2_PRIORITY_RECORD));
 
 	prio = V4L2_PRIORITY_INTERACTIVE;
-	if (!doioctl(node2, VIDIOC_S_PRIORITY, &prio))
-		return fail("Can lower prio on second filehandle\n");
+	// Going back to interactive on the other node must fail
+	fail_on_test(!doioctl(node2, VIDIOC_S_PRIORITY, &prio));
 	prio = V4L2_PRIORITY_INTERACTIVE;
-	if (doioctl(node, VIDIOC_S_PRIORITY, &prio))
-		return fail("Could not lower prio\n");
-	if (check_prio(node, node2, V4L2_PRIORITY_INTERACTIVE))
-		return fail("expected priority INTERACTIVE");
+	// Changing it on the first node must work.
+	fail_on_test(doioctl(node, VIDIOC_S_PRIORITY, &prio));
+	fail_on_test(check_prio(node, node2, V4L2_PRIORITY_INTERACTIVE));
 	return 0;
 }
 
@@ -417,6 +437,7 @@ int main(int argc, char **argv)
 		node.fd = radio_node.fd;
 		device = radio_device;
 		node.is_radio = true;
+		printf("is radio\n");
 	} else if (vbi_node.fd >= 0) {
 		node.fd = vbi_node.fd;
 		device = vbi_device;
@@ -547,15 +568,21 @@ int main(int argc, char **argv)
 	printf("\ttest VIDIOC_G/S_DV_TIMINGS: %s\n", ok(testCustomTimings(&node)));
 	printf("\n");
 
+	/* Format ioctls */
+
+	printf("Format ioctls:\n");
+	printf("\ttest VIDIOC_ENUM_FMT/FRAMESIZES/FRAMEINTERVALS: %s\n", ok(testEnumFormats(&node)));
+	printf("\ttest VIDIOC_G_FBUF: %s\n", ok(testFBuf(&node)));
+	printf("\ttest VIDIOC_G_FMT: %s\n", ok(testFormats(&node)));
+	printf("\ttest VIDIOC_G_SLICED_VBI_CAP: %s\n", ok(testSlicedVBICap(&node)));
+
 	/* TODO:
 
 	   VIDIOC_CROPCAP, VIDIOC_G/S_CROP
-	   VIDIOC_ENUM_FMT/FRAMESIZES/FRAMEINTERVALS
-	   VIDIOC_G/S_FBUF/OVERLAY
-	   VIDIOC_G/S/TRY_FMT
+	   VIDIOC_S_FBUF/OVERLAY
+	   VIDIOC_S/TRY_FMT
 	   VIDIOC_G/S_PARM
 	   VIDIOC_G/S_JPEGCOMP
-	   VIDIOC_SLICED_VBI_CAP
 	   VIDIOC_S_HW_FREQ_SEEK
 	   VIDIOC_SUBSCRIBE_EVENT/UNSUBSCRIBE_EVENT/DQEVENT
 	   VIDIOC_(TRY_)ENCODER_CMD
