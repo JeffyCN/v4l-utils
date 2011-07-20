@@ -1,3 +1,10 @@
+v4l-utils (0.8.5-1) unstable; urgency=low
+
+  * Add multiarch support
+  * Imported Upstream version 0.8.5
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Wed, 20 Jul 2011 21:28:36 +0200
+
 v4l-utils (0.8.4-3) unstable; urgency=low
 
   * Cherry picked upstream patches
