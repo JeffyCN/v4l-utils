@@ -1,3 +1,9 @@
+v4l-utils (0.8.5-2) unstable; urgency=low
+
+  * Add tinyjpeg quirk from upstream and add some more cameras
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Fri, 05 Aug 2011 17:51:03 +0200
+
 v4l-utils (0.8.5-1) unstable; urgency=low
 
   * Add multiarch support
