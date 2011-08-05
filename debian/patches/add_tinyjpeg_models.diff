@@ -1,0 +1,32 @@
+From: Gregor Jasny <gjasny@googlemail.com>
+Forwarded: yes
+Description: Add more quirks for cameras that would otherwise fail.
+
+Tested on an AMD64 system with Skype 2.2 (32bit), Linux 3.0.0 and libv4l 0.8.5
+
+Signed-off-by: Gregor Jasny <gjasny@googlemail.com>
+
+Index: libv4l/lib/libv4lconvert/control/libv4lcontrol.c
+===================================================================
+--- libv4l.orig/lib/libv4lconvert/control/libv4lcontrol.c	2011-08-05 16:05:02.788777443 +0200
++++ libv4l/lib/libv4lconvert/control/libv4lcontrol.c	2011-08-05 16:10:47.132774159 +0200
+@@ -586,6 +586,9 @@
+ 	{ 0x0c45, 0x6128, 0,    NULL, NULL, V4LCONTROL_WANTS_WB }, /* OM6802 */
+ 	{ 0x0c45, 0x612e, 0,    NULL, NULL, V4LCONTROL_WANTS_WB }, /* OV7630 */
+ 	{ 0x0c45, 0x613e, 0,    NULL, NULL, V4LCONTROL_WANTS_WB }, /* OV7630 */
++	{ 0x045e, 0x00f5, 0,    NULL, NULL, V4LCONTROL_FORCE_TINYJPEG }, /* Microsoft VX-3000 */
++	{ 0x045e, 0x00f7, 0,    NULL, NULL, V4LCONTROL_FORCE_TINYJPEG }, /* Microsoft VX-1000 */
++	{ 0x045e, 0x0723, 0,    NULL, NULL, V4LCONTROL_FORCE_TINYJPEG }, /* Microsoft VX-7000 */
+ 	/* Pac207 based devices */
+ 	{ 0x041e, 0x4028, 0,    NULL, NULL, V4LCONTROL_WANTS_WB, 1500 },
+ 	{ 0x093a, 0x2460, 0x1f, NULL, NULL, V4LCONTROL_WANTS_WB, 1500 },
+@@ -636,6 +639,9 @@
+ 	/* W996xCF based cams, must use jpeglite because of funky JPEG fmt */
+ 	{ 0x041e, 0x4003, 0,    NULL, NULL, V4LCONTROL_FORCE_TINYJPEG },
+ 	{ 0x1046, 0x9967, 0,    NULL, NULL, V4LCONTROL_FORCE_TINYJPEG },
++	/* zc3xx */
++	{ 0x046d, 0x08ae, 0,    NULL, NULL, V4LCONTROL_FORCE_TINYJPEG }, /* Logitech QuickCam for Notebooks */
++	{ 0x046d, 0x089d, 0,    NULL, NULL, V4LCONTROL_FORCE_TINYJPEG }, /* Logitech QuickCam E2500 series */
+ };
+ 
+ static const struct v4l2_queryctrl fake_controls[];
