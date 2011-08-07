@@ -1,0 +1,121 @@
+--- a/lib/libv4lconvert/Makefile
++++ b/lib/libv4lconvert/Makefile
+@@ -1,6 +1,6 @@
+ override CPPFLAGS += -I../include -fvisibility=hidden
+ 
+-LIBS_libv4lconvert = -lrt -lm -ljpeg
++LIBS_libv4lconvert = -lrt -lm
+ 
+ ifeq ($(LINKTYPE),static)
+ CONVERT_LIB   = libv4lconvert.a
+@@ -12,13 +12,20 @@
+ CONVERT_OBJS  = libv4lconvert.o tinyjpeg.o sn9c10x.o sn9c20x.o pac207.o \
+ 		mr97310a.o flip.o crop.o jidctflt.o spca561-decompress.o \
+ 		rgbyuv.o sn9c2028-decomp.o spca501.o sq905c.o bayer.o hm12.o \
+-		stv0680.o cpia1.o se401.o jpgl.o jpeg.o jpeg_memsrcdest.o \
++		stv0680.o cpia1.o se401.o jpgl.o jpeg.o \
+ 		control/libv4lcontrol.o processing/libv4lprocessing.o \
+ 		processing/whitebalance.o processing/autogain.o \
+ 		processing/gamma.o helper.o
+ TARGETS       = $(CONVERT_LIB) libv4lconvert.pc ov511-decomp ov518-decomp
+ INCLUDES      = ../include/libv4lconvert.h
+ 
++ifeq ($(DISABLE_LIBJPEG),1)
++override CFLAGS += -DDISABLE_LIBJPEG
++else
++LIBS_libv4lconvert += -ljpeg
++ONVERT_OBJS += jpeg_memsrcdest.o
++endif
++
+ override CPPFLAGS += -DLIBDIR=\"$(LIBDIR)\" -DLIBSUBDIR=\"$(LIBSUBDIR)\"
+ 
+ all: $(TARGETS)
+--- a/lib/libv4lconvert/jpeg.c
++++ b/lib/libv4lconvert/jpeg.c
+@@ -19,7 +19,9 @@
+ #include <errno.h>
+ #include <stdlib.h>
+ #include "libv4lconvert-priv.h"
++#ifndef DISABLE_LIBJPEG
+ #include "jpeg_memsrcdest.h"
++#endif
+ 
+ int v4lconvert_decode_jpeg_tinyjpeg(struct v4lconvert_data *data,
+ 	unsigned char *src, int src_size, unsigned char *dest,
+@@ -107,6 +109,8 @@
+ 	return 0;
+ }
+ 
++#ifndef DISABLE_LIBJPEG
++
+ static void jerr_error_exit(j_common_ptr cinfo)
+ {
+ 	struct v4lconvert_data *data = cinfo->client_data;
+@@ -404,3 +408,6 @@
+ 
+ 	return result;
+ }
++
++#endif
++
+--- a/lib/libv4lconvert/libv4lconvert-priv.h
++++ b/lib/libv4lconvert/libv4lconvert-priv.h
+@@ -22,7 +22,9 @@
+ #include <stdio.h>
+ #include <stdint.h>
+ #include <sys/types.h>
++#ifndef DISABLE_LIBJPEG
+ #include <jpeglib.h>
++#endif
+ #include <setjmp.h>
+ #include "libv4lconvert.h"
+ #include "control/libv4lcontrol.h"
+@@ -50,11 +52,13 @@
+ 	int64_t supported_src_formats; /* bitfield */
+ 	char error_msg[V4LCONVERT_ERROR_MSG_SIZE];
+ 	struct jdec_private *tinyjpeg;
++#ifndef DISABLE_LIBJPEG
+ 	struct jpeg_error_mgr jerr;
+ 	int jerr_errno;
+ 	jmp_buf jerr_jmp_state;
+ 	struct jpeg_decompress_struct cinfo;
+ 	int cinfo_initialized;
++#endif
+ 	struct v4l2_frmsizeenum framesizes[V4LCONVERT_MAX_FRAMESIZES];
+ 	unsigned int no_framesizes;
+ 	int bandwidth;
+--- a/lib/libv4lconvert/libv4lconvert.c
++++ b/lib/libv4lconvert/libv4lconvert.c
+@@ -185,8 +185,10 @@
+ 		tinyjpeg_set_components(data->tinyjpeg, comps, 3);
+ 		tinyjpeg_free(data->tinyjpeg);
+ 	}
++#ifndef DISABLE_LIBJPEG
+ 	if (data->cinfo_initialized)
+ 		jpeg_destroy_decompress(&data->cinfo);
++#endif
+ 	v4lconvert_helper_cleanup(data);
+ 	free(data->convert1_buf);
+ 	free(data->convert2_buf);
+@@ -632,10 +634,13 @@
+ 	/* JPG and variants */
+ 	case V4L2_PIX_FMT_MJPEG:
+ 	case V4L2_PIX_FMT_JPEG:
++#ifndef DISABLE_LIBJPEG
+ 		if (data->flags & V4LCONVERT_USE_TINYJPEG) {
++#endif
+ 			result = v4lconvert_decode_jpeg_tinyjpeg(data,
+ 							src, src_size, dest,
+ 							fmt, dest_pix_fmt, 0);
++#ifndef DISABLE_LIBJPEG
+ 		} else {
+ 			result = v4lconvert_decode_jpeg_libjpeg(data,
+ 							src, src_size, dest,
+@@ -650,6 +655,7 @@
+ 							fmt, dest_pix_fmt, 0);
+ 			}
+ 		}
++#endif
+ 		break;
+ 	case V4L2_PIX_FMT_PJPG:
+ 		result = v4lconvert_decode_jpeg_tinyjpeg(data, src, src_size,

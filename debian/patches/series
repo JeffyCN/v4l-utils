@@ -1,2 +1,2 @@
 force_tinyjpeg_quirk.diff
-add_tinyjpeg_models.diff
+allow-disabling-libjpeg.diff
