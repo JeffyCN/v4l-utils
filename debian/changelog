@@ -1,7 +1,8 @@
 v4l-utils (0.8.5-3) unstable; urgency=medium
 
-  * Disable libjpeg for cross compiled 32bit packages
-    This resolves the libjpeg-dev vs. ia32-libs-dev version mismatch.
+  * Disable libjpeg for cross compiled 32bit packages (Closes: #636301)
+    The libjpeg.so shipped by ia32-libs-dev does not match the current
+    libjpeg-dev header version which leads to broken (M)JPEG support.
 
  -- Gregor Jasny <gjasny@googlemail.com>  Sun, 07 Aug 2011 14:09:04 +0200
 
