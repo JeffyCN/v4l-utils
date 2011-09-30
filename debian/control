@@ -77,7 +77,7 @@ Description: Collection of video4linux support libraries (development files)
  libv4l2 offers the v4l2 API on top of v4l2 devices, while adding for the
  application transparent libv4lconvert conversion where necessary.
  .
- This package contains development files (headers and static libraries).
+ This package contains the development files.
 
 Package: lib32v4l-0
 Section: libs
@@ -129,8 +129,7 @@ Description: Collection of video4linux support libraries (32 bits development fi
  libv4l2 offers the v4l2 API on top of v4l2 devices, while adding for the
  application transparent libv4lconvert conversion where necessary.
  .
- This package contains the 32 bits version of the development files (headers
- and static libraries).
+ This package contains the 32 bits version of the development files.
 
 Package: v4l-utils
 Section: utils
