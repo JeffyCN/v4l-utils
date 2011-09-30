@@ -18,7 +18,8 @@ Homepage: http://linuxtv.org/downloads/v4l-utils/
 Package: libv4l-0
 Section: libs
 Architecture: any
-Depends: ${shlibs:Depends},
+Depends: libv4lconvert0 (= ${binary:Version}),
+         ${shlibs:Depends},
          ${misc:Depends}
 Pre-Depends: ${misc:Pre-Depends}
 Multi-Arch: same
@@ -29,9 +30,6 @@ Description: Collection of video4linux support libraries
  having to write separate code for different devices in the same class. libv4l
  consists of 3 different libraries: libv4lconvert, libv4l1 and libv4l2.
  .
- libv4lconvert offers functions to convert from any (known) pixelformat
- to BGR24, RGB24, YUV420 and YVU420.
- .
  libv4l1 offers the (deprecated) v4l1 API on top of v4l2 devices, independent
  of the drivers for those devices supporting v4l1 compatibility (which many
  v4l2 drivers do not).
@@ -41,10 +39,24 @@ Description: Collection of video4linux support libraries
  .
  This package contains the shared libraries.
 
+Package: libv4lconvert0
+Section: libs
+Architecture: any
+Depends: ${shlibs:Depends},
+         ${misc:Depends}
+Pre-Depends: ${misc:Pre-Depends}
+Multi-Arch: same
+Description: Video4linux frame format conversion library
+ libv4lconvert offers functions to convert from any (known) pixelformat
+ to BGR24, RGB24, YUV420 and YVU420.
+ .
+ This package contains the shared library.
+
 Package: libv4l-dev
 Section: libdevel
 Architecture: any
 Depends: libv4l-0 (= ${binary:Version}),
+         libv4lconvert0 (= ${binary:Version}),
          ${shlibs:Depends},
          ${misc:Depends}
 Suggests: pkg-config (>= 0.18)

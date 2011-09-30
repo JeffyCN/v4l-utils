@@ -17,27 +17,27 @@ build-stamp:
 	# to be installed side by side.
 	#
 	# build shared libs and install
-	$(MAKE) PREFIX=/usr LIBDIR=/usr/lib/$(DEB_HOST_MULTIARCH) DESTDIR=$(CURDIR)/debian/tmp
-	$(MAKE) PREFIX=/usr LIBDIR=/usr/lib/$(DEB_HOST_MULTIARCH) DESTDIR=$(CURDIR)/debian/tmp install
+	$(MAKE) PREFIX=/usr LIBDIR=/usr/lib/$(DEB_HOST_MULTIARCH) LIBCONVERTSUBDIR=libv4lconvert-0 DESTDIR=$(CURDIR)/debian/tmp
+	$(MAKE) PREFIX=/usr LIBDIR=/usr/lib/$(DEB_HOST_MULTIARCH) LIBCONVERTSUBDIR=libv4lconvert-0 DESTDIR=$(CURDIR)/debian/tmp install
 	# prefix filenames with /lib/udev/rc_keymaps
 	mv $(CURDIR)/debian/tmp/etc/rc_maps.cfg $(CURDIR)/debian/tmp/etc/rc_maps.cfg.orig
 	sed -e 's,^\([^#][[:graph:]]*[[:space:]]\+[[:graph:]]\+[[:space:]]\+\)\([[:graph:]]\+.*\),\1/lib/udev/rc_keymaps/\2,' -e 's,^\(#[[:space:]]\+\*[[:space:]]\+\*[[:space:]]\+\)\([[:alnum:]].*\),\1/lib/udev/rc_keymaps/\2,' < $(CURDIR)/debian/tmp/etc/rc_maps.cfg.orig > $(CURDIR)/debian/tmp/etc/rc_maps.cfg
 	# clean object files
 	$(MAKE) clean
 	# build static libs and install
-	$(MAKE) -C lib PREFIX=/usr LIBDIR=/usr/lib/$(DEB_HOST_MULTIARCH) DESTDIR=$(CURDIR)/debian/tmp LINKTYPE=static
-	$(MAKE) -C lib PREFIX=/usr LIBDIR=/usr/lib/$(DEB_HOST_MULTIARCH) DESTDIR=$(CURDIR)/debian/tmp LINKTYPE=static install
+	$(MAKE) -C lib PREFIX=/usr LIBDIR=/usr/lib/$(DEB_HOST_MULTIARCH) LIBCONVERTSUBDIR=libv4lconvert-0 DESTDIR=$(CURDIR)/debian/tmp LINKTYPE=static
+	$(MAKE) -C lib PREFIX=/usr LIBDIR=/usr/lib/$(DEB_HOST_MULTIARCH) LIBCONVERTSUBDIR=libv4lconvert-0 DESTDIR=$(CURDIR)/debian/tmp LINKTYPE=static install
 ifeq ($(DEB_HOST_ARCH), amd64)
 	# clean object files
 	$(MAKE) clean
 	# build 32 bit shared libs and install
-	$(MAKE) -C lib CPPFLAGS+=-m32 LDFLAGS+=-m32 DISABLE_LIBJPEG=1 PREFIX=/usr LIBDIR=/usr/lib32 DESTDIR=$(CURDIR)/debian/tmp
-	$(MAKE) -C lib CPPFLAGS+=-m32 LDFLAGS+=-m32 DISABLE_LIBJPEG=1 PREFIX=/usr LIBDIR=/usr/lib32 DESTDIR=$(CURDIR)/debian/tmp install
+	$(MAKE) -C lib CPPFLAGS+=-m32 LDFLAGS+=-m32 DISABLE_LIBJPEG=1 PREFIX=/usr LIBDIR=/usr/lib32 LIBCONVERTSUBDIR=libv4lconvert-0 DESTDIR=$(CURDIR)/debian/tmp
+	$(MAKE) -C lib CPPFLAGS+=-m32 LDFLAGS+=-m32 DISABLE_LIBJPEG=1 PREFIX=/usr LIBDIR=/usr/lib32 LIBCONVERTSUBDIR=libv4lconvert-0 DESTDIR=$(CURDIR)/debian/tmp install
 	# clean object files
 	$(MAKE) clean
 	# build 32 bit static libs and install
-	$(MAKE) -C lib CPPFLAGS+=-m32 LDFLAGS+=-m32 DISABLE_LIBJPEG=1 PREFIX=/usr LIBDIR=/usr/lib32 DESTDIR=$(CURDIR)/debian/tmp LINKTYPE=static
-	$(MAKE) -C lib CPPFLAGS+=-m32 LDFLAGS+=-m32 DISABLE_LIBJPEG=1 PREFIX=/usr LIBDIR=/usr/lib32 DESTDIR=$(CURDIR)/debian/tmp LINKTYPE=static install
+	$(MAKE) -C lib CPPFLAGS+=-m32 LDFLAGS+=-m32 DISABLE_LIBJPEG=1 PREFIX=/usr LIBDIR=/usr/lib32 LIBCONVERTSUBDIR=libv4lconvert-0 DESTDIR=$(CURDIR)/debian/tmp LINKTYPE=static
+	$(MAKE) -C lib CPPFLAGS+=-m32 LDFLAGS+=-m32 DISABLE_LIBJPEG=1 PREFIX=/usr LIBDIR=/usr/lib32 LIBCONVERTSUBDIR=libv4lconvert-0 DESTDIR=$(CURDIR)/debian/tmp LINKTYPE=static install
 endif
 	touch $@
 
@@ -55,8 +55,8 @@ binary-arch: build
 	dh_testroot
 	dh_lintian -s
 	dh_installudev -s
-	dh_installchangelogs -plibv4l-0 -pir-keytable ChangeLog
-	dh_installdocs -plibv4l-0 -pir-keytable
+	dh_installchangelogs -plibv4l-0 -pir-keytable -plibv4lconvert0 ChangeLog
+	dh_installdocs -plibv4l-0 -pir-keytable -plibv4lconvert0
 	dh_installman -s
 	dh_install -s --sourcedir=debian/tmp
 	dh_link -s
