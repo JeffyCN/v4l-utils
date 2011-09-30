@@ -1,2 +1,5 @@
 force_tinyjpeg_quirk.diff
 allow-disabling-libjpeg.diff
+update_upside_down_table-1.diff
+update_upside_down_table-2.diff
+update_upside_down_table-3.diff

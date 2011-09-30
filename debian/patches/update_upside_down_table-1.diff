@@ -1,0 +1,36 @@
+Origin: upstream, 3d22fe950f025b2faf3c1850441123a61f8884ff
+From: Hans de Goede <hdegoede@redhat.com>
+Date: Sun, 24 Jul 2011 16:52:25 +0200
+Subject: [PATCH] libv4l: update upside down device list
+
+Signed-off-by: Hans de Goede <hdegoede@redhat.com>
+---
+ lib/libv4lconvert/control/libv4lcontrol.c |    5 +++++
+ 1 files changed, 5 insertions(+), 0 deletions(-)
+
+diff --git a/lib/libv4lconvert/control/libv4lcontrol.c b/lib/libv4lconvert/control/libv4lcontrol.c
+index b11d96c..3dcbd9e 100644
+--- a/lib/libv4lconvert/control/libv4lcontrol.c
++++ b/lib/libv4lconvert/control/libv4lcontrol.c
+@@ -231,6 +231,9 @@ static const struct v4lcontrol_flags_info v4lcontrol_flags[] = {
+ 	{ 0x04f2, 0xb169, 0, "FUJITSU", "FJNB219",
+ 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED, 0,
+ 		"FUJITSU", "LIFEBOOK T730" },
++	{ 0x04f2, 0xb169, 0, "FUJITSU", "FJNB21A",
++		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED, 0,
++		"FUJITSU", "LIFEBOOK TH700" },
+ 	{ 0x04f2, 0xb16b, 0, "ASUSTeK Computer Inc.        ", "U20A      ",
+ 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
+ 	{ 0x04f2, 0xb16b, 0, "ASUSTeK Computer Inc.        ", "U80A     ",
+@@ -299,6 +302,8 @@ static const struct v4lcontrol_flags_info v4lcontrol_flags[] = {
+ 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
+ 	{ 0x04f2, 0xb1e5, 0, "ASUSTeK Computer Inc.        ", "P52Jc",
+ 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
++	{ 0x04f2, 0xb217, 0, "LENOVO", "42992QG",
++		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
+ 	{ 0x064e, 0xa111, 0, "ASUSTeK Computer Inc.", "F5RL      ",
+ 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
+ 	{ 0x064e, 0xa111, 0, "ASUSTeK Computer Inc.        ", "F5SL    ",
+-- 
+1.7.2.5
+
