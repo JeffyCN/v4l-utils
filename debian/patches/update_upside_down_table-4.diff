@@ -1,0 +1,37 @@
+Origin: upstream, b5939a0af472b7610f868cec4470e96c791047e7
+From: Hans de Goede <hdegoede@redhat.com>
+Date: Thu, 15 Sep 2011 10:48:42 +0200
+Subject: [PATCH] libv4l: Fix sorting of upside down device list
+
+Signed-off-by: Hans de Goede <hdegoede@redhat.com>
+---
+ lib/libv4lconvert/control/libv4lcontrol.c |    9 ++++-----
+ 1 files changed, 4 insertions(+), 5 deletions(-)
+
+--- a/lib/libv4lconvert/control/libv4lcontrol.c
++++ b/lib/libv4lconvert/control/libv4lcontrol.c
+@@ -325,8 +325,12 @@
+ 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
+ 	{ 0x064e, 0xa116, 0, "ASUSTeK Computer Inc.        ", "F82Q      ",
+ 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
++	{ 0x064e, 0xa116, 0, "ASUSTeK Computer INC.", "K40AB",
++		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
+ 	{ 0x064e, 0xa116, 0, "ASUSTeK Computer INC.", "K40AD",
+ 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
++	{ 0x064e, 0xa116, 0, "ASUSTeK Computer INC.", "K50AD",
++		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
+ 	{ 0x064e, 0xa116, 0, "ASUSTeK Computer Inc.        ", "K40IJ     ",
+ 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
+ 	{ 0x064e, 0xa116, 0, "ASUSTeK Computer Inc.        ", "K40IN      ",
+@@ -385,11 +389,6 @@
+ 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
+ 	{ 0x064e, 0xa116, 0, "ASUSTeK Computer Inc.        ", "X58LE     ",
+ 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
+-	/* Note no whitespace padding for these models, this is not a typo */
+-	{ 0x064e, 0xa116, 0, "ASUSTeK Computer INC.", "K40AB",
+-		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
+-	{ 0x064e, 0xa116, 0, "ASUSTeK Computer INC.", "K50AD",
+-		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
+ 	/* 2 reports:
+ 	   Unknown laptop model -> System Vendor: "  IDEALMAX"
+ 	   Síragon SL-6120      -> System Vendor: "PEGA PC"
