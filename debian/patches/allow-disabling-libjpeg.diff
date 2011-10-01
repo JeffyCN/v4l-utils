@@ -1,3 +1,7 @@
+Description: Allow to disable the libjpeg dependency (needed for cross compiled 32bit packages)
+Author: Gregor Jasny <gjasny@googlemail.com>
+Forwarded: not-needed
+
 --- a/lib/libv4lconvert/Makefile
 +++ b/lib/libv4lconvert/Makefile
 @@ -1,6 +1,6 @@
