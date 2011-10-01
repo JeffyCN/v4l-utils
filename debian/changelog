@@ -1,3 +1,14 @@
+v4l-utils (0.8.5-4) unstable; urgency=low
+
+  * Cherry picked some upside down table entries
+  * Build separate libv4lconvert library package
+  * Drop static libraries
+  * Apply dpkg-buildflags for build
+  * Tighten architecture to linux-any
+  * Fix some Lintian issues
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Sat, 01 Oct 2011 17:00:24 +0200
+
 v4l-utils (0.8.5-3) unstable; urgency=medium
 
   * Disable libjpeg for cross compiled 32bit packages (Closes: #636301)
