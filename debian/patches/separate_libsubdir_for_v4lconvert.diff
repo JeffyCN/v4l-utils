@@ -15,7 +15,7 @@ Forwarded: not-needed
 --- a/lib/libv4lconvert/Makefile
 +++ b/lib/libv4lconvert/Makefile
 @@ -26,7 +26,7 @@
- ONVERT_OBJS += jpeg_memsrcdest.o
+ CONVERT_OBJS += jpeg_memsrcdest.o
  endif
  
 -override CPPFLAGS += -DLIBDIR=\"$(LIBDIR)\" -DLIBSUBDIR=\"$(LIBSUBDIR)\"

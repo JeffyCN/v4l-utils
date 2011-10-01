@@ -28,7 +28,7 @@ Forwarded: not-needed
 +override CFLAGS += -DDISABLE_LIBJPEG
 +else
 +LIBS_libv4lconvert += -ljpeg
-+ONVERT_OBJS += jpeg_memsrcdest.o
++CONVERT_OBJS += jpeg_memsrcdest.o
 +endif
 +
  override CPPFLAGS += -DLIBDIR=\"$(LIBDIR)\" -DLIBSUBDIR=\"$(LIBSUBDIR)\"
