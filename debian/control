@@ -44,6 +44,8 @@ Architecture: linux-any
 Depends: ${shlibs:Depends},
          ${misc:Depends}
 Pre-Depends: ${misc:Pre-Depends}
+Breaks: libv4l-0 (<< 0.8.5-4)
+Replaces: libv4l-0 (<< 0.8.5-4)
 Multi-Arch: same
 Description: Video4linux frame format conversion library
  libv4lconvert offers functions to convert from any (known) pixelformat
