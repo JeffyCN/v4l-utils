@@ -11,7 +11,9 @@ V4L_COMMON_FLAGS += CPPFLAGS+="$(CPPFLAGS)" CFLAGS+="$(CFLAGS)" CXXFLAGS+="$(CXX
 V4L_NATIVE_FLAGS = $(V4L_COMMON_FLAGS) LIBDIR=/usr/lib/$(DEB_HOST_MULTIARCH) LIBCONVERTSUBDIR=libv4lconvert-0
 V4L_32BIT_FLAGS  = $(V4L_COMMON_FLAGS) LIBDIR=/usr/lib32 CPPFLAGS+=-m32 LDFLAGS+=-m32 DISABLE_LIBJPEG=1 
 
-build: build-stamp
+build: build-arch build-indep
+build-arch: build-stamp
+build-indep: build-stamp
 build-stamp:
 	dh_testdir
 	dh_prep
