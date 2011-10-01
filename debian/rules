@@ -1,12 +1,21 @@
 #!/usr/bin/make -f
 
-DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
-DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
-
 V4L_COMMON_FLAGS = PREFIX=/usr DESTDIR=$(CURDIR)/debian/tmp
 
--include /usr/share/dpkg/buildflags.mk
-V4L_COMMON_FLAGS += CPPFLAGS+="$(CPPFLAGS)" CFLAGS+="$(CFLAGS)" CXXFLAGS+="$(CXXFLAGS)" LDFLAGS+="$(LDFLAGS)"
+# if we have dpkg 1.16.1
+#include /usr/share/dpkg/default.mk
+#V4L_COMMON_FLAGS += CPPFLAGS+="$(CPPFLAGS)" CFLAGS+="$(CFLAGS)" CXXFLAGS+="$(CXXFLAGS)" LDFLAGS+="$(LDFLAGS)"
+
+# else
+
+DEB_HOST_ARCH ?= $(shell dpkg-architecture -qDEB_HOST_ARCH)
+DEB_HOST_MULTIARCH ?= $(shell dpkg-architecture -qDEB_HOST_MULTIARCH)
+V4L_COMMON_FLAGS += CPPFLAGS+="$(shell dpkg-buildflags --get CPPFLAGS)"
+V4L_COMMON_FLAGS += CFLAGS+="$(shell dpkg-buildflags --get CFLAGS)"
+V4L_COMMON_FLAGS += CXXFLAGS+="$(shell dpkg-buildflags --get CXXFLAGS)"
+V4L_COMMON_FLAGS += LDFLAGS+="$(shell dpkg-buildflags --get LDFLAGS)"
+
+# endif
 
 V4L_NATIVE_FLAGS = $(V4L_COMMON_FLAGS) LIBDIR=/usr/lib/$(DEB_HOST_MULTIARCH) LIBCONVERTSUBDIR=libv4lconvert0
 V4L_32BIT_FLAGS  = $(V4L_COMMON_FLAGS) LIBDIR=/usr/lib32 CPPFLAGS+=-m32 LDFLAGS+=-m32 DISABLE_LIBJPEG=1 
