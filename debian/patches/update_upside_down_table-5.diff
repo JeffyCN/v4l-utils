@@ -1,0 +1,31 @@
+Origin: upstream, 15616da05df33b49d475766127db43e0f1cb4296
+From: Hans de Goede <hdegoede@redhat.com>
+Date: Sun, 16 Oct 2011 16:45:04 +0200
+Subject: [PATCH] libv4l: Update upside down device table
+
+Signed-off-by: Hans de Goede <hdegoede@redhat.com>
+---
+ lib/libv4lconvert/control/libv4lcontrol.c |    5 +++++
+ 1 files changed, 5 insertions(+), 0 deletions(-)
+
+--- a/lib/libv4lconvert/control/libv4lcontrol.c
++++ b/lib/libv4lconvert/control/libv4lcontrol.c
+@@ -308,6 +308,9 @@
+ 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
+ 	{ 0x04f2, 0xb1e5, 0, "ASUSTeK Computer Inc.        ", "P52Jc",
+ 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
++	{ 0x04f2, 0xb213, 0, "FUJITSU", "FJNBB11",
++		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED, 0,
++		"FUJITSU", "LIFEBOOK PH521" },
+ 	{ 0x04f2, 0xb213, 0, "FUJITSU", "FJNBB19",
+ 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED, 0,
+ 		"FUJITSU", "LIFEBOOK NH751" },
+@@ -462,6 +465,8 @@
+ 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
+ 	{ 0x13d3, 0x5122, 0, "ASUSTeK Computer Inc.        ", "N73JF",
+ 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
++	{ 0x13d3, 0x5122, 0, "ASUSTeK Computer Inc.        ", "N73Jn",
++		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
+ 	{ 0x13d3, 0x5122, 0, "ASUSTeK Computer Inc.        ", "N73JQ",
+ 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
+ 	{ 0x13d3, 0x5122, 0, "ASUSTeK Computer Inc.", "N73SV",
