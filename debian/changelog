@@ -1,3 +1,9 @@
+v4l-utils (0.8.5-5) unstable; urgency=low
+
+  * Cherry picked more upside down table patches
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Fri, 28 Oct 2011 20:47:49 +0200
+
 v4l-utils (0.8.5-4) unstable; urgency=low
 
   * Cherry picked some upside down table entries
