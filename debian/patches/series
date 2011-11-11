@@ -9,3 +9,4 @@ update_upside_down_table-6.diff
 separate_libsubdir_for_v4lconvert.diff
 fix_spelling_error.diff
 disable_fancy_upsampling.diff
+kfreebsd.diff
