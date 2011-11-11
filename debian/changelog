@@ -1,3 +1,11 @@
+v4l-utils (0.8.5-6) unstable; urgency=low
+
+  * Add bug report script
+  * Disable fancy upsampling (Closes: #647273)
+  * Add kFreeBSD support (Closes: #647508)
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Fri, 11 Nov 2011 10:24:59 +0100
+
 v4l-utils (0.8.5-5) unstable; urgency=low
 
   * Cherry picked more upside down table patches
