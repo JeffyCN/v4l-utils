@@ -7,7 +7,7 @@ Uploaders: Martin Pitt <mpitt@debian.org>,
 DM-Upload-Allowed: yes
 Build-Depends: debhelper (>= 8.1.3),
                libjpeg-dev,
-               libqt4-dev,
+               libqt4-dev [linux-any],
                gcc-multilib [amd64]
 Standards-Version: 3.9.2
 Vcs-Browser: http://anonscm.debian.org/gitweb/?p=collab-maint/libv4l.git
@@ -16,7 +16,7 @@ Homepage: http://linuxtv.org/downloads/v4l-utils/
 
 Package: libv4l-0
 Section: libs
-Architecture: linux-any
+Architecture: linux-any kfreebsd-any
 Depends: libv4lconvert0 (= ${binary:Version}),
          ${shlibs:Depends},
          ${misc:Depends}
@@ -40,7 +40,7 @@ Description: Collection of video4linux support libraries
 
 Package: libv4lconvert0
 Section: libs
-Architecture: linux-any
+Architecture: linux-any kfreebsd-any
 Depends: ${shlibs:Depends},
          ${misc:Depends}
 Pre-Depends: ${misc:Pre-Depends}
@@ -55,7 +55,7 @@ Description: Video4linux frame format conversion library
 
 Package: libv4l-dev
 Section: libdevel
-Architecture: linux-any
+Architecture: linux-any kfreebsd-any
 Depends: libv4l-0 (= ${binary:Version}),
          libv4lconvert0 (= ${binary:Version}),
          ${shlibs:Depends},
