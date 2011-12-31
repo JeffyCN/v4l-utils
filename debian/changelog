@@ -1,3 +1,9 @@
+v4l-utils (0.8.5-7) unstable; urgency=low
+
+  * Add 90 degrees rotated JPEG quirk for 145f:013c
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Sat, 31 Dec 2011 16:30:32 +0100
+
 v4l-utils (0.8.5-6) unstable; urgency=low
 
   * Add bug report script
