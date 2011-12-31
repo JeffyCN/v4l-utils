@@ -1,0 +1,16 @@
+Origin: upstream, 4925c3eda4db5a6ba03c4e83879dd0f813434a11
+From: Hans de Goede <hdegoede@redhat.com>
+Date: Fri, 30 Dec 2011 23:13:51 +0100
+Subject: [PATCH] libv4l: Add 90 degrees rotated JPEG quirk for 145f:013c
+
+--- a/lib/libv4lconvert/control/libv4lcontrol.c
++++ b/lib/libv4lconvert/control/libv4lcontrol.c
+@@ -627,6 +627,8 @@
+ 		V4LCONTROL_ROTATED_90_JPEG | V4LCONTROL_WANTS_WB, 1500 },
+ 	{ 0x06f8, 0x3009, 0,    NULL, NULL,
+ 		V4LCONTROL_ROTATED_90_JPEG | V4LCONTROL_WANTS_WB, 1500 },
++	{ 0x145f, 0x013c, 0,    NULL, NULL,
++		V4LCONTROL_ROTATED_90_JPEG | V4LCONTROL_WANTS_WB, 1500 },
+ 	/* Pac7311 based devices */
+ 	{ 0x093a, 0x2600, 0x0f, NULL, NULL, V4LCONTROL_WANTS_WB },
+ 	/* sq905 devices */
