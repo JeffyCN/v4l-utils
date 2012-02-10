@@ -1,3 +1,17 @@
+v4l-utils (0.8.6-1) unstable; urgency=low
+
+  * Imported Upstream version 0.8.6
+    - Add support for libjpeg >= v7
+    - Add new matching algorithm for upside down table (Closes: #639231)
+    - Add some more laptop models to the upside down devices table
+    - Retry with another frame on JPEG header decode errors
+    - Improved JL2005BCD support
+    - Set errno to EIO if getting 4 consecutive EAGAIN convert errors
+    - Make software autowhitebalance converge faster
+    - Add quirk support for forced tinyjpeg fallback
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Fri, 10 Feb 2012 21:25:42 +0100
+
 v4l-utils (0.8.5-7) unstable; urgency=low
 
   * Add 90 degrees rotated JPEG quirk for 145f:013c
