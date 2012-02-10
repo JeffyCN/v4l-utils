@@ -1,13 +1,3 @@
-force_tinyjpeg_quirk.diff
 allow-disabling-libjpeg.diff
-update_upside_down_table-1.diff
-update_upside_down_table-2.diff
-update_upside_down_table-3.diff
-update_upside_down_table-4.diff
-update_upside_down_table-5.diff
-update_upside_down_table-6.diff
 separate_libsubdir_for_v4lconvert.diff
-fix_spelling_error.diff
-disable_fancy_upsampling.diff
 kfreebsd.diff
-update_upside_down_table-7.diff

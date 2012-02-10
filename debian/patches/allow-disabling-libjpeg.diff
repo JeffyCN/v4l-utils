@@ -12,8 +12,11 @@ Forwarded: not-needed
  
  ifeq ($(LINKTYPE),static)
  CONVERT_LIB   = libv4lconvert.a
-@@ -12,13 +12,20 @@
+@@ -10,16 +10,22 @@
+ endif
+ 
  CONVERT_OBJS  = libv4lconvert.o tinyjpeg.o sn9c10x.o sn9c20x.o pac207.o \
+-		jl2005bcd.o \
  		mr97310a.o flip.o crop.o jidctflt.o spca561-decompress.o \
  		rgbyuv.o sn9c2028-decomp.o spca501.o sq905c.o bayer.o hm12.o \
 -		stv0680.o cpia1.o se401.o jpgl.o jpeg.o jpeg_memsrcdest.o \
@@ -28,7 +31,7 @@ Forwarded: not-needed
 +override CFLAGS += -DDISABLE_LIBJPEG
 +else
 +LIBS_libv4lconvert += -ljpeg
-+CONVERT_OBJS += jpeg_memsrcdest.o
++CONVERT_OBJS += jl2005bcd.o jpeg_memsrcdest.o
 +endif
 +
  override CPPFLAGS += -DLIBDIR=\"$(LIBDIR)\" -DLIBSUBDIR=\"$(LIBSUBDIR)\"
@@ -55,7 +58,7 @@ Forwarded: not-needed
  static void jerr_error_exit(j_common_ptr cinfo)
  {
  	struct v4lconvert_data *data = cinfo->client_data;
-@@ -404,3 +408,6 @@
+@@ -405,3 +409,6 @@
  
  	return result;
  }
@@ -90,7 +93,17 @@ Forwarded: not-needed
  	int bandwidth;
 --- a/lib/libv4lconvert/libv4lconvert.c
 +++ b/lib/libv4lconvert/libv4lconvert.c
-@@ -185,8 +185,10 @@
+@@ -78,7 +78,9 @@
+ 	{ V4L2_PIX_FMT_SN9C2028,	 0,	 9,	 9,	1 },
+ 	{ V4L2_PIX_FMT_PAC207,		 0,	 9,	 9,	1 },
+ 	{ V4L2_PIX_FMT_MR97310A,	 0,	 9,	 9,	1 },
++#ifndef DISABLE_LIBJPEG
+ 	{ V4L2_PIX_FMT_JL2005BCD,	 0,	 9,	 9,	1 },
++#endif
+ 	{ V4L2_PIX_FMT_SQ905C,		 0,	 9,	 9,	1 },
+ 	/* special */
+ 	{ V4L2_PIX_FMT_SE401,		 0,	 8,	 9,	1 },
+@@ -186,8 +188,10 @@
  		tinyjpeg_set_components(data->tinyjpeg, comps, 3);
  		tinyjpeg_free(data->tinyjpeg);
  	}
@@ -101,7 +114,7 @@ Forwarded: not-needed
  	v4lconvert_helper_cleanup(data);
  	free(data->convert1_buf);
  	free(data->convert2_buf);
-@@ -632,10 +634,13 @@
+@@ -634,10 +638,13 @@
  	/* JPG and variants */
  	case V4L2_PIX_FMT_MJPEG:
  	case V4L2_PIX_FMT_JPEG:
@@ -115,7 +128,7 @@ Forwarded: not-needed
  		} else {
  			result = v4lconvert_decode_jpeg_libjpeg(data,
  							src, src_size, dest,
-@@ -650,6 +655,7 @@
+@@ -652,6 +659,7 @@
  							fmt, dest_pix_fmt, 0);
  			}
  		}
@@ -123,3 +136,29 @@ Forwarded: not-needed
  		break;
  	case V4L2_PIX_FMT_PJPG:
  		result = v4lconvert_decode_jpeg_tinyjpeg(data, src, src_size,
+@@ -777,7 +785,9 @@
+ 	case V4L2_PIX_FMT_SN9C10X:
+ 	case V4L2_PIX_FMT_PAC207:
+ 	case V4L2_PIX_FMT_MR97310A:
++#ifndef DISABLE_LIBJPEG
+ 	case V4L2_PIX_FMT_JL2005BCD:
++#endif
+ 	case V4L2_PIX_FMT_SN9C2028:
+ 	case V4L2_PIX_FMT_SQ905C:
+ 	case V4L2_PIX_FMT_STV0680: { /* Not compressed but needs some shuffling */
+@@ -816,6 +826,7 @@
+ 			}
+ 			tmpfmt.fmt.pix.pixelformat = V4L2_PIX_FMT_SBGGR8;
+ 			break;
++#ifndef DISABLE_LIBJPEG
+ 		case V4L2_PIX_FMT_JL2005BCD:
+ 			if (v4lconvert_decode_jl2005bcd(data, src, src_size,
+ 							tmpbuf,
+@@ -826,6 +837,7 @@
+ 			}
+ 			tmpfmt.fmt.pix.pixelformat = V4L2_PIX_FMT_SRGGB8;
+ 			break;
++#endif
+ 		case V4L2_PIX_FMT_SN9C2028:
+ 			v4lconvert_decode_sn9c2028(src, tmpbuf, width, height);
+ 			tmpfmt.fmt.pix.pixelformat = V4L2_PIX_FMT_SBGGR8;
