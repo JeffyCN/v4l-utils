@@ -1,0 +1,89 @@
+Origin: upstream, 0488ac87cbda1f2b8d36326a31a2082c44e0ddd3
+From: Chris Pockele <chris.pockele.f1@gmail.com>
+Date: Sun, 8 Jan 2012 22:31:35 +0000
+Subject: v4l-utils: ir-keytable file parsing errors
+
+While configuring a remote control I noticed that the ir-keytable
+utility would throw the message "Invalid parameter on line 1" if the
+first line following the "table ... type: ..." line is a comment.
+Also, if a configuration line is invalid, the line number indication
+of the error message is sometimes incorrect, because the comments
+before it are not counted.
+This happens because of the "continue" statement when processing
+comments (or the table/type line), thus skipping the line counter
+increase at the end of the loop.  The included patch fixes both
+problems by making sure the counter is always increased.
+The parse_cfgfile() function had a similar problem.
+
+Signed-off-by: Chris Pockelé <chris.pockele.f1@gmail.com>
+Signed-off-by: Mauro Carvalho Chehab <mchehab@redhat.com>
+(cherry picked from commit a3b4e693fe28b3ac6aa1ec892661a61779a76ffe)
+
+Signed-off-by: Gregor Jasny <gjasny@googlemail.com>
+---
+ utils/keytable/keytable.c |   12 +++++++-----
+ 1 files changed, 7 insertions(+), 5 deletions(-)
+
+diff --git a/utils/keytable/keytable.c b/utils/keytable/keytable.c
+index aa0627f..424a60e 100644
+--- a/utils/keytable/keytable.c
++++ b/utils/keytable/keytable.c
+@@ -200,9 +200,11 @@ static error_t parse_keyfile(char *fname, char **table)
+ 
+ 	while (fgets(s, sizeof(s), fin)) {
+ 		char *p = s;
++
++		line++;
+ 		while (*p == ' ' || *p == '\t')
+ 			p++;
+-		if (!line && p[0] == '#') {
++		if (line==1 && p[0] == '#') {
+ 			p++;
+ 			p = strtok(p, "\n\t =:");
+ 			do {
+@@ -275,7 +277,6 @@ static error_t parse_keyfile(char *fname, char **table)
+ 			return ENOMEM;
+ 		}
+ 		nextkey = nextkey->next;
+-		line++;
+ 	}
+ 	fclose(fin);
+ 
+@@ -283,7 +284,7 @@ static error_t parse_keyfile(char *fname, char **table)
+ 
+ err_einval:
+ 	fprintf(stderr, "Invalid parameter on line %d of %s\n",
+-		line + 1, fname);
++		line, fname);
+ 	return EINVAL;
+ 
+ }
+@@ -308,6 +309,8 @@ static error_t parse_cfgfile(char *fname)
+ 
+ 	while (fgets(s, sizeof(s), fin)) {
+ 		char *p = s;
++
++		line++;
+ 		while (*p == ' ' || *p == '\t')
+ 			p++;
+ 
+@@ -345,7 +348,6 @@ static error_t parse_cfgfile(char *fname)
+ 			return ENOMEM;
+ 		}
+ 		nextcfg = nextcfg->next;
+-		line++;
+ 	}
+ 	fclose(fin);
+ 
+@@ -353,7 +355,7 @@ static error_t parse_cfgfile(char *fname)
+ 
+ err_einval:
+ 	fprintf(stderr, "Invalid parameter on line %d of %s\n",
+-		line + 1, fname);
++		line, fname);
+ 	return EINVAL;
+ 
+ }
+-- 
+1.7.9.1
+
