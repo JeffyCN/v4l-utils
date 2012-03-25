@@ -1,3 +1,14 @@
+v4l-utils (0.8.6-2) unstable; urgency=low
+
+  * Add patches from stable-0.8 branch
+    - Fix ir-keytable file parsing errors
+    - Add ThinkPad X200 to upside down table
+    - Add ThinkPad X201 to upside down table
+    - Add ThinkPad Edge E325 to upside down table
+  * Bumped standards to version 3.9.3 (no changes needed)
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Sun, 25 Mar 2012 23:12:26 +0200
+
 v4l-utils (0.8.6-1) unstable; urgency=low
 
   * Imported Upstream version 0.8.6
