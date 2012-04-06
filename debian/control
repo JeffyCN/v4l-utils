@@ -8,6 +8,7 @@ DM-Upload-Allowed: yes
 Build-Depends: debhelper (>= 8.1.3),
                libjpeg-dev,
                libqt4-dev [linux-any],
+               g++-multilib [amd64],
                gcc-multilib [amd64]
 Standards-Version: 3.9.3
 Vcs-Browser: http://anonscm.debian.org/gitweb/?p=collab-maint/libv4l.git
