@@ -1,7 +1,3 @@
 allow-disabling-libjpeg.diff
 separate_libsubdir_for_v4lconvert.diff
 kfreebsd.diff
-ir-keytable-file-parsing-errors.patch
-Add-ThinkPad-X200-to-upside-down-table.patch
-Add-ThinkPad-X201-to-upside-down-table.patch
-Add-ThinkPad-Edge-E325-to-upside-down-table.patch
