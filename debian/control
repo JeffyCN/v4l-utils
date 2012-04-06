@@ -150,6 +150,30 @@ Description: Collection of command line video4linux utilities
   v4l2-dbg: tool to directly get and set registers of v4l2 devices
   v4l2-sysfs-path: sysfs helper tool
 
+Package: dvb-tools
+Section: utils
+Architecture: linux-any
+Depends: ${shlibs:Depends},
+         ${misc:Depends}
+Description: Collection of command line DVB utilities
+ This is a series of tools written to help testing and working with DVB,
+ using its latest V5 API. The tools can also work with the DVBv3 API.
+ .
+ The current tools are:
+ .
+ dvb-fe-tool: a simple test application, that reads from the frontend.
+ it also allows to change the default delivery system.
+ In the future, it may be used to change any property via command line.
+ .
+ dvb-format-convert: converts from zap and scan initial-tuning-data-file
+ into the new format defined to work with DVBv5.
+ .
+ dvbv5-scan: a DVBv5 scan tool.
+ .
+ dvbv5-zap: a DVBv5 zap tool. It allow to tune into a DVB channel, and
+ to watch to a DVB service (e. g. receiving the video and audio
+ streams, via another application using the dvr device).
+
 Package: qv4l2
 Section: utils
 Architecture: linux-any
