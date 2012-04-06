@@ -1,3 +1,13 @@
+v4l-utils (0.8.7-1) unstable; urgency=low
+
+  * Imported Upstream version 0.8.7
+    - libv4l2: Prevent GCC 4.7 inlining error (Closes: #667406)
+    - qv4l2: fix segfault when there are no inputs or outputs
+    - dvb: Merged DVB tools from development branch
+    - Add some more laptop models to the upside down devices table
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Fri, 06 Apr 2012 20:24:03 +0200
+
 v4l-utils (0.8.6-2) unstable; urgency=low
 
   * Add patches from stable-0.8 branch
