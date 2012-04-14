@@ -114,7 +114,7 @@ Forwarded: not-needed
  	v4lconvert_helper_cleanup(data);
  	free(data->convert1_buf);
  	free(data->convert2_buf);
-@@ -634,10 +638,13 @@
+@@ -635,10 +639,13 @@
  	/* JPG and variants */
  	case V4L2_PIX_FMT_MJPEG:
  	case V4L2_PIX_FMT_JPEG:
@@ -128,7 +128,7 @@ Forwarded: not-needed
  		} else {
  			result = v4lconvert_decode_jpeg_libjpeg(data,
  							src, src_size, dest,
-@@ -652,6 +659,7 @@
+@@ -653,6 +660,7 @@
  							fmt, dest_pix_fmt, 0);
  			}
  		}
@@ -136,7 +136,7 @@ Forwarded: not-needed
  		break;
  	case V4L2_PIX_FMT_PJPG:
  		result = v4lconvert_decode_jpeg_tinyjpeg(data, src, src_size,
-@@ -777,7 +785,9 @@
+@@ -778,7 +786,9 @@
  	case V4L2_PIX_FMT_SN9C10X:
  	case V4L2_PIX_FMT_PAC207:
  	case V4L2_PIX_FMT_MR97310A:
@@ -146,7 +146,7 @@ Forwarded: not-needed
  	case V4L2_PIX_FMT_SN9C2028:
  	case V4L2_PIX_FMT_SQ905C:
  	case V4L2_PIX_FMT_STV0680: { /* Not compressed but needs some shuffling */
-@@ -816,6 +826,7 @@
+@@ -817,6 +827,7 @@
  			}
  			tmpfmt.fmt.pix.pixelformat = V4L2_PIX_FMT_SBGGR8;
  			break;
@@ -154,7 +154,7 @@ Forwarded: not-needed
  		case V4L2_PIX_FMT_JL2005BCD:
  			if (v4lconvert_decode_jl2005bcd(data, src, src_size,
  							tmpbuf,
-@@ -826,6 +837,7 @@
+@@ -827,6 +838,7 @@
  			}
  			tmpfmt.fmt.pix.pixelformat = V4L2_PIX_FMT_SRGGB8;
  			break;
