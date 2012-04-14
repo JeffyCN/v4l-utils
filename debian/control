@@ -162,7 +162,7 @@ Description: Collection of command line DVB utilities
  The current tools are:
  .
  dvb-fe-tool: a simple test application, that reads from the frontend.
- it also allows to change the default delivery system.
+ it also allows one to change the default delivery system.
  In the future, it may be used to change any property via command line.
  .
  dvb-format-convert: converts from zap and scan initial-tuning-data-file
