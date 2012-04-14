@@ -67,8 +67,8 @@ binary-arch: build
 	dh_lintian -s
 	dh_installudev -s
 	dh_bugfiles -s
-	dh_installchangelogs -plibv4l-0 -pir-keytable -plibv4lconvert0 ChangeLog
-	dh_installdocs -plibv4l-0 -pir-keytable -plibv4lconvert0
+	dh_installchangelogs -plibv4l-0 -pir-keytable -plibv4lconvert0 -pdvb-tools ChangeLog
+	dh_installdocs -plibv4l-0 -pir-keytable -plibv4lconvert0 -pdvb-tools
 	dh_installman -s
 	dh_install -s --sourcedir=debian/tmp
 	dh_link -s
