@@ -1,3 +1,13 @@
+v4l-utils (0.8.8-2) unstable; urgency=low
+
+  * Add patches from stable-0.8 branch  
+    - Build fixes for GCC 4.7
+    - Add 04f2:b169 USB ID to ASUS upside down table
+    - Add Lenovo Thinkpad X220 Tablet to upside down table
+  * Add sanyo and rc-5-sz protocol to ir-keytable (Closes: #675564)
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Wed, 06 Jun 2012 08:38:04 +0200
+
 v4l-utils (0.8.8-1) unstable; urgency=low
 
   * Imported Upstream version 0.8.8
