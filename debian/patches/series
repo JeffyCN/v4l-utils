@@ -4,3 +4,4 @@ kfreebsd.diff
 gcc-4.7.diff
 add-another-asus-usb-id.diff
 add-lenovo-thinkpad-x220.diff
+keytable-add-protocols.diff
