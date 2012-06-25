@@ -1,3 +1,9 @@
+v4l-utils (0.8.8-3) unstable; urgency=low
+
+  * Mark libv4l-dev Multi-Arch: same (Closes: #678894)
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Mon, 25 Jun 2012 18:28:11 +0200
+
 v4l-utils (0.8.8-2) unstable; urgency=low
 
   * Add patches from stable-0.8 branch  
