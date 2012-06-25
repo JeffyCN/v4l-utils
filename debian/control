@@ -62,6 +62,7 @@ Depends: libv4l-0 (= ${binary:Version}),
          ${shlibs:Depends},
          ${misc:Depends}
 Suggests: pkg-config (>= 0.18)
+Multi-Arch: same
 Description: Collection of video4linux support libraries (development files)
  libv4l is a collection of libraries which adds a thin abstraction layer on
  top of video4linux2 devices. The purpose of this (thin) layer is to make it
