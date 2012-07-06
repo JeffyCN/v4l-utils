@@ -1,0 +1,29 @@
+v4l-utils (0.8.9-1) unstable; urgency=low
+
+  Beginning with the Wheezy release libv4l-0 will support multiarch.
+  As a result of the new triplet library directory you need to update
+  any preload paths. For example on an i386 system the following line
+
+  LD_PRELOAD=/usr/lib/libv4l/v4l1compat.so
+
+  must be changed into
+
+  LD_PRELOAD=/usr/lib/i386-linux-gnu/libv4l/v4l1compat.so
+
+  Another effect of the multiarch transition is the deprecation of the
+  lib32v4l-0 package to preload the i386 version of libv4l on amd64
+  systems. This preloading is necessary for some webcams to work properly
+  with Skype. To preload libv4l on Wheezy you have to install the i386
+  version of libv4l-0 the multiarch way:
+
+  dpkg --add-architecture i386
+  apt-get install libv4l-0:i386
+
+  Now you can preload the library from the new location:
+
+  LD_PRELOAD=/usr/lib/i386-linux-gnu/libv4l/v4l1compat.so skype
+
+  More information about multiarch can be found in the Wiki:
+  http://wiki.debian.org/Multiarch
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Fri, 06 Jul 2012 21:06:52 +0200
