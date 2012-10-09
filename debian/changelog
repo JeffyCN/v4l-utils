@@ -1,3 +1,15 @@
+v4l-utils (0.8.9-1) unstable; urgency=low
+
+  * Imported Upstream version 0.8.9
+    - libv4lconvert: Various Pixart JPEG fixes
+    - libv4lconvert: Add more notebooks to the upside down device table
+    - keytable: Add support for Sanyo IR and RC-5-SZ protocol
+    - keytable: Add missing buttons in shipped keytables (LP: #1054122)
+    - v4l2-compliance, v4l-ctl, qv4l2: Sync with development branch
+  * Drop 32bit cross compiled libraries
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Tue, 09 Oct 2012 18:38:05 +0200
+
 v4l-utils (0.8.8-3) unstable; urgency=low
 
   * Mark libv4l-dev Multi-Arch: same (Closes: #678894)
