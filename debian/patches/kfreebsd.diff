@@ -4,7 +4,7 @@ Bug-Debian: http://bugs.debian.org/647508
 
 --- a/include/linux/videodev2.h
 +++ b/include/linux/videodev2.h
-@@ -61,9 +61,27 @@
+@@ -61,9 +61,28 @@
  #else
  #include <sys/time.h>
  #endif
@@ -29,9 +29,10 @@ Bug-Debian: http://bugs.debian.org/647508
 +typedef uint64_t __le64;
 +#define __user
 +#endif
++
+ #include <linux/v4l2-common.h>
+ #include <linux/v4l2-controls.h>
  
- /*
-  * Common stuff for both V4L1 and V4L2
 --- a/lib/include/libv4l1-videodev.h
 +++ b/lib/include/libv4l1-videodev.h
 @@ -2,7 +2,12 @@
