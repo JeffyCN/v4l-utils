@@ -87,7 +87,7 @@ int v4l2::read(unsigned char *p, int size)
 	return ::read(m_fd, p, size);
 }
 
-void *v4l2::mmap(size_t length, __off64_t offset)
+void *v4l2::mmap(size_t length, int64_t offset)
 {
 	if (useWrapper())
 		return v4l2_mmap(NULL, length, PROT_READ | PROT_WRITE, MAP_SHARED, m_fd, offset);
@@ -142,6 +142,22 @@ bool v4l2::g_tuner(v4l2_tuner &tuner)
 	if (tuner.rangehigh > INT_MAX)
 		tuner.rangehigh = INT_MAX;
 	return true;
+}
+
+bool v4l2::s_tuner(v4l2_tuner &tuner)
+{
+	return ioctl("Set Tuner", VIDIOC_S_TUNER, &tuner);
+}
+
+bool v4l2::g_modulator(v4l2_modulator &modulator)
+{
+	memset(&modulator, 0, sizeof(modulator));
+	return ioctl(VIDIOC_G_MODULATOR, &modulator) >= 0;
+}
+
+bool v4l2::s_modulator(v4l2_modulator &modulator)
+{
+	return ioctl("Set Modulator", VIDIOC_S_MODULATOR, &modulator);
 }
 
 bool v4l2::g_input(int &input)
@@ -204,6 +220,11 @@ bool v4l2::s_std(v4l2_std_id std)
 	return ioctl("Set TV Standard", VIDIOC_S_STD, &std);
 }
 
+bool v4l2::query_std(v4l2_std_id &std)
+{
+	return ioctl("Query TV Standard", VIDIOC_QUERYSTD, &std);
+}
+
 bool v4l2::g_dv_preset(__u32 &preset)
 {
 	struct v4l2_dv_preset p;
@@ -224,6 +245,27 @@ bool v4l2::s_dv_preset(__u32 preset)
 	return ioctl("Set Preset", VIDIOC_S_DV_PRESET, &p);
 }
 
+bool v4l2::query_dv_preset(v4l2_dv_preset &preset)
+{
+	return ioctl("Query Preset", VIDIOC_QUERY_DV_PRESET, &preset);
+}
+
+bool v4l2::g_dv_timings(v4l2_dv_timings &timings)
+{
+	int err = ioctl(VIDIOC_G_DV_TIMINGS, &timings);
+	return err >= 0;
+}
+
+bool v4l2::s_dv_timings(v4l2_dv_timings &timings)
+{
+	return ioctl("Set Timings", VIDIOC_S_DV_TIMINGS, &timings);
+}
+
+bool v4l2::query_dv_timings(v4l2_dv_timings &timings)
+{
+	return ioctl("Query Timings", VIDIOC_QUERY_DV_TIMINGS, &timings);
+}
+
 
 bool v4l2::g_frequency(v4l2_frequency &freq)
 {
@@ -237,12 +279,12 @@ bool v4l2::s_frequency(v4l2_frequency &freq)
 	return ioctl("Set Frequency", VIDIOC_S_FREQUENCY, &freq);
 }
 
-bool v4l2::s_frequency(int val)
+bool v4l2::s_frequency(int val, bool low)
 {
 	v4l2_frequency f;
 
 	memset(&f, 0, sizeof(f));
-	f.type = V4L2_TUNER_ANALOG_TV;
+	f.type = low ? V4L2_TUNER_RADIO : V4L2_TUNER_ANALOG_TV;
 	f.frequency = val;
 	return s_frequency(f);
 }
@@ -261,14 +303,30 @@ bool v4l2::g_fmt_out(v4l2_format &fmt)
 	return ioctl(VIDIOC_G_FMT, &fmt) >= 0;
 }
 
+bool v4l2::g_fmt_vbi(v4l2_format &fmt)
+{
+	memset(&fmt, 0, sizeof(fmt));
+	fmt.type = V4L2_BUF_TYPE_VBI_CAPTURE;
+	return ioctl(VIDIOC_G_FMT, &fmt) >= 0;
+}
+
+bool v4l2::g_fmt_sliced_vbi(v4l2_format &fmt)
+{
+	memset(&fmt, 0, sizeof(fmt));
+	fmt.type = V4L2_BUF_TYPE_SLICED_VBI_CAPTURE;
+	return ioctl(VIDIOC_G_FMT, &fmt) >= 0;
+}
+
 bool v4l2::try_fmt(v4l2_format &fmt)
 {
 	fmt.fmt.pix.field = V4L2_FIELD_ANY;
+	fmt.fmt.pix.bytesperline = 0;
 	return ioctl("Try Capture Format", VIDIOC_TRY_FMT, &fmt);
 }
 
 bool v4l2::s_fmt(v4l2_format &fmt)
 {
+	fmt.fmt.pix.bytesperline = 0;
 	return ioctl("Set Capture Format", VIDIOC_S_FMT, &fmt);
 }
 
@@ -334,6 +392,17 @@ bool v4l2::enum_dv_preset(v4l2_dv_enum_preset &preset, bool init, int index)
 	return ioctl(VIDIOC_ENUM_DV_PRESETS, &preset) >= 0;
 }
 
+bool v4l2::enum_dv_timings(v4l2_enum_dv_timings &timings, bool init, int index)
+{
+	if (init) {
+		memset(&timings, 0, sizeof(timings));
+		timings.index = index;
+	} else {
+		timings.index++;
+	}
+	return ioctl(VIDIOC_ENUM_DV_TIMINGS, &timings) >= 0;
+}
+
 bool v4l2::enum_fmt_cap(v4l2_fmtdesc &fmt, bool init, int index)
 {
 	if (init) {
@@ -384,44 +453,44 @@ bool v4l2::enum_frameintervals(v4l2_frmivalenum &frm, __u32 init_pixfmt, __u32 w
 	return ioctl(VIDIOC_ENUM_FRAMEINTERVALS, &frm) >= 0;
 }
 
-bool v4l2::reqbufs_user_cap(v4l2_requestbuffers &reqbuf, int count)
+bool v4l2::reqbufs_user(v4l2_requestbuffers &reqbuf, __u32 buftype, int count)
 {
 	memset(&reqbuf, 0, sizeof (reqbuf));
-	reqbuf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	reqbuf.type = buftype;
 	reqbuf.memory = V4L2_MEMORY_USERPTR;
 	reqbuf.count = count;
 
 	return ioctl(VIDIOC_REQBUFS, &reqbuf) >= 0;
 }
 
-bool v4l2::reqbufs_mmap_cap(v4l2_requestbuffers &reqbuf, int count)
+bool v4l2::reqbufs_mmap(v4l2_requestbuffers &reqbuf, __u32 buftype, int count)
 {
 	memset(&reqbuf, 0, sizeof (reqbuf));
-	reqbuf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	reqbuf.type = buftype;
 	reqbuf.memory = V4L2_MEMORY_MMAP;
 	reqbuf.count = count;
 
 	return ioctl(VIDIOC_REQBUFS, &reqbuf) >= 0;
 }
 
-bool v4l2::dqbuf_mmap_cap(v4l2_buffer &buf, bool &again)
+bool v4l2::dqbuf_mmap(v4l2_buffer &buf, __u32 buftype, bool &again)
 {
 	int res;
 
 	memset(&buf, 0, sizeof(buf));
-	buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	buf.type = buftype;
 	buf.memory = V4L2_MEMORY_MMAP;
 	res = ioctl(VIDIOC_DQBUF, &buf);
 	again = res < 0 && errno == EAGAIN;
 	return res >= 0 || again;
 }
 
-bool v4l2::dqbuf_user_cap(v4l2_buffer &buf, bool &again)
+bool v4l2::dqbuf_user(v4l2_buffer &buf, __u32 buftype, bool &again)
 {
 	int res;
 
 	memset(&buf, 0, sizeof(buf));
-	buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	buf.type = buftype;
 	buf.memory = V4L2_MEMORY_USERPTR;
 	res = ioctl(VIDIOC_DQBUF, &buf);
 	again = res < 0 && errno == EAGAIN;
@@ -433,23 +502,23 @@ bool v4l2::qbuf(v4l2_buffer &buf)
 	return ioctl(VIDIOC_QBUF, &buf) >= 0;
 }
 
-bool v4l2::qbuf_mmap_cap(int index)
+bool v4l2::qbuf_mmap(int index, __u32 buftype)
 {
 	v4l2_buffer buf;
 
 	memset(&buf, 0, sizeof(buf));
-	buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	buf.type = buftype;
 	buf.memory = V4L2_MEMORY_MMAP;
 	buf.index = index;
 	return qbuf(buf);
 }
 
-bool v4l2::qbuf_user_cap(int index, void *ptr, int length)
+bool v4l2::qbuf_user(int index, __u32 buftype, void *ptr, int length)
 {
 	v4l2_buffer buf;
 
 	memset(&buf, 0, sizeof(buf));
-	buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	buf.type = buftype;
 	buf.memory = V4L2_MEMORY_USERPTR;
 	buf.m.userptr = (unsigned long)ptr;
 	buf.length = length;
@@ -457,18 +526,14 @@ bool v4l2::qbuf_user_cap(int index, void *ptr, int length)
 	return qbuf(buf);
 }
 
-bool v4l2::streamon_cap()
+bool v4l2::streamon(__u32 buftype)
 {
-	enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-
-	return ioctl("Start Capture", VIDIOC_STREAMON, &type);
+	return ioctl("Start Streaming", VIDIOC_STREAMON, &buftype);
 }
 
-bool v4l2::streamoff_cap()
+bool v4l2::streamoff(__u32 buftype)
 {
-	enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-
-	return ioctl("Stop Capture", VIDIOC_STREAMOFF, &type);
+	return ioctl("Stop Streaming", VIDIOC_STREAMOFF, &buftype);
 }
 
 bool v4l2::reqbufs_user_out(v4l2_requestbuffers &reqbuf)

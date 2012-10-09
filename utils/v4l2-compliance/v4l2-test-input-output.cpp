@@ -33,12 +33,46 @@
 
 #define MAGIC 0x1eadbeef
 
+static int checkEnumFreqBands(struct node *node, __u32 tuner, __u32 type, __u32 caps)
+{
+	unsigned i;
+	__u32 caps_union = 0;
+
+	for (i = 0; ; i++) {
+		struct v4l2_frequency_band band;
+		int ret;
+
+		memset(band.reserved, 0, sizeof(band.reserved));
+		band.tuner = tuner;
+		band.type = type;
+		band.index = i;
+		ret = doioctl(node, VIDIOC_ENUM_FREQ_BANDS, &band);
+		if (ret == EINVAL && i)
+			return 0;
+		if (ret)
+			return fail("couldn't get freq band\n");
+		caps_union |= band.capability;
+		if ((caps & V4L2_TUNER_CAP_LOW) != (band.capability & V4L2_TUNER_CAP_LOW))
+			return fail("Inconsistent CAP_LOW usage\n");
+		fail_on_test(band.rangehigh < band.rangelow);
+		fail_on_test(band.index != i);
+		fail_on_test(band.type != type);
+		fail_on_test(band.tuner != tuner);
+		fail_on_test((band.capability & V4L2_TUNER_CAP_FREQ_BANDS) == 0);
+		check_0(band.reserved, sizeof(band.reserved));
+	}
+	fail_on_test(caps_union != caps);
+	return 0;
+}
+
 static int checkTuner(struct node *node, const struct v4l2_tuner &tuner,
 		unsigned t, v4l2_std_id std)
 {
-	bool valid_modes[5] = { true, false, false, true, false };
+	bool valid_modes[5] = { true, false, false, false, false };
 	bool tv = !node->is_radio;
-	enum v4l2_tuner_type type = tv ? V4L2_TUNER_ANALOG_TV : V4L2_TUNER_RADIO;
+	bool hwseek_caps = tuner.capability & (V4L2_TUNER_CAP_HWSEEK_BOUNDED |
+			V4L2_TUNER_CAP_HWSEEK_WRAP | V4L2_TUNER_CAP_HWSEEK_PROG_LIM);
+	unsigned type = tv ? V4L2_TUNER_ANALOG_TV : V4L2_TUNER_RADIO;
 	__u32 audmode;
 
 	if (tuner.index != t)
@@ -58,6 +92,10 @@ static int checkTuner(struct node *node, const struct v4l2_tuner &tuner,
 		return fail("did not expect to see V4L2_TUNER_CAP_LOW set for a tv tuner\n");
 	if (!tv && !(tuner.capability & V4L2_TUNER_CAP_LOW))
 		return fail("V4L2_TUNER_CAP_LOW was not set for a radio tuner\n");
+	fail_on_test(!(tuner.capability & V4L2_TUNER_CAP_FREQ_BANDS));
+	fail_on_test(!(node->caps & V4L2_CAP_HW_FREQ_SEEK) && hwseek_caps);
+	fail_on_test((node->caps & V4L2_CAP_HW_FREQ_SEEK) &&
+		!(tuner.capability & (V4L2_TUNER_CAP_HWSEEK_BOUNDED | V4L2_TUNER_CAP_HWSEEK_WRAP)));
 	if (tuner.rangelow >= tuner.rangehigh)
 		return fail("rangelow >= rangehigh\n");
 	if (tuner.rangelow == 0 || tuner.rangehigh == 0xffffffff)
@@ -74,17 +112,26 @@ static int checkTuner(struct node *node, const struct v4l2_tuner &tuner,
 	if (!(tuner.capability & V4L2_TUNER_CAP_RDS) &&
 			(tuner.rxsubchans & V4L2_TUNER_SUB_RDS))
 		return fail("RDS subchan, but no RDS caps?\n");
+	bool have_rds = tuner.capability & V4L2_TUNER_CAP_RDS;
+	bool have_rds_method = tuner.capability &
+                        (V4L2_TUNER_CAP_RDS_BLOCK_IO | V4L2_TUNER_CAP_RDS_CONTROLS);
+	if (have_rds ^ have_rds_method)
+		return fail("V4L2_TUNER_CAP_RDS is set, but not V4L2_TUNER_CAP_RDS_* or vice versa\n");
+	if ((tuner.capability & V4L2_TUNER_CAP_RDS) &&
+			!(node->caps & V4L2_CAP_READWRITE))
+		return fail("V4L2_TUNER_CAP_RDS set, but not V4L2_CAP_READWRITE\n");
 	if (std == V4L2_STD_NTSC_M && (tuner.rxsubchans & V4L2_TUNER_SUB_LANG1))
 		return fail("LANG1 subchan, but NTSC-M standard\n");
 	if (tuner.audmode > V4L2_TUNER_MODE_LANG1_LANG2)
 		return fail("invalid audio mode\n");
-	// Ambiguous whether this is allowed or not
-	//		if (!tv && tuner.audmode > V4L2_TUNER_MODE_STEREO)
-	//			return -16;
+	if (!tv && tuner.audmode > V4L2_TUNER_MODE_STEREO)
+		return fail("invalid audio mode for radio device\n");
 	if (tuner.signal > 65535)
 		return fail("signal too large\n");
 	if (tuner.capability & V4L2_TUNER_CAP_STEREO)
 		valid_modes[V4L2_TUNER_MODE_STEREO] = true;
+	if (tuner.capability & V4L2_TUNER_CAP_LANG1)
+		valid_modes[V4L2_TUNER_MODE_LANG1] = true;
 	if (tuner.capability & V4L2_TUNER_CAP_LANG2) {
 		valid_modes[V4L2_TUNER_MODE_LANG2] = true;
 		valid_modes[V4L2_TUNER_MODE_LANG1_LANG2] = true;
@@ -100,13 +147,10 @@ static int checkTuner(struct node *node, const struct v4l2_tuner &tuner,
 			fail("failure to get new tuner audmode\n");
 		if (tun.audmode > V4L2_TUNER_MODE_LANG1_LANG2)
 			return fail("invalid new audmode\n");
-		// Ambiguous whether this is allowed or not
-		//	if (!tv && tun.audmode > V4L2_TUNER_MODE_STEREO)
-		//		return -21;
-		//	if (!valid_modes[tun.audmode])
-		//		return fail("accepted invalid audmode %d\n", audmode);
+		if (!valid_modes[tun.audmode])
+			return fail("accepted invalid audmode %d\n", audmode);
 	}
-	return 0;
+	return checkEnumFreqBands(node, tuner.index, tuner.type, tuner.capability);
 }
 
 int testTuner(struct node *node)
@@ -125,8 +169,8 @@ int testTuner(struct node *node)
 		memset(tuner.reserved, 0, sizeof(tuner.reserved));
 		tuner.index = t;
 		ret = doioctl(node, VIDIOC_G_TUNER, &tuner);
-		if (ret == EINVAL && t == 0)
-			return -ENOSYS;
+		if (ret == ENOTTY)
+			return ret;
 		if (ret == EINVAL)
 			break;
 		if (ret)
@@ -167,7 +211,7 @@ int testTunerFreq(struct node *node)
 		ret = doioctl(node, VIDIOC_G_TUNER, &tuner);
 		if (ret)
 			return fail("could not get tuner %d\n", t);
-		last_type = tuner.type;
+		last_type = (enum v4l2_tuner_type)tuner.type;
 		memset(&freq, 0, sizeof(freq));
 		freq.tuner = t;
 		ret = doioctl(node, VIDIOC_G_FREQUENCY, &freq);
@@ -207,33 +251,89 @@ int testTunerFreq(struct node *node)
 			return fail("could not set rangehigh frequency\n");
 		freq.frequency = tuner.rangelow - 1;
 		ret = doioctl(node, VIDIOC_S_FREQUENCY, &freq);
-		if (ret != EINVAL)
-			return fail("set rangelow-1 frequency did not return EINVAL\n");
+		if (ret)
+			return fail("could not set rangelow-1 frequency\n");
+		ret = doioctl(node, VIDIOC_G_FREQUENCY, &freq);
+		if (ret || freq.frequency != tuner.rangelow)
+			return fail("frequency rangelow-1 wasn't mapped to rangelow\n");
 		freq.frequency = tuner.rangehigh + 1;
 		ret = doioctl(node, VIDIOC_S_FREQUENCY, &freq);
-		if (ret != EINVAL)
-			return fail("set rangehigh+1 frequency did not return EINVAL\n");
+		if (ret)
+			return fail("could not set rangehigh+1 frequency\n");
+		ret = doioctl(node, VIDIOC_G_FREQUENCY, &freq);
+		if (ret || freq.frequency != tuner.rangehigh)
+			return fail("frequency rangehigh+1 wasn't mapped to rangehigh\n");
 	}
 
-	/* There is an ambiguity in the API and G/S_FREQUENCY: you cannot specify
-	   correctly whether to the ioctl is for a tuner or a modulator. This should
-	   be corrected, but until then the tests below have to be skipped if there
-	   is a modulator of index t. */
-	if (node->modulators > t)
+	/* If this is a modulator device, then skip the remaining tests */
+	if (node->caps & V4L2_CAP_MODULATOR)
 		return 0;
 
 	freq.tuner = t;
 	ret = doioctl(node, VIDIOC_G_FREQUENCY, &freq);
-	if (ret != EINVAL)
+	if (ret != EINVAL && ret != ENOTTY)
 		return fail("could get frequency for invalid tuner %d\n", t);
 	freq.tuner = t;
 	freq.type = last_type;
 	// TV: 400 Mhz Radio: 100 MHz
 	freq.frequency = last_type == V4L2_TUNER_ANALOG_TV ? 6400 : 1600000;
 	ret = doioctl(node, VIDIOC_S_FREQUENCY, &freq);
-	if (ret != EINVAL)
+	if (ret != EINVAL && ret != ENOTTY)
 		return fail("could set frequency for invalid tuner %d\n", t);
-	return node->tuners ? 0 : -ENOSYS;
+	return node->tuners ? 0 : ENOTTY;
+}
+
+int testTunerHwSeek(struct node *node)
+{
+	struct v4l2_hw_freq_seek seek;
+	unsigned t;
+	int ret;
+
+	for (t = 0; t < node->tuners; t++) {
+		struct v4l2_tuner tuner;
+		
+		tuner.index = t;
+		ret = doioctl(node, VIDIOC_G_TUNER, &tuner);
+		if (ret)
+			return fail("could not get tuner %d\n", t);
+
+		memset(&seek, 0, sizeof(seek));
+		seek.tuner = t;
+		seek.type = V4L2_TUNER_RADIO;
+		ret = doioctl(node, VIDIOC_S_HW_FREQ_SEEK, &seek);
+		if (!(node->caps & V4L2_CAP_HW_FREQ_SEEK) && ret != ENOTTY)
+			return fail("hw seek supported but capability not set\n");
+		if (!node->is_radio && ret != ENOTTY)
+			return fail("hw seek supported on a non-radio node?!\n");
+		if (!node->is_radio || !(node->caps & V4L2_CAP_HW_FREQ_SEEK))
+			return ENOTTY;
+		seek.type = V4L2_TUNER_ANALOG_TV;
+		ret = doioctl(node, VIDIOC_S_HW_FREQ_SEEK, &seek);
+		if (ret != EINVAL)
+			return fail("hw seek accepted TV tuner\n");
+		seek.type = V4L2_TUNER_RADIO;
+		seek.seek_upward = 1;
+		ret = doioctl(node, VIDIOC_S_HW_FREQ_SEEK, &seek);
+		if (ret == EINVAL && (tuner.capability & V4L2_TUNER_CAP_HWSEEK_BOUNDED))
+			return fail("hw bounded seek failed\n");
+		if (ret && ret != EINVAL && ret != ENODATA)
+			return fail("hw bounded seek failed with error %d\n", ret);
+		seek.wrap_around = 1;
+		ret = doioctl(node, VIDIOC_S_HW_FREQ_SEEK, &seek);
+		if (ret == EINVAL && (tuner.capability & V4L2_TUNER_CAP_HWSEEK_WRAP))
+			return fail("hw wrapped seek failed\n");
+		if (ret && ret != EINVAL && ret != ENODATA)
+			return fail("hw wrapped seek failed with error %d\n", ret);
+		if (check_0(seek.reserved, sizeof(seek.reserved)))
+			return fail("non-zero reserved fields\n");
+	}
+	memset(&seek, 0, sizeof(seek));
+	seek.tuner = node->tuners;
+	seek.type = V4L2_TUNER_RADIO;
+	ret = doioctl(node, VIDIOC_S_HW_FREQ_SEEK, &seek);
+	if (ret != EINVAL && ret != ENOTTY)
+		return fail("hw seek for invalid tuner didn't return EINVAL or ENOTTY\n");
+	return ret == ENOTTY ? ret : 0;
 }
 
 static int checkInput(struct node *node, const struct v4l2_input &descr, unsigned i)
@@ -275,16 +375,16 @@ int testInput(struct node *node)
 	int ret = doioctl(node, VIDIOC_G_INPUT, &cur_input);
 	int i = 0;
 
-	if (ret == EINVAL) {
+	if (ret == ENOTTY) {
 		descr.index = 0;
 		ret = doioctl(node, VIDIOC_ENUMINPUT, &descr);
-		if (ret != EINVAL)
+		if (ret != ENOTTY)
 			return fail("G_INPUT not supported, but ENUMINPUT is\n");
 		cur_input = 0;
 		ret = doioctl(node, VIDIOC_S_INPUT, &cur_input);
-		if (ret != EINVAL)
+		if (ret != ENOTTY)
 			return fail("G_INPUT not supported, but S_INPUT is\n");
-		return -ENOSYS;
+		return ENOTTY;
 	}
 	if (ret)
 		return fail("could not get current input\n");
@@ -350,8 +450,8 @@ int testEnumInputAudio(struct node *node)
 		input.index = i;
 
 		ret = doioctl(node, VIDIOC_ENUMAUDIO, &input);
-		if (i == 0 && ret == EINVAL)
-			return -ENOSYS;
+		if (ret == ENOTTY)
+			return ret;
 		if (ret == EINVAL)
 			break;
 		if (ret)
@@ -373,8 +473,8 @@ static int checkInputAudioSet(struct node *node, __u32 audioset)
 	int ret;
 
 	ret = doioctl(node, VIDIOC_G_AUDIO, &input);
-	if (audioset == 0 && ret != EINVAL)
-		return fail("No audio inputs, but G_AUDIO did not return EINVAL\n");
+	if (audioset == 0 && ret != ENOTTY && ret != EINVAL)
+		return fail("No audio inputs, but G_AUDIO did not return ENOTTY or EINVAL\n");
 	if (audioset) {
 		if (ret)
 			return fail("Audio inputs, but G_AUDIO returned an error\n");
@@ -392,7 +492,7 @@ static int checkInputAudioSet(struct node *node, __u32 audioset)
 		input.index = i;
 		input.mode = 0;
 		ret = doioctl(node, VIDIOC_S_AUDIO, &input);
-		if (!valid && ret != EINVAL)
+		if (!valid && ret != EINVAL && ret != ENOTTY)
 			return fail("can set invalid audio input %d\n", i);
 		if (valid && ret)
 			return fail("can't set valid audio input %d\n", i);
@@ -420,7 +520,7 @@ int testInputAudio(struct node *node)
 		if (checkInputAudioSet(node, vinput.audioset))
 			return fail("invalid audioset for input %d\n", i);
 	}
-	return node->audio_inputs ? 0 : -ENOSYS;
+	return node->audio_inputs ? 0 : ENOTTY;
 }
 
 static int checkModulator(struct node *node, const struct v4l2_modulator &mod, unsigned m)
@@ -440,6 +540,7 @@ static int checkModulator(struct node *node, const struct v4l2_modulator &mod, u
 	if (mod.capability & (V4L2_TUNER_CAP_NORM |
 					V4L2_TUNER_CAP_LANG1 | V4L2_TUNER_CAP_LANG2))
 		return fail("TV capabilities for radio modulator?\n");
+	fail_on_test(!(mod.capability & V4L2_TUNER_CAP_FREQ_BANDS));
 	if (mod.rangelow >= mod.rangehigh)
 		return fail("rangelow >= rangehigh\n");
 	if (mod.rangelow == 0 || mod.rangehigh == 0xffffffff)
@@ -456,7 +557,15 @@ static int checkModulator(struct node *node, const struct v4l2_modulator &mod, u
 	if (!(mod.capability & V4L2_TUNER_CAP_RDS) &&
 			(mod.txsubchans & V4L2_TUNER_SUB_RDS))
 		return fail("RDS subchan, but no RDS caps?\n");
-	return 0;
+	bool have_rds = mod.capability & V4L2_TUNER_CAP_RDS;
+	bool have_rds_method = mod.capability &
+                        (V4L2_TUNER_CAP_RDS_BLOCK_IO | V4L2_TUNER_CAP_RDS_CONTROLS);
+	if (have_rds ^ have_rds_method)
+		return fail("V4L2_TUNER_CAP_RDS is set, but not V4L2_TUNER_CAP_RDS_* or vice versa\n");
+	if ((mod.capability & V4L2_TUNER_CAP_RDS) &&
+			!(node->caps & V4L2_CAP_READWRITE))
+		return fail("V4L2_TUNER_CAP_RDS set, but not V4L2_CAP_READWRITE\n");
+	return checkEnumFreqBands(node, mod.index, V4L2_TUNER_RADIO, mod.capability);
 }
 
 int testModulator(struct node *node)
@@ -471,8 +580,8 @@ int testModulator(struct node *node)
 		memset(mod.reserved, 0, sizeof(mod.reserved));
 		mod.index = m;
 		ret = doioctl(node, VIDIOC_G_MODULATOR, &mod);
-		if (ret == EINVAL && m == 0)
-			return -ENOSYS;
+		if (ret == ENOTTY)
+			return ret;
 		if (ret == EINVAL)
 			break;
 		if (ret)
@@ -542,32 +651,35 @@ int testModulatorFreq(struct node *node)
 			return fail("could not set rangehigh frequency\n");
 		freq.frequency = modulator.rangelow - 1;
 		ret = doioctl(node, VIDIOC_S_FREQUENCY, &freq);
-		if (ret != EINVAL)
-			return fail("set rangelow-1 frequency did not return EINVAL\n");
+		if (ret)
+			return fail("could not set rangelow-1 frequency\n");
+		ret = doioctl(node, VIDIOC_G_FREQUENCY, &freq);
+		if (ret || freq.frequency != modulator.rangelow)
+			return fail("frequency rangelow-1 wasn't mapped to rangelow\n");
 		freq.frequency = modulator.rangehigh + 1;
 		ret = doioctl(node, VIDIOC_S_FREQUENCY, &freq);
-		if (ret != EINVAL)
-			return fail("set rangehigh+1 frequency did not return EINVAL\n");
+		if (ret)
+			return fail("could not set rangehigh+1 frequency\n");
+		ret = doioctl(node, VIDIOC_G_FREQUENCY, &freq);
+		if (ret || freq.frequency != modulator.rangehigh)
+			return fail("frequency rangehigh+1 wasn't mapped to rangehigh\n");
 	}
 
-	/* There is an ambiguity in the API and G/S_FREQUENCY: you cannot specify
-	   correctly whether to the ioctl is for a tuner or a modulator. This should
-	   be corrected, but until then the tests below have to be skipped if there
-	   is a tuner of index m. */
-	if (node->tuners > m)
+	/* If this is a tuner device, then skip the remaining tests */
+	if (node->caps & V4L2_CAP_TUNER)
 		return 0;
 
 	freq.tuner = m;
 	ret = doioctl(node, VIDIOC_G_FREQUENCY, &freq);
-	if (ret != EINVAL)
+	if (ret != EINVAL && ret != ENOTTY)
 		return fail("could get frequency for invalid modulator %d\n", m);
 	freq.tuner = m;
 	// Radio: 100 MHz
 	freq.frequency = 1600000;
 	ret = doioctl(node, VIDIOC_S_FREQUENCY, &freq);
-	if (ret != EINVAL)
+	if (ret != EINVAL && ret != ENOTTY)
 		return fail("could set frequency for invalid modulator %d\n", m);
-	return node->modulators ? 0 : -ENOSYS;
+	return node->modulators ? 0 : ENOTTY;
 }
 
 static int checkOutput(struct node *node, const struct v4l2_output &descr, unsigned o)
@@ -605,16 +717,15 @@ int testOutput(struct node *node)
 	int ret = doioctl(node, VIDIOC_G_OUTPUT, &cur_output);
 	int o = 0;
 
-	if (ret == EINVAL) {
+	if (ret == ENOTTY) {
 		descr.index = 0;
 		ret = doioctl(node, VIDIOC_ENUMOUTPUT, &descr);
-		if (ret != EINVAL)
+		if (ret != ENOTTY)
 			return fail("G_OUTPUT not supported, but ENUMOUTPUT is\n");
 		output = 0;
 		ret = doioctl(node, VIDIOC_S_OUTPUT, &output);
-		if (ret != EINVAL)
+		if (ret != ENOTTY)
 			return fail("G_OUTPUT not supported, but S_OUTPUT is\n");
-		return -ENOSYS;
 	}
 	if (ret)
 		return ret;
@@ -674,8 +785,8 @@ int testEnumOutputAudio(struct node *node)
 		output.index = o;
 
 		ret = doioctl(node, VIDIOC_ENUMAUDOUT, &output);
-		if (o == 0 && ret == EINVAL)
-			return -ENOSYS;
+		if (ret == ENOTTY)
+			return ENOTTY;
 		if (ret == EINVAL)
 			break;
 		if (ret)
@@ -698,8 +809,8 @@ static int checkOutputAudioSet(struct node *node, __u32 audioset)
 	int ret;
 
 	ret = doioctl(node, VIDIOC_G_AUDOUT, &output);
-	if (audioset == 0 && ret != EINVAL)
-		return fail("No audio outputs, but G_AUDOUT did not return EINVAL\n");
+	if (audioset == 0 && ret != EINVAL && ret != ENOTTY)
+		return fail("No audio outputs, but G_AUDOUT did not return EINVAL or ENOTTY\n");
 	if (audioset) {
 		if (ret)
 			return fail("Audio outputs, but G_AUDOUT returned an error\n");
@@ -717,7 +828,7 @@ static int checkOutputAudioSet(struct node *node, __u32 audioset)
 		output.index = i;
 		output.mode = 0;
 		ret = doioctl(node, VIDIOC_S_AUDOUT, &output);
-		if (!valid && ret != EINVAL)
+		if (!valid && ret != EINVAL && ret != ENOTTY)
 			return fail("can set invalid audio output %d\n", i);
 		if (valid && ret)
 			return fail("can't set valid audio output %d\n", i);
@@ -746,7 +857,7 @@ int testOutputAudio(struct node *node)
 			return fail("invalid audioset for output %d\n", o);
 	}
 
-	if (node->audio_outputs == 0 && node->audio_inputs && (caps & V4L2_CAP_AUDIO))
+	if (node->audio_outputs == 0 && node->audio_inputs == 0 && (node->caps & V4L2_CAP_AUDIO))
 		return fail("no audio inputs or outputs reported, but CAP_AUDIO set\n");
-	return node->audio_outputs ? 0 : -ENOSYS;
+	return node->audio_outputs ? 0 : ENOTTY;
 }

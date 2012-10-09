@@ -129,9 +129,14 @@ static const struct v4lcontrol_flags_info v4lcontrol_flags[] = {
 	{ 0x04f2, 0xb213, 0, "FUJITSU", "FJNBB16",
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED, 0,
 		"FUJITSU", "LIFEBOOK LH531" },
+	{ 0x04f2, 0xb213, 0, "FUJITSU", "FJNBB18",
+		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED, 0,
+		"FUJITSU", "FMVN77ED" },
 	{ 0x04f2, 0xb213, 0, "FUJITSU", "FJNBB19",
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED, 0,
 		"FUJITSU", "LIFEBOOK NH751" },
+	{ 0x04f2, 0xb217, 0, "LENOVO", "42982YG",
+		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
 	{ 0x04f2, 0xb217, 0, "LENOVO", "42992QG",
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
 	{ 0x04f2, 0xb27c, 0, "LENOVO", "12973MG",
@@ -207,6 +212,8 @@ static const struct v4lcontrol_flags_info v4lcontrol_flags[] = {
 	{ 0x06f8, 0x301b, 0,    NULL, NULL,
 		V4LCONTROL_ROTATED_90_JPEG | V4LCONTROL_WANTS_WB, 1500 },
 	{ 0x145f, 0x013c, 0,    NULL, NULL,
+		V4LCONTROL_ROTATED_90_JPEG | V4LCONTROL_WANTS_WB, 1500 },
+	{ 0x1ae7, 0x2001, 0,    NULL, NULL,
 		V4LCONTROL_ROTATED_90_JPEG | V4LCONTROL_WANTS_WB, 1500 },
 	/* Pac7311 based devices */
 	{ 0x093a, 0x2600, 0x0f, NULL, NULL, V4LCONTROL_WANTS_WB },
@@ -284,6 +291,7 @@ static const struct v4lcontrol_usb_id asus_camera_id[] = {
 	{ 0x04f2, 0xb071 },
 	{ 0x04f2, 0xb072 },
 	{ 0x04f2, 0xb106 },
+	{ 0x04f2, 0xb169 },
 	{ 0x04f2, 0xb16b },
 	{ 0x04f2, 0xb1b9 },
 	{ 0x04f2, 0xb1bb },
@@ -449,6 +457,7 @@ static int find_dmi_string(const char **table_entries, const char *dmi_value)
 	const char **entry_ptr;
 	char *trimmed_dmi;
 	size_t n;
+	int found = 0;
 
 	if (!start) return 0;
 
@@ -456,16 +465,19 @@ static int find_dmi_string(const char **table_entries, const char *dmi_value)
 	while (isspace(*start)) start++;
 	n = strlen(start);
 	while (n > 0 && isspace(start[n-1])) --n;
-	trimmed_dmi = strndupa(start, n);
+	trimmed_dmi = strndup(start, n);
 
 	/* find trimmed value */
 	for (entry_ptr = table_entries; *entry_ptr;  entry_ptr++) {
-		const int found = fnmatch(*entry_ptr, trimmed_dmi, 0) == 0;
+		found = fnmatch(*entry_ptr, trimmed_dmi, 0) == 0;
 		/* fprintf(stderr, "find_dmi_string('%s', '%s'->'%s')=%i\n", *entry_ptr, dmi_value, trimmed_dmi, found); */
 		if (found)
-			return 1;
+			break;
 	}
-	return 0;
+
+	free(trimmed_dmi);
+
+	return found;
 }
 
 /*

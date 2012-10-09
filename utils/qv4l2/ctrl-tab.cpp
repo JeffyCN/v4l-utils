@@ -40,12 +40,13 @@
 
 #define CTRL_FLAG_DISABLED (V4L2_CTRL_FLAG_READ_ONLY | V4L2_CTRL_FLAG_INACTIVE | V4L2_CTRL_FLAG_GRABBED)
 
-static bool is_valid_type(enum v4l2_ctrl_type type)
+static bool is_valid_type(__u32 type)
 {
 	switch (type) {
 	case V4L2_CTRL_TYPE_INTEGER:
 	case V4L2_CTRL_TYPE_BOOLEAN:
 	case V4L2_CTRL_TYPE_MENU:
+	case V4L2_CTRL_TYPE_INTEGER_MENU:
 	case V4L2_CTRL_TYPE_BUTTON:
 	case V4L2_CTRL_TYPE_INTEGER64:
 	case V4L2_CTRL_TYPE_BITMASK:
@@ -233,6 +234,7 @@ void ApplicationWindow::addCtrl(QGridLayout *grid, const v4l2_queryctrl &qctrl)
 			m_widgetMap[qctrl.id] = spin = new QSpinBox(p);
 			spin->setMinimum(qctrl.minimum);
 			spin->setMaximum(qctrl.maximum);
+			spin->setSingleStep(qctrl.step);
 			addWidget(grid, m_widgetMap[qctrl.id]);
 			connect(m_widgetMap[qctrl.id], SIGNAL(valueChanged(int)),
 				m_sigMapper, SLOT(map()));
@@ -302,6 +304,7 @@ void ApplicationWindow::addCtrl(QGridLayout *grid, const v4l2_queryctrl &qctrl)
 		break;
 
 	case V4L2_CTRL_TYPE_MENU:
+	case V4L2_CTRL_TYPE_INTEGER_MENU:
 		addLabel(grid, name);
 		combo = new QComboBox(p);
 		m_widgetMap[qctrl.id] = combo;
@@ -310,7 +313,10 @@ void ApplicationWindow::addCtrl(QGridLayout *grid, const v4l2_queryctrl &qctrl)
 			qmenu.index = i;
 			if (!querymenu(qmenu))
 				continue;
-			combo->addItem((char *)qmenu.name);
+			if (qctrl.type == V4L2_CTRL_TYPE_MENU)
+				combo->addItem((char *)qmenu.name);
+			else
+				combo->addItem(QString("%1").arg(qmenu.value));
 		}
 		addWidget(grid, m_widgetMap[qctrl.id]);
 		connect(m_widgetMap[qctrl.id], SIGNAL(activated(int)),
@@ -472,6 +478,7 @@ int ApplicationWindow::getVal(unsigned id)
 		v = (int)static_cast<QLineEdit *>(w)->text().toUInt(0, 16);
 		break;
 	case V4L2_CTRL_TYPE_MENU:
+	case V4L2_CTRL_TYPE_INTEGER_MENU:
 		idx = static_cast<QComboBox *>(w)->currentIndex();
 		for (i = qctrl.minimum; i <= qctrl.maximum; i++) {
 			qmenu.id = qctrl.id;
@@ -695,6 +702,16 @@ void ApplicationWindow::setWhat(QWidget *w, unsigned id, long long v)
 			.arg(qctrl.minimum).arg(qctrl.maximum).arg(v).arg(qctrl.default_value) + flags);
 		w->setStatusTip(w->whatsThis());
 		break;
+
+	case V4L2_CTRL_TYPE_INTEGER_MENU:
+		w->setWhatsThis(QString("Type: Integer Menu\n"
+					"Minimum: %1\n"
+					"Maximum: %2\n"
+					"Current: %3\n"
+					"Default: %4")
+			.arg(qctrl.minimum).arg(qctrl.maximum).arg(v).arg(qctrl.default_value) + flags);
+		w->setStatusTip(w->whatsThis());
+		break;
 	default:
 		break;
 	}
@@ -726,6 +743,7 @@ void ApplicationWindow::setVal(unsigned id, int v)
 		break;
 
 	case V4L2_CTRL_TYPE_MENU:
+	case V4L2_CTRL_TYPE_INTEGER_MENU:
 		idx = 0;
 		for (i = qctrl.minimum; i <= v; i++) {
 			qmenu.id = id;
@@ -784,7 +802,7 @@ void ApplicationWindow::setDefaults(unsigned ctrl_class)
 		if (m_ctrlMap[id].type == V4L2_CTRL_TYPE_INTEGER64)
 			setVal64(id, 0);
 		else if (m_ctrlMap[id].type == V4L2_CTRL_TYPE_STRING)
-			setString(id, QString(' ', m_ctrlMap[id].minimum));
+			setString(id, QString(m_ctrlMap[id].minimum, ' '));
 		else if (m_ctrlMap[id].type != V4L2_CTRL_TYPE_BUTTON)
 			setVal(id, m_ctrlMap[id].default_value);
 	}
@@ -803,6 +821,8 @@ QString ApplicationWindow::getCtrlFlags(unsigned flags)
 		s += "update ";
 	if (flags & V4L2_CTRL_FLAG_INACTIVE)
 		s += "inactive ";
+	if (flags & V4L2_CTRL_FLAG_VOLATILE)
+		s += "volatile ";
 	if (flags & V4L2_CTRL_FLAG_SLIDER)
 		s += "slider ";
 	if (s.length()) s = QString("\nFlags: ") + s;

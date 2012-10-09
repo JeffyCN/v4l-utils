@@ -28,7 +28,9 @@
 #include "v4l2-api.h"
 
 class QComboBox;
+class QCheckBox;
 class QSpinBox;
+class QPushButton;
 
 class GeneralTab: public QGridLayout, public v4l2
 {
@@ -39,8 +41,33 @@ public:
 	virtual ~GeneralTab() {}
 
 	CapMethod capMethod();
+	bool get_interval(struct v4l2_fract &interval);
 	int width() const { return m_width; }
 	int height() const { return m_height; }
+	bool isRadio() const { return m_isRadio; }
+	bool isVbi() const { return m_isVbi; }
+	bool isSlicedVbi() const;
+	__u32 bufType() const { return m_buftype; }
+	inline bool reqbufs_mmap(v4l2_requestbuffers &reqbuf, int count = 0) {
+		return v4l2::reqbufs_mmap(reqbuf, m_buftype, count);
+	}
+	inline bool reqbufs_user(v4l2_requestbuffers &reqbuf, int count = 0) {
+		return v4l2::reqbufs_user(reqbuf, m_buftype, count);
+	}
+	inline bool dqbuf_mmap(v4l2_buffer &buf, bool &again) {
+		return v4l2::dqbuf_mmap(buf, m_buftype, again);
+	}
+	inline bool dqbuf_user(v4l2_buffer &buf, bool &again) {
+		return v4l2::dqbuf_user(buf, m_buftype, again);
+	}
+	inline bool qbuf_mmap(int index) {
+		return v4l2::qbuf_mmap(index, m_buftype);
+	}
+	inline bool qbuf_user(int index, void *ptr, int length) {
+		return v4l2::qbuf_user(index, m_buftype, ptr, length);
+	}
+	inline bool streamon() { return v4l2::streamon(m_buftype); }
+	inline bool streamoff() { return v4l2::streamoff(m_buftype); }
 
 private slots:
 	void inputChanged(int);
@@ -48,24 +75,37 @@ private slots:
 	void inputAudioChanged(int);
 	void outputAudioChanged(int);
 	void standardChanged(int);
+	void qryStdClicked();
 	void presetChanged(int);
+	void qryPresetClicked();
+	void timingsChanged(int);
+	void qryTimingsClicked();
 	void freqTableChanged(int);
 	void freqChannelChanged(int);
-	void freqChanged(int);
+	void freqChanged();
+	void audioModeChanged(int);
+	void detectSubchansClicked();
+	void stereoModeChanged();
+	void rdsModeChanged();
 	void vidCapFormatChanged(int);
 	void frameWidthChanged();
 	void frameHeightChanged();
 	void frameSizeChanged(int);
 	void frameIntervalChanged(int);
 	void vidOutFormatChanged(int);
+	void vbiMethodsChanged(int);
 
 private:
 	void updateVideoInput();
 	void updateVideoOutput();
 	void updateAudioInput();
 	void updateAudioOutput();
+	void refreshStandards();
 	void updateStandard();
+	void refreshPresets();
 	void updatePreset();
+	void refreshTimings();
+	void updateTimings();
 	void updateFreq();
 	void updateFreqChannel();
 	void updateVidCapFormat();
@@ -90,10 +130,17 @@ private:
 	int m_row;
 	int m_col;
 	int m_cols;
+	bool m_isRadio;
+	bool m_isVbi;
+	__u32 m_buftype;
+	__u32 m_audioModes[5];
 	struct v4l2_tuner m_tuner;
+	struct v4l2_modulator m_modulator;
 	struct v4l2_capability m_querycap;
 	__u32 m_pixelformat;
 	__u32 m_width, m_height;
+	struct v4l2_fract m_interval;
+	bool m_has_interval;
 
 	// General tab
 	QComboBox *m_videoInput;
@@ -101,10 +148,19 @@ private:
 	QComboBox *m_audioInput;
 	QComboBox *m_audioOutput;
 	QComboBox *m_tvStandard;
+	QPushButton *m_qryStandard;
 	QComboBox *m_videoPreset;
-	QSpinBox  *m_freq;
+	QPushButton *m_qryPreset;
+	QComboBox *m_videoTimings;
+	QPushButton *m_qryTimings;
+	QLineEdit *m_freq;
 	QComboBox *m_freqTable;
 	QComboBox *m_freqChannel;
+	QComboBox *m_audioMode;
+	QLabel *m_subchannels;
+	QCheckBox *m_stereoMode;
+	QCheckBox *m_rdsMode;
+	QPushButton *m_detectSubchans;
 	QComboBox *m_vidCapFormats;
 	QComboBox *m_frameSize;
 	QSpinBox *m_frameWidth;
@@ -112,7 +168,7 @@ private:
 	QComboBox *m_frameInterval;
 	QComboBox *m_vidOutFormats;
 	QComboBox *m_capMethods;
-	QGridLayout *m_layout;
+	QComboBox *m_vbiMethods;
 };
 
 #endif

@@ -19,7 +19,9 @@
 #include <errno.h>
 #include <stdlib.h>
 #include "libv4lconvert-priv.h"
+#ifndef DISABLE_LIBJPEG
 #include "jpeg_memsrcdest.h"
+#endif
 
 int v4lconvert_decode_jpeg_tinyjpeg(struct v4lconvert_data *data,
 	unsigned char *src, int src_size, unsigned char *dest,
@@ -53,7 +55,7 @@ int v4lconvert_decode_jpeg_tinyjpeg(struct v4lconvert_data *data,
 	}
 
 	if (header_width != width || header_height != height) {
-		V4LCONVERT_ERR("unexpected width / height in JPEG header"
+		V4LCONVERT_ERR("unexpected width / height in JPEG header: "
 			       "expected: %ux%u, header: %ux%u\n",
 			       width, height, header_width, header_height);
 		errno = EIO;
@@ -106,6 +108,8 @@ int v4lconvert_decode_jpeg_tinyjpeg(struct v4lconvert_data *data,
 	}
 	return 0;
 }
+
+#ifndef DISABLE_LIBJPEG
 
 static void jerr_error_exit(j_common_ptr cinfo)
 {
@@ -283,7 +287,7 @@ int v4lconvert_decode_jpeg_libjpeg(struct v4lconvert_data *data,
 
 	if (data->cinfo.image_width  != width ||
 	    data->cinfo.image_height != height) {
-		V4LCONVERT_ERR("unexpected width / height in JPEG header"
+		V4LCONVERT_ERR("unexpected width / height in JPEG header: "
 			       "expected: %ux%u, header: %ux%u\n", width,
 			       height, data->cinfo.image_width,
 			       data->cinfo.image_height);
@@ -405,3 +409,6 @@ int v4lconvert_decode_jpeg_libjpeg(struct v4lconvert_data *data,
 
 	return result;
 }
+
+#endif
+
