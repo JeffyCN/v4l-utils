@@ -32,7 +32,6 @@
 #include <sys/ioctl.h>
 #include <sys/time.h>
 #include <math.h>
-#include <sys/klog.h>
 #include <sys/utsname.h>
 
 #include "v4l2-compliance.h"
@@ -65,7 +64,6 @@ static int tests_total, tests_ok;
 int verbose;
 int wrapper;
 int kernel_version;
-unsigned caps;
 unsigned warnings;
 
 static struct option long_options[] = {
@@ -83,7 +81,6 @@ static void usage(void)
 {
 	printf("Usage:\n");
 	printf("Common options:\n");
-	printf("  -D, --info         show driver info [VIDIOC_QUERYCAP]\n");
 	printf("  -d, --device=<dev> use device <dev> as the video device\n");
 	printf("                     if <dev> is a single digit, then /dev/video<dev> is used\n");
 	printf("  -r, --radio-device=<dev> use device <dev> as the radio device\n");
@@ -124,8 +121,16 @@ std::string cap2s(unsigned cap)
 
 	if (cap & V4L2_CAP_VIDEO_CAPTURE)
 		s += "\t\tVideo Capture\n";
+	if (cap & V4L2_CAP_VIDEO_CAPTURE_MPLANE)
+		s += "\t\tVideo Capture Multiplanar\n";
 	if (cap & V4L2_CAP_VIDEO_OUTPUT)
 		s += "\t\tVideo Output\n";
+	if (cap & V4L2_CAP_VIDEO_OUTPUT_MPLANE)
+		s += "\t\tVideo Output Multiplanar\n";
+	if (cap & V4L2_CAP_VIDEO_M2M)
+		s += "\t\tVideo Memory-to-Memory\n";
+	if (cap & V4L2_CAP_VIDEO_M2M_MPLANE)
+		s += "\t\tVideo Memory-to-Memory Multiplanar\n";
 	if (cap & V4L2_CAP_VIDEO_OVERLAY)
 		s += "\t\tVideo Overlay\n";
 	if (cap & V4L2_CAP_VIDEO_OUTPUT_OVERLAY)
@@ -156,6 +161,8 @@ std::string cap2s(unsigned cap)
 		s += "\t\tAsync I/O\n";
 	if (cap & V4L2_CAP_STREAMING)
 		s += "\t\tStreaming\n";
+	if (cap & V4L2_CAP_DEVICE_CAPS)
+		s += "\t\tDevice Capabilities\n";
 	return s;
 }
 
@@ -193,8 +200,8 @@ const char *ok(int res)
 {
 	static char buf[100];
 
-	if (res == -ENOSYS) {
-		strcpy(buf, "Not Supported");
+	if (res == ENOTTY) {
+		strcpy(buf, "OK (Not Supported)");
 		res = 0;
 	} else {
 		strcpy(buf, "OK");
@@ -238,29 +245,83 @@ int check_0(const void *p, int len)
 static int testCap(struct node *node)
 {
 	struct v4l2_capability vcap;
-	__u32 caps;
+	__u32 caps, dcaps;
+	const __u32 video_caps = V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_VIDEO_OUTPUT |
+			V4L2_CAP_VIDEO_CAPTURE_MPLANE | V4L2_CAP_VIDEO_OUTPUT_MPLANE |
+			V4L2_CAP_VIDEO_M2M | V4L2_CAP_VIDEO_M2M_MPLANE |
+			V4L2_CAP_VIDEO_OVERLAY | V4L2_CAP_VIDEO_OUTPUT_OVERLAY;
+	const __u32 vbi_caps = V4L2_CAP_VBI_CAPTURE | V4L2_CAP_SLICED_VBI_CAPTURE |
+			V4L2_CAP_VBI_OUTPUT | V4L2_CAP_SLICED_VBI_OUTPUT;
+	const __u32 radio_caps = V4L2_CAP_RADIO | V4L2_CAP_MODULATOR;
+	const __u32 input_caps = V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_VIDEO_OVERLAY |
+			V4L2_CAP_VBI_CAPTURE | V4L2_CAP_SLICED_VBI_CAPTURE |
+			V4L2_CAP_VIDEO_CAPTURE_MPLANE | V4L2_CAP_HW_FREQ_SEEK |
+			V4L2_CAP_RDS_CAPTURE | V4L2_CAP_TUNER;
+	const __u32 output_caps = V4L2_CAP_VIDEO_OUTPUT | V4L2_CAP_VIDEO_OUTPUT_MPLANE |
+			V4L2_CAP_VIDEO_OUTPUT_OVERLAY | V4L2_CAP_VBI_OUTPUT |
+			V4L2_CAP_SLICED_VBI_OUTPUT | V4L2_CAP_MODULATOR |
+			V4L2_CAP_RDS_OUTPUT;
+	const __u32 m2m_caps = V4L2_CAP_VIDEO_M2M | V4L2_CAP_VIDEO_M2M_MPLANE;
+	const __u32 io_caps = V4L2_CAP_STREAMING | V4L2_CAP_READWRITE;
+	const __u32 mplane_caps = V4L2_CAP_VIDEO_CAPTURE_MPLANE | V4L2_CAP_VIDEO_OUTPUT_MPLANE |
+		V4L2_CAP_VIDEO_M2M_MPLANE;
+	const __u32 splane_caps = V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_VIDEO_OUTPUT |
+		V4L2_CAP_VIDEO_M2M;
 
+	memset(&vcap, 0xff, sizeof(vcap));
 	// Must always be there
 	fail_on_test(doioctl(node, VIDIOC_QUERYCAP, &vcap));
 	fail_on_test(check_ustring(vcap.driver, sizeof(vcap.driver)));
 	fail_on_test(check_ustring(vcap.card, sizeof(vcap.card)));
-	if (check_ustring(vcap.bus_info, sizeof(vcap.bus_info))) {
-		fail_on_test(vcap.bus_info[0]);
-		warn("VIDIOC_QUERYCAP: empty bus_info\n");
-	}
+	fail_on_test(check_ustring(vcap.bus_info, sizeof(vcap.bus_info)));
+	// Check for valid prefixes
+	if (memcmp(vcap.bus_info, "usb-", 4) &&
+	    memcmp(vcap.bus_info, "PCI:", 4) &&
+	    memcmp(vcap.bus_info, "PCIe:", 5) &&
+	    memcmp(vcap.bus_info, "ISA:", 4) &&
+	    memcmp(vcap.bus_info, "I2C:", 4) &&
+	    memcmp(vcap.bus_info, "parport", 7) &&
+	    memcmp(vcap.bus_info, "platform:", 9))
+		return fail("missing bus_info prefix ('%s')\n", vcap.bus_info);
+	fail_on_test((vcap.version >> 16) < 3);
 	fail_on_test(check_0(vcap.reserved, sizeof(vcap.reserved)));
 	caps = vcap.capabilities;
-	fail_on_test(vcap.capabilities == 0);
-	fail_on_test(node->is_video && !(caps & (V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_VIDEO_OUTPUT |
-				        V4L2_CAP_VIDEO_OVERLAY | V4L2_CAP_VIDEO_OUTPUT_OVERLAY)));
-	fail_on_test(node->is_radio && !(caps & (V4L2_CAP_RADIO | V4L2_CAP_MODULATOR)));
+	dcaps = vcap.device_caps;
+	node->is_m2m = dcaps & m2m_caps;
+	fail_on_test(caps == 0);
+	fail_on_test(caps & V4L2_CAP_ASYNCIO);
+	fail_on_test(!(caps & V4L2_CAP_DEVICE_CAPS));
+	fail_on_test(dcaps & V4L2_CAP_DEVICE_CAPS);
+	fail_on_test(dcaps & ~caps);
+	fail_on_test(!(dcaps & caps));
+	fail_on_test(node->is_video && !(dcaps & video_caps));
+	fail_on_test(node->is_radio && !(dcaps & radio_caps));
 	// V4L2_CAP_AUDIO is invalid for radio
-	fail_on_test(node->is_radio && (caps & V4L2_CAP_AUDIO));
-	fail_on_test(node->is_vbi && !(caps & (V4L2_CAP_VBI_CAPTURE | V4L2_CAP_SLICED_VBI_CAPTURE |
-				      V4L2_CAP_VBI_OUTPUT | V4L2_CAP_SLICED_VBI_OUTPUT)));
+	fail_on_test(node->is_radio && (dcaps & V4L2_CAP_AUDIO));
+	fail_on_test(node->is_vbi && !(dcaps & vbi_caps));
 	// You can't have both set due to missing buffer type in VIDIOC_G/S_FBUF
-	fail_on_test((caps & (V4L2_CAP_VIDEO_OVERLAY | V4L2_CAP_VIDEO_OUTPUT_OVERLAY)) ==
+	fail_on_test((dcaps & (V4L2_CAP_VIDEO_OVERLAY | V4L2_CAP_VIDEO_OUTPUT_OVERLAY)) ==
 			(V4L2_CAP_VIDEO_OVERLAY | V4L2_CAP_VIDEO_OUTPUT_OVERLAY));
+	fail_on_test(node->is_video && (dcaps & (vbi_caps | radio_caps)));
+	fail_on_test(node->is_radio && (dcaps & (vbi_caps | video_caps)));
+	fail_on_test(node->is_vbi && (dcaps & (video_caps | radio_caps)));
+	if (node->is_m2m) {
+		// This will become an error as this combination of caps
+		// is on the feature removal list.
+		if ((dcaps & input_caps) && (dcaps & output_caps))
+			warn("VIDIOC_QUERYCAP: m2m with video input and output caps\n");
+	} else {
+		if (dcaps & input_caps)
+			fail_on_test(dcaps & output_caps);
+		if (dcaps & output_caps)
+			fail_on_test(dcaps & input_caps);
+	}
+	if (node->can_capture || node->can_output)
+		fail_on_test(!(dcaps & io_caps));
+	else
+		fail_on_test(dcaps & io_caps);
+	// having both mplane and splane caps is not allowed (at least for now)
+	fail_on_test((dcaps & mplane_caps) && (dcaps & splane_caps));
 
 	return 0;
 }
@@ -283,6 +344,10 @@ static int testPrio(struct node *node, struct node *node2)
 	enum v4l2_priority prio;
 	int err;
 
+	if (node->is_m2m) {
+		fail_on_test(doioctl(node, VIDIOC_G_PRIORITY, &prio) != ENOTTY);
+		return 0;
+	}
 	err = check_prio(node, node2, V4L2_PRIORITY_DEFAULT);
 	if (err)
 		return err;
@@ -443,17 +508,31 @@ int main(int argc, char **argv)
 		device = vbi_device;
 		node.is_vbi = true;
 	}
+	node.device = device;
 
 	doioctl(&node, VIDIOC_QUERYCAP, &vcap);
-	node.caps = vcap.capabilities;
+	if (vcap.capabilities & V4L2_CAP_DEVICE_CAPS)
+		node.caps = vcap.device_caps;
+	else
+		node.caps = vcap.capabilities;
 	if (node.caps & (V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_VBI_CAPTURE |
-			 V4L2_CAP_SLICED_VBI_CAPTURE | V4L2_CAP_RDS_CAPTURE |
-			 V4L2_CAP_RADIO | V4L2_CAP_TUNER))
+			 V4L2_CAP_VIDEO_CAPTURE_MPLANE | V4L2_CAP_SLICED_VBI_CAPTURE |
+			 V4L2_CAP_RDS_CAPTURE | V4L2_CAP_RADIO | V4L2_CAP_TUNER))
 		node.has_inputs = true;
 	if (node.caps & (V4L2_CAP_VIDEO_OUTPUT | V4L2_CAP_VBI_OUTPUT |
-			 V4L2_CAP_SLICED_VBI_OUTPUT | V4L2_CAP_RDS_OUTPUT |
-			 V4L2_CAP_MODULATOR))
+			 V4L2_CAP_VIDEO_OUTPUT_MPLANE | V4L2_CAP_SLICED_VBI_OUTPUT |
+			 V4L2_CAP_RDS_OUTPUT | V4L2_CAP_MODULATOR))
 		node.has_outputs = true;
+	if (node.caps & (V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_VBI_CAPTURE |
+			 V4L2_CAP_VIDEO_CAPTURE_MPLANE | V4L2_CAP_VIDEO_M2M_MPLANE |
+			 V4L2_CAP_VIDEO_M2M | V4L2_CAP_SLICED_VBI_CAPTURE |
+			 V4L2_CAP_RDS_CAPTURE))
+		node.can_capture = true;
+	if (node.caps & (V4L2_CAP_VIDEO_OUTPUT | V4L2_CAP_VBI_OUTPUT |
+			 V4L2_CAP_VIDEO_OUTPUT_MPLANE | V4L2_CAP_VIDEO_M2M_MPLANE |
+			 V4L2_CAP_VIDEO_M2M | V4L2_CAP_SLICED_VBI_OUTPUT |
+			 V4L2_CAP_RDS_OUTPUT))
+		node.can_output = true;
 
 	/* Information Opts */
 
@@ -470,6 +549,10 @@ int main(int argc, char **argv)
 			vcap.version & 0xff);
 	printf("\tCapabilities  : 0x%08X\n", vcap.capabilities);
 	printf("%s", cap2s(vcap.capabilities).c_str());
+	if (vcap.capabilities & V4L2_CAP_DEVICE_CAPS) {
+		printf("\tDevice Caps   : 0x%08X\n", vcap.device_caps);
+		printf("%s", cap2s(vcap.device_caps).c_str());
+	}
 
 	printf("\nCompliance test for device %s (%susing libv4l2):\n\n",
 			device, wrapper ? "" : "not ");
@@ -490,8 +573,8 @@ int main(int argc, char **argv)
 		if (video_node2.fd >= 0) {
 			printf("\ttest VIDIOC_QUERYCAP: %s\n", ok(testCap(&video_node2)));
 			printf("\ttest VIDIOC_G/S_PRIORITY: %s\n",
-					ok(testPrio(&video_node, &video_node2)));
-			test_close(video_node2.fd);
+					ok(testPrio(&node, &video_node2)));
+			node.node2 = &video_node2;
 		}
 	}
 	if (radio_device) {
@@ -501,8 +584,8 @@ int main(int argc, char **argv)
 		if (radio_node2.fd >= 0) {
 			printf("\ttest VIDIOC_QUERYCAP: %s\n", ok(testCap(&radio_node2)));
 			printf("\ttest VIDIOC_G/S_PRIORITY: %s\n",
-					ok(testPrio(&radio_node, &radio_node2)));
-			test_close(radio_node2.fd);
+					ok(testPrio(&node, &radio_node2)));
+			node.node2 = &video_node2;
 		}
 	}
 	if (vbi_device) {
@@ -512,8 +595,8 @@ int main(int argc, char **argv)
 		if (vbi_node2.fd >= 0) {
 			printf("\ttest VIDIOC_QUERYCAP: %s\n", ok(testCap(&vbi_node2)));
 			printf("\ttest VIDIOC_G/S_PRIORITY: %s\n",
-					ok(testPrio(&vbi_node, &vbi_node2)));
-			test_close(vbi_node2.fd);
+					ok(testPrio(&node, &vbi_node2)));
+			node.node2 = &video_node2;
 		}
 	}
 	printf("\n");
@@ -531,6 +614,7 @@ int main(int argc, char **argv)
 	printf("Input ioctls:\n");
 	printf("\ttest VIDIOC_G/S_TUNER: %s\n", ok(testTuner(&node)));
 	printf("\ttest VIDIOC_G/S_FREQUENCY: %s\n", ok(testTunerFreq(&node)));
+	printf("\ttest VIDIOC_S_HW_FREQ_SEEK: %s\n", ok(testTunerHwSeek(&node)));
 	printf("\ttest VIDIOC_ENUMAUDIO: %s\n", ok(testEnumInputAudio(&node)));
 	printf("\ttest VIDIOC_G/S/ENUMINPUT: %s\n", ok(testInput(&node)));
 	printf("\ttest VIDIOC_G/S_AUDIO: %s\n", ok(testInputAudio(&node)));
@@ -556,6 +640,8 @@ int main(int argc, char **argv)
 	printf("\ttest VIDIOC_QUERYCTRL/MENU: %s\n", ok(testQueryControls(&node)));
 	printf("\ttest VIDIOC_G/S_CTRL: %s\n", ok(testSimpleControls(&node)));
 	printf("\ttest VIDIOC_G/S/TRY_EXT_CTRLS: %s\n", ok(testExtendedControls(&node)));
+	printf("\ttest VIDIOC_(UN)SUBSCRIBE_EVENT/DQEVENT: %s\n", ok(testControlEvents(&node)));
+	printf("\ttest VIDIOC_G/S_JPEGCOMP: %s\n", ok(testJpegComp(&node)));
 	printf("\tStandard Controls: %d Private Controls: %d\n",
 			node.std_controls, node.priv_controls);
 	printf("\n");
@@ -565,37 +651,51 @@ int main(int argc, char **argv)
 	printf("Input/Output configuration ioctls:\n");
 	printf("\ttest VIDIOC_ENUM/G/S/QUERY_STD: %s\n", ok(testStd(&node)));
 	printf("\ttest VIDIOC_ENUM/G/S/QUERY_DV_PRESETS: %s\n", ok(testPresets(&node)));
-	printf("\ttest VIDIOC_G/S_DV_TIMINGS: %s\n", ok(testCustomTimings(&node)));
+	printf("\ttest VIDIOC_ENUM/G/S/QUERY_DV_TIMINGS: %s\n", ok(testTimings(&node)));
+	printf("\ttest VIDIOC_DV_TIMINGS_CAP: %s\n", ok(testTimingsCap(&node)));
 	printf("\n");
 
 	/* Format ioctls */
 
 	printf("Format ioctls:\n");
 	printf("\ttest VIDIOC_ENUM_FMT/FRAMESIZES/FRAMEINTERVALS: %s\n", ok(testEnumFormats(&node)));
+	printf("\ttest VIDIOC_G/S_PARM: %s\n", ok(testParm(&node)));
 	printf("\ttest VIDIOC_G_FBUF: %s\n", ok(testFBuf(&node)));
-	printf("\ttest VIDIOC_G_FMT: %s\n", ok(testFormats(&node)));
+	printf("\ttest VIDIOC_G_FMT: %s\n", ok(testGetFormats(&node)));
+	printf("\ttest VIDIOC_TRY_FMT: %s\n", ok(testTryFormats(&node)));
+	printf("\ttest VIDIOC_S_FMT: %s\n", ok(testSetFormats(&node)));
 	printf("\ttest VIDIOC_G_SLICED_VBI_CAP: %s\n", ok(testSlicedVBICap(&node)));
+	printf("\n");
+
+	/* Codec ioctls */
+
+	printf("Codec ioctls:\n");
+	printf("\ttest VIDIOC_(TRY_)ENCODER_CMD: %s\n", ok(testEncoder(&node)));
+	printf("\ttest VIDIOC_G_ENC_INDEX: %s\n", ok(testEncIndex(&node)));
+	printf("\ttest VIDIOC_(TRY_)DECODER_CMD: %s\n", ok(testDecoder(&node)));
+	printf("\n");
+
+	/* Buffer ioctls */
+
+	printf("Buffer ioctls:\n");
+	printf("\ttest VIDIOC_REQBUFS/CREATE_BUFS/QUERYBUF: %s\n", ok(testReqBufs(&node)));
+	//printf("\ttest read/write: %s\n", ok(testReadWrite(&node)));
+	printf("\n");
 
 	/* TODO:
 
-	   VIDIOC_CROPCAP, VIDIOC_G/S_CROP
+	   VIDIOC_CROPCAP, VIDIOC_G/S_CROP, VIDIOC_G/S_SELECTION
 	   VIDIOC_S_FBUF/OVERLAY
-	   VIDIOC_S/TRY_FMT
-	   VIDIOC_G/S_PARM
-	   VIDIOC_G/S_JPEGCOMP
-	   VIDIOC_S_HW_FREQ_SEEK
-	   VIDIOC_SUBSCRIBE_EVENT/UNSUBSCRIBE_EVENT/DQEVENT
-	   VIDIOC_(TRY_)ENCODER_CMD
-	   VIDIOC_G_ENC_INDEX
-	   VIDIOC_REQBUFS/QBUF/DQBUF/QUERYBUF
+	   VIDIOC_QBUF/DQBUF/QUERYBUF/PREPARE_BUFS
 	   VIDIOC_STREAMON/OFF
-
 	   */
 
 	/* Final test report */
 
 	test_close(node.fd);
-	printf("Total: %d Succeeded: %d Failed: %d Warnings: %d\n",
+	if (node.node2)
+		test_close(node.node2->fd);
+	printf("Total: %d, Succeeded: %d, Failed: %d, Warnings: %d\n",
 			tests_total, tests_ok, tests_total - tests_ok, warnings);
 	exit(app_result);
 }

@@ -20,7 +20,6 @@
  */
 
 #include <unistd.h>
-#include <features.h>	/* Uses _GNU_SOURCE to define getsubopt in stdlib.h */
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -34,8 +33,6 @@
 #include <sys/ioctl.h>
 #include <sys/time.h>
 #include <math.h>
-#include <linux/types.h>
-#include <sys/klog.h>
 
 #include <linux/videodev2.h>
 

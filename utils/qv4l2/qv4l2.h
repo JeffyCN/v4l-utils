@@ -27,14 +27,17 @@
 #include <QGridLayout>
 #include <QSocketNotifier>
 #include <QImage>
+#include <QFileDialog>
 #include <map>
 #include <vector>
 
 #include "v4l2-api.h"
+#include "raw2sliced.h"
 
 class QComboBox;
 class QSpinBox;
 class GeneralTab;
+class VbiTab;
 class QCloseEvent;
 class CaptureWin;
 
@@ -91,17 +94,24 @@ private:
 	unsigned char *m_frameData;
 	unsigned m_nbuffers;
 	struct v4lconvert_data *m_convertData;
+	bool m_mustConvert;
 	CapMethod m_capMethod;
+	bool m_makeSnapshot;
 
 private slots:
 	void capStart(bool);
 	void capFrame();
+	void snapshot();
+	void capVbiFrame();
+	void saveRaw(bool);
 
 	// gui
 private slots:
 	void opendev();
 	void openrawdev();
 	void ctrlAction(int);
+	void openRawFile(const QString &s);
+	void rejectedRawFile();
 
 	void about();
 
@@ -126,6 +136,7 @@ private:
 	void updateCtrl(unsigned id);
 	void refresh(unsigned ctrl_class);
 	void refresh();
+	void makeSnapshot(unsigned char *buf, unsigned size);
 	void setDefaults(unsigned ctrl_class);
 	int getVal(unsigned id);
 	long long getVal64(unsigned id);
@@ -145,7 +156,11 @@ private:
 	void updateFreqChannel();
 
 	GeneralTab *m_genTab;
+	VbiTab *m_vbiTab;
 	QAction *m_capStartAct;
+	QAction *m_snapshotAct;
+	QAction *m_saveRawAct;
+	QAction *m_showFramesAct;
 	QString m_filename;
 	QSignalMapper *m_sigMapper;
 	QTabWidget *m_tabs;
@@ -156,8 +171,36 @@ private:
 	WidgetMap m_widgetMap;
 	ClassMap m_classMap;
 	bool m_haveExtendedUserCtrls;
+	bool m_showFrames;
+	int m_vbiSize;
+	unsigned m_vbiWidth;
+	unsigned m_vbiHeight;
+	struct vbi_handle m_vbiHandle;
+	unsigned m_frame;
+	unsigned m_lastFrame;
+	unsigned m_fps;
+	struct timeval m_tv;
+	QFile m_saveRaw;
 };
 
 extern ApplicationWindow *g_mw;
+
+class SaveDialog : public QFileDialog
+{
+	Q_OBJECT
+
+public:
+	SaveDialog(QWidget *parent, const QString &caption) :
+		QFileDialog(parent, caption), m_buf(NULL) {}
+	virtual ~SaveDialog() {}
+	bool setBuffer(unsigned char *buf, unsigned size);
+
+public slots:
+	void selected(const QString &s);
+
+private:
+	unsigned char *m_buf;
+	unsigned m_size;
+};
 
 #endif

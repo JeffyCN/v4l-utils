@@ -20,7 +20,6 @@
  */
 
 #include <unistd.h>
-#include <features.h>	/* Uses _GNU_SOURCE to define getsubopt in stdlib.h */
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
@@ -34,8 +33,6 @@
 #include <sys/ioctl.h>
 #include <sys/time.h>
 #include <math.h>
-#include <linux/types.h>
-#include <sys/klog.h>
 
 #include <linux/videodev2.h>
 #include <linux/dvb/video.h>
@@ -498,7 +495,11 @@ int main(int argc, char **argv)
 			if (ioctl(fd, VIDEO_GET_EVENT, &ev) < 0) {
 				fprintf(stderr, "ioctl: VIDEO_GET_EVENT failed\n");
 				break;
+#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
+			} else if (ev.timestamp.tv_sec == 0 && ev.timestamp.tv_nsec == 0) {
+#else
 			} else if (ev.timestamp == 0) {
+#endif
 				unsigned long long pts = 0, frame = 0;
 				struct timeval tv;
 				gettimeofday(&tv, NULL);

@@ -23,7 +23,12 @@
 
 #include <QSpinBox>
 #include <QComboBox>
+#include <QCheckBox>
+#include <QPushButton>
+#include <QLineEdit>
+#include <QDoubleValidator>
 
+#include <stdio.h>
 #include <errno.h>
 
 GeneralTab::GeneralTab(const QString &device, v4l2 &fd, int n, QWidget *parent) :
@@ -32,13 +37,20 @@ GeneralTab::GeneralTab(const QString &device, v4l2 &fd, int n, QWidget *parent) 
 	m_row(0),
 	m_col(0),
 	m_cols(n),
+	m_isRadio(false),
+	m_isVbi(false),
 	m_audioInput(NULL),
 	m_tvStandard(NULL),
+	m_qryStandard(NULL),
 	m_videoPreset(NULL),
+	m_qryPreset(NULL),
+	m_videoTimings(NULL),
+	m_qryTimings(NULL),
 	m_freq(NULL),
 	m_vidCapFormats(NULL),
 	m_frameSize(NULL),
-	m_vidOutFormats(NULL)
+	m_vidOutFormats(NULL),
+	m_vbiMethods(NULL)
 {
 	setSpacing(3);
 
@@ -59,45 +71,38 @@ GeneralTab::GeneralTab(const QString &device, v4l2 &fd, int n, QWidget *parent) 
 	}
 
 	g_tuner(m_tuner);
-
-	v4l2_standard vs;
-	if (enum_std(vs, true)) {
-		addLabel("TV Standard");
-		m_tvStandard = new QComboBox(parent);
-		do {
-			m_tvStandard->addItem((char *)vs.name);
-		} while (enum_std(vs));
-		addWidget(m_tvStandard);
-		connect(m_tvStandard, SIGNAL(activated(int)), SLOT(standardChanged(int)));
-		updateStandard();
-	}
-
-	v4l2_dv_enum_preset preset;
-	if (enum_dv_preset(preset, true)) {
-		addLabel("Video Preset");
-		m_videoPreset = new QComboBox(parent);
-		do {
-			m_videoPreset->addItem((char *)preset.name);
-		} while (enum_dv_preset(preset));
-		addWidget(m_videoPreset);
-		connect(m_videoPreset, SIGNAL(activated(int)), SLOT(presetChanged(int)));
-		updatePreset();
-	}
+	g_modulator(m_modulator);
 
 	v4l2_input vin;
-	if (enum_input(vin, true)) {
+	bool needsStd = false;
+	bool needsPreset = false;
+	bool needsTimings = false;
+
+	if (m_tuner.capability && m_tuner.capability & V4L2_TUNER_CAP_LOW)
+		m_isRadio = true;
+	if (m_modulator.capability && m_modulator.capability & V4L2_TUNER_CAP_LOW)
+		m_isRadio = true;
+	if (m_querycap.capabilities & V4L2_CAP_DEVICE_CAPS)
+		m_isVbi = caps() & (V4L2_CAP_VBI_CAPTURE | V4L2_CAP_SLICED_VBI_CAPTURE);
+
+	if (!isRadio() && enum_input(vin, true)) {
 		addLabel("Input");
 		m_videoInput = new QComboBox(parent);
 		do {
 			m_videoInput->addItem((char *)vin.name);
+			if (vin.capabilities & V4L2_IN_CAP_STD)
+				needsStd = true;
+			if (vin.capabilities & V4L2_IN_CAP_PRESETS)
+				needsPreset = true;
+			if (vin.capabilities & V4L2_IN_CAP_DV_TIMINGS)
+				needsTimings = true;
 		} while (enum_input(vin));
 		addWidget(m_videoInput);
 		connect(m_videoInput, SIGNAL(activated(int)), SLOT(inputChanged(int)));
-		updateVideoInput();
 	}
 
 	v4l2_output vout;
-	if (enum_output(vout, true)) {
+	if (!isRadio() && enum_output(vout, true)) {
 		addLabel("Output");
 		m_videoOutput = new QComboBox(parent);
 		do {
@@ -109,7 +114,7 @@ GeneralTab::GeneralTab(const QString &device, v4l2 &fd, int n, QWidget *parent) 
 	}
 
 	v4l2_audio vaudio;
-	if (enum_audio(vaudio, true)) {
+	if (!isRadio() && enum_audio(vaudio, true)) {
 		addLabel("Input Audio");
 		m_audioInput = new QComboBox(parent);
 		do {
@@ -121,7 +126,7 @@ GeneralTab::GeneralTab(const QString &device, v4l2 &fd, int n, QWidget *parent) 
 	}
 
 	v4l2_audioout vaudout;
-	if (enum_audout(vaudout, true)) {
+	if (!isRadio() && enum_audout(vaudout, true)) {
 		addLabel("Output Audio");
 		m_audioOutput = new QComboBox(parent);
 		do {
@@ -132,31 +137,161 @@ GeneralTab::GeneralTab(const QString &device, v4l2 &fd, int n, QWidget *parent) 
 		updateAudioOutput();
 	}
 
-	if (m_tuner.type) {
-		m_freq = new QSpinBox(parent);
-		m_freq->setMinimum(m_tuner.rangelow);
-		m_freq->setMaximum(m_tuner.rangehigh);
+	if (needsStd) {
+		addLabel("TV Standard");
+		m_tvStandard = new QComboBox(parent);
+		addWidget(m_tvStandard);
+		connect(m_tvStandard, SIGNAL(activated(int)), SLOT(standardChanged(int)));
+		refreshStandards();
+		addLabel("");
+		m_qryStandard = new QPushButton("Query Standard", parent);
+		addWidget(m_qryStandard);
+		connect(m_qryStandard, SIGNAL(clicked()), SLOT(qryStdClicked()));
+	}
+
+	if (needsPreset) {
+		addLabel("Video Preset");
+		m_videoPreset = new QComboBox(parent);
+		addWidget(m_videoPreset);
+		connect(m_videoPreset, SIGNAL(activated(int)), SLOT(presetChanged(int)));
+		refreshPresets();
+		addLabel("");
+		m_qryPreset = new QPushButton("Query Preset", parent);
+		addWidget(m_qryPreset);
+		connect(m_qryPreset, SIGNAL(clicked()), SLOT(qryPresetClicked()));
+	}
+
+	if (needsTimings) {
+		addLabel("Video Timings");
+		m_videoTimings = new QComboBox(parent);
+		addWidget(m_videoTimings);
+		connect(m_videoTimings, SIGNAL(activated(int)), SLOT(timingsChanged(int)));
+		refreshTimings();
+		addLabel("");
+		m_qryTimings = new QPushButton("Query Timings", parent);
+		addWidget(m_qryTimings);
+		connect(m_qryTimings, SIGNAL(clicked()), SLOT(qryTimingsClicked()));
+	}
+
+	if (m_tuner.capability) {
+		QDoubleValidator *val;
+		double factor = (m_tuner.capability & V4L2_TUNER_CAP_LOW) ? 16 : 16000;
+
+		val = new QDoubleValidator(m_tuner.rangelow / factor, m_tuner.rangehigh / factor, 3, parent);
+		m_freq = new QLineEdit(parent);
+		m_freq->setValidator(val);
 		m_freq->setWhatsThis(QString("Frequency\nLow: %1\nHigh: %2")
-				.arg(m_tuner.rangelow).arg(m_tuner.rangehigh));
-		connect(m_freq, SIGNAL(valueChanged(int)), SLOT(freqChanged(int)));
+				.arg(m_tuner.rangelow / factor).arg(m_tuner.rangehigh / factor));
+		connect(m_freq, SIGNAL(lostFocus()), SLOT(freqChanged()));
+		connect(m_freq, SIGNAL(returnPressed()), SLOT(freqChanged()));
 		updateFreq();
-		addLabel("Frequency");
+		if (m_tuner.capability & V4L2_TUNER_CAP_LOW)
+			addLabel("Frequency (kHz)");
+		else
+			addLabel("Frequency (MHz)");
 		addWidget(m_freq);
 
-		addLabel("Frequency Table");
-		m_freqTable = new QComboBox(parent);
-		for (int i = 0; v4l2_channel_lists[i].name; i++) {
-			m_freqTable->addItem(v4l2_channel_lists[i].name);
-		}
-		addWidget(m_freqTable);
-		connect(m_freqTable, SIGNAL(activated(int)), SLOT(freqTableChanged(int)));
+		if (!m_tuner.capability & V4L2_TUNER_CAP_LOW) {
+			addLabel("Frequency Table");
+			m_freqTable = new QComboBox(parent);
+			for (int i = 0; v4l2_channel_lists[i].name; i++) {
+				m_freqTable->addItem(v4l2_channel_lists[i].name);
+			}
+			addWidget(m_freqTable);
+			connect(m_freqTable, SIGNAL(activated(int)), SLOT(freqTableChanged(int)));
 
-		addLabel("Channels");
-		m_freqChannel = new QComboBox(parent);
-		m_freqChannel->setSizeAdjustPolicy(QComboBox::AdjustToContents);
-		addWidget(m_freqChannel);
-		connect(m_freqChannel, SIGNAL(activated(int)), SLOT(freqChannelChanged(int)));
-		updateFreqChannel();
+			addLabel("Channels");
+			m_freqChannel = new QComboBox(parent);
+			m_freqChannel->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+			addWidget(m_freqChannel);
+			connect(m_freqChannel, SIGNAL(activated(int)), SLOT(freqChannelChanged(int)));
+			updateFreqChannel();
+		}
+		addLabel("Audio Mode");
+		m_audioMode = new QComboBox(parent);
+		m_audioMode->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+		m_audioMode->addItem("Mono");
+		int audIdx = 0;
+		m_audioModes[audIdx++] = V4L2_TUNER_MODE_MONO;
+		if (m_tuner.capability & V4L2_TUNER_CAP_STEREO) {
+			m_audioMode->addItem("Stereo");
+			m_audioModes[audIdx++] = V4L2_TUNER_MODE_STEREO;
+		}
+		if (m_tuner.capability & V4L2_TUNER_CAP_LANG1) {
+			m_audioMode->addItem("Language 1");
+			m_audioModes[audIdx++] = V4L2_TUNER_MODE_LANG1;
+		}
+		if (m_tuner.capability & V4L2_TUNER_CAP_LANG2) {
+			m_audioMode->addItem("Language 2");
+			m_audioModes[audIdx++] = V4L2_TUNER_MODE_LANG2;
+		}
+		if ((m_tuner.capability & (V4L2_TUNER_CAP_LANG1 | V4L2_TUNER_CAP_LANG2)) ==
+				(V4L2_TUNER_CAP_LANG1 | V4L2_TUNER_CAP_LANG2)) {
+			m_audioMode->addItem("Language 1+2");
+			m_audioModes[audIdx++] = V4L2_TUNER_MODE_LANG1_LANG2;
+		}
+		addWidget(m_audioMode);
+		for (int i = 0; i < audIdx; i++)
+			if (m_audioModes[i] == m_tuner.audmode)
+				m_audioMode->setCurrentIndex(i);
+		connect(m_audioMode, SIGNAL(activated(int)), SLOT(audioModeChanged(int)));
+		m_subchannels = new QLabel("", parent);
+		addWidget(m_subchannels, Qt::AlignRight);
+		m_detectSubchans = new QPushButton("Refresh Tuner Status", parent);
+		addWidget(m_detectSubchans);
+		connect(m_detectSubchans, SIGNAL(clicked()), SLOT(detectSubchansClicked()));
+		detectSubchansClicked();
+	}
+
+	if (m_modulator.capability) {
+		QDoubleValidator *val;
+		double factor = (m_modulator.capability & V4L2_TUNER_CAP_LOW) ? 16 : 16000;
+
+		val = new QDoubleValidator(m_modulator.rangelow / factor, m_modulator.rangehigh / factor, 3, parent);
+		m_freq = new QLineEdit(parent);
+		m_freq->setValidator(val);
+		m_freq->setWhatsThis(QString("Frequency\nLow: %1\nHigh: %2")
+				.arg(m_modulator.rangelow / factor).arg(m_modulator.rangehigh / factor));
+		connect(m_freq, SIGNAL(lostFocus()), SLOT(freqChanged()));
+		connect(m_freq, SIGNAL(returnPressed()), SLOT(freqChanged()));
+		updateFreq();
+		if (m_modulator.capability & V4L2_TUNER_CAP_LOW)
+			addLabel("Frequency (kHz)");
+		else
+			addLabel("Frequency (MHz)");
+		addWidget(m_freq);
+		if (m_modulator.capability & V4L2_TUNER_CAP_STEREO) {
+			addLabel("Stereo");
+			m_stereoMode = new QCheckBox(parent);
+			m_stereoMode->setCheckState((m_modulator.txsubchans & V4L2_TUNER_SUB_STEREO) ?
+					Qt::Checked : Qt::Unchecked);
+			addWidget(m_stereoMode);
+			connect(m_stereoMode, SIGNAL(clicked()), SLOT(stereoModeChanged()));
+		}
+		if (m_modulator.capability & V4L2_TUNER_CAP_RDS) {
+			addLabel("RDS");
+			m_rdsMode = new QCheckBox(parent);
+			m_rdsMode->setCheckState((m_modulator.txsubchans & V4L2_TUNER_SUB_RDS) ?
+					Qt::Checked : Qt::Unchecked);
+			addWidget(m_rdsMode);
+			connect(m_rdsMode, SIGNAL(clicked()), SLOT(rdsModeChanged()));
+		}
+	}
+
+	if (isRadio())
+		goto done;
+
+	if (isVbi()) {
+		addLabel("VBI Capture Method");
+		m_vbiMethods = new QComboBox(parent);
+		if (caps() & V4L2_CAP_VBI_CAPTURE)
+			m_vbiMethods->addItem("Raw");
+		if (caps() & V4L2_CAP_SLICED_VBI_CAPTURE)
+			m_vbiMethods->addItem("Sliced");
+		addWidget(m_vbiMethods);
+		connect(m_vbiMethods, SIGNAL(activated(int)), SLOT(vbiMethodsChanged(int)));
+		updateVideoInput();
+		goto capture_method;
 	}
 
 	v4l2_fmtdesc fmt;
@@ -164,8 +299,12 @@ GeneralTab::GeneralTab(const QString &device, v4l2 &fd, int n, QWidget *parent) 
 	m_vidCapFormats = new QComboBox(parent);
 	if (enum_fmt_cap(fmt, true)) {
 		do {
-			m_vidCapFormats->addItem(pixfmt2s(fmt.pixelformat) +
-					" - " + (const char *)fmt.description);
+			QString s(pixfmt2s(fmt.pixelformat) + " (");
+
+			if (fmt.flags & V4L2_FMT_FLAG_EMULATED)
+				m_vidCapFormats->addItem(s + "Emulated)");
+			else
+				m_vidCapFormats->addItem(s + (const char *)fmt.description + ")");
 		} while (enum_fmt_cap(fmt));
 	}
 	addWidget(m_vidCapFormats);
@@ -192,6 +331,7 @@ GeneralTab::GeneralTab(const QString &device, v4l2 &fd, int n, QWidget *parent) 
 	addWidget(m_frameInterval);
 	connect(m_frameInterval, SIGNAL(activated(int)), SLOT(frameIntervalChanged(int)));
 
+	updateVideoInput();
 	updateVidCapFormat();
 
 	if (caps() & V4L2_CAP_VIDEO_OUTPUT) {
@@ -207,9 +347,12 @@ GeneralTab::GeneralTab(const QString &device, v4l2 &fd, int n, QWidget *parent) 
 		connect(m_vidOutFormats, SIGNAL(activated(int)), SLOT(vidOutFormatChanged(int)));
 	}
 
+capture_method:
 	addLabel("Capture Method");
 	m_capMethods = new QComboBox(parent);
-	if (m_querycap.capabilities & V4L2_CAP_STREAMING) {
+	m_buftype = isSlicedVbi() ? V4L2_BUF_TYPE_SLICED_VBI_CAPTURE :
+		(isVbi() ? V4L2_BUF_TYPE_VBI_CAPTURE : V4L2_BUF_TYPE_VIDEO_CAPTURE);
+	if (caps() & V4L2_CAP_STREAMING) {
 		v4l2_requestbuffers reqbuf;
 
 		// Yuck. The videobuf framework does not accept a count of 0.
@@ -221,20 +364,21 @@ GeneralTab::GeneralTab(const QString &device, v4l2 &fd, int n, QWidget *parent) 
 		// unexpected. So the only way at the moment to do this that works
 		// everywhere is to call REQBUFS with a count of 1, and then again with
 		// a count of 0.
-		if (reqbufs_user_cap(reqbuf, 1)) {
+		if (reqbufs_user(reqbuf, 1)) {
 			m_capMethods->addItem("User pointer I/O", QVariant(methodUser));
-			reqbufs_user_cap(reqbuf, 0);
+			reqbufs_user(reqbuf, 0);
 		}
-		if (reqbufs_mmap_cap(reqbuf, 1)) {
+		if (reqbufs_mmap(reqbuf, 1)) {
 			m_capMethods->addItem("Memory mapped I/O", QVariant(methodMmap));
-			reqbufs_mmap_cap(reqbuf, 0);
+			reqbufs_mmap(reqbuf, 0);
 		}
 	}
-	if (m_querycap.capabilities & V4L2_CAP_READWRITE) {
+	if (caps() & V4L2_CAP_READWRITE) {
 		m_capMethods->addItem("read()", QVariant(methodRead));
 	}
 	addWidget(m_capMethods);
 
+done:
 	QGridLayout::addWidget(new QWidget(parent), rowCount(), 0, 1, n);
 	setRowStretch(rowCount() - 1, 1);
 }
@@ -247,6 +391,11 @@ void GeneralTab::addWidget(QWidget *w, Qt::Alignment align)
 		m_col = 0;
 		m_row++;
 	}
+}
+
+bool GeneralTab::isSlicedVbi() const
+{
+	return m_vbiMethods && m_vbiMethods->currentText() == "Sliced";
 }
 
 CapMethod GeneralTab::capMethod()
@@ -300,6 +449,15 @@ void GeneralTab::presetChanged(int index)
 	updatePreset();
 }
 
+void GeneralTab::timingsChanged(int index)
+{
+	v4l2_enum_dv_timings timings;
+
+	enum_dv_timings(timings, true, index);
+	s_dv_timings(timings.timings);
+	updateTimings();
+}
+
 void GeneralTab::freqTableChanged(int)
 {
 	updateFreqChannel();
@@ -308,12 +466,67 @@ void GeneralTab::freqTableChanged(int)
 
 void GeneralTab::freqChannelChanged(int idx)
 {
-	m_freq->setValue((int)(v4l2_channel_lists[m_freqTable->currentIndex()].list[idx].freq / 62.5));
+	double f = v4l2_channel_lists[m_freqTable->currentIndex()].list[idx].freq;
+
+	m_freq->setText(QString::number(f / 1000.0));
+	freqChanged();
 }
 
-void GeneralTab::freqChanged(int val)
+void GeneralTab::freqChanged()
 {
-	s_frequency(val);
+	double f = m_freq->text().toDouble();
+
+	s_frequency(f * 16, m_tuner.capability & V4L2_TUNER_CAP_LOW);
+}
+
+void GeneralTab::audioModeChanged(int)
+{
+	m_tuner.audmode = m_audioModes[m_audioMode->currentIndex()];
+	s_tuner(m_tuner);
+}
+
+void GeneralTab::detectSubchansClicked()
+{
+	QString chans;
+
+	g_tuner(m_tuner);
+	if (m_tuner.rxsubchans & V4L2_TUNER_SUB_MONO)
+		chans += "Mono ";
+	if (m_tuner.rxsubchans & V4L2_TUNER_SUB_STEREO)
+		chans += "Stereo ";
+	if (m_tuner.rxsubchans & V4L2_TUNER_SUB_LANG1)
+		chans += "Lang1 ";
+	if (m_tuner.rxsubchans & V4L2_TUNER_SUB_LANG2)
+		chans += "Lang2 ";
+	if (m_tuner.rxsubchans & V4L2_TUNER_SUB_RDS)
+		chans += "RDS ";
+	chans += "(" + QString::number((int)(m_tuner.signal / 655.35 + 0.5)) + "%";
+	if (m_tuner.signal && m_tuner.afc)
+		chans += m_tuner.afc < 0 ? " too low" : " too high";
+	chans += ")";
+	m_subchannels->setText(chans);
+}
+
+void GeneralTab::stereoModeChanged()
+{
+	v4l2_modulator mod;
+	bool val = m_stereoMode->checkState() == Qt::Checked;
+
+	g_modulator(mod);
+	mod.txsubchans &= ~(V4L2_TUNER_SUB_MONO | V4L2_TUNER_SUB_STEREO);
+	mod.txsubchans |= val ? V4L2_TUNER_SUB_STEREO : V4L2_TUNER_SUB_MONO;
+	s_modulator(mod);
+}
+
+void GeneralTab::rdsModeChanged()
+{
+	v4l2_modulator mod;
+	bool val = m_rdsMode->checkState() == Qt::Checked;
+
+	g_modulator(mod);
+	mod.txsubchans &= ~V4L2_TUNER_SUB_RDS;
+	mod.txsubchans |= val ? V4L2_TUNER_SUB_RDS : 0;
+	s_modulator(mod);
 }
 
 void GeneralTab::vidCapFormatChanged(int idx)
@@ -380,8 +593,10 @@ void GeneralTab::frameIntervalChanged(int idx)
 
 	if (enum_frameintervals(frmival, m_pixelformat, m_width, m_height, idx)
 	    && frmival.type == V4L2_FRMIVAL_TYPE_DISCRETE) {
-		set_interval(frmival.discrete);
+		if (set_interval(frmival.discrete))
+			m_interval = frmival.discrete;
 	}
+	updateVidCapFormat();
 }
 
 void GeneralTab::vidOutFormatChanged(int idx)
@@ -399,6 +614,12 @@ void GeneralTab::vidOutFormatChanged(int idx)
 	updateVidOutFormat();
 }
 
+void GeneralTab::vbiMethodsChanged(int idx)
+{
+	m_buftype = isSlicedVbi() ? V4L2_BUF_TYPE_SLICED_VBI_CAPTURE :
+		(isVbi() ? V4L2_BUF_TYPE_VBI_CAPTURE : V4L2_BUF_TYPE_VIDEO_CAPTURE);
+}
+
 void GeneralTab::updateVideoInput()
 {
 	int input;
@@ -408,10 +629,24 @@ void GeneralTab::updateVideoInput()
 		return;
 	enum_input(in, true, input);
 	m_videoInput->setCurrentIndex(input);
-	if (m_tvStandard)
+	if (m_tvStandard) {
+		refreshStandards();
+		updateStandard();
 		m_tvStandard->setEnabled(in.capabilities & V4L2_IN_CAP_STD);
-	if (m_videoPreset)
+		m_qryStandard->setEnabled(in.capabilities & V4L2_IN_CAP_STD);
+	}
+	if (m_videoPreset) {
+		refreshPresets();
+		updatePreset();
 		m_videoPreset->setEnabled(in.capabilities & V4L2_IN_CAP_PRESETS);
+		m_qryPreset->setEnabled(in.capabilities & V4L2_IN_CAP_PRESETS);
+	}
+	if (m_videoTimings) {
+		refreshTimings();
+		updateTimings();
+		m_videoTimings->setEnabled(in.capabilities & V4L2_IN_CAP_DV_TIMINGS);
+		m_qryTimings->setEnabled(in.capabilities & V4L2_IN_CAP_DV_TIMINGS);
+	}
 }
 
 void GeneralTab::updateVideoOutput()
@@ -423,10 +658,18 @@ void GeneralTab::updateVideoOutput()
 		return;
 	enum_output(out, true, output);
 	m_videoOutput->setCurrentIndex(output);
-	if (m_tvStandard)
+	if (m_tvStandard) {
 		m_tvStandard->setEnabled(out.capabilities & V4L2_OUT_CAP_STD);
-	if (m_videoPreset)
+		m_qryStandard->setEnabled(out.capabilities & V4L2_OUT_CAP_STD);
+	}
+	if (m_videoPreset) {
 		m_videoPreset->setEnabled(out.capabilities & V4L2_OUT_CAP_PRESETS);
+		m_qryPreset->setEnabled(out.capabilities & V4L2_OUT_CAP_PRESETS);
+	}
+	if (m_videoTimings) {
+		m_videoTimings->setEnabled(out.capabilities & V4L2_OUT_CAP_DV_TIMINGS);
+		m_qryTimings->setEnabled(out.capabilities & V4L2_OUT_CAP_DV_TIMINGS);
+	}
 }
 
 void GeneralTab::updateAudioInput()
@@ -453,6 +696,17 @@ void GeneralTab::updateAudioOutput()
 
 	g_audout(audio);
 	m_audioOutput->setCurrentIndex(audio.index);
+}
+
+void GeneralTab::refreshStandards()
+{
+	v4l2_standard vs;
+	m_tvStandard->clear();
+	if (enum_std(vs, true)) {
+		do {
+			m_tvStandard->addItem((char *)vs.name);
+		} while (enum_std(vs));
+	}
 }
 
 void GeneralTab::updateStandard()
@@ -486,6 +740,28 @@ void GeneralTab::updateStandard()
 		vs.frameperiod.numerator, vs.frameperiod.denominator,
 		vs.framelines);
 	m_tvStandard->setWhatsThis(what);
+	updateVidCapFormat();
+}
+
+void GeneralTab::qryStdClicked()
+{
+	v4l2_std_id std;
+
+	if (query_std(std)) {
+		s_std(std);
+		updateStandard();
+	}
+}
+
+void GeneralTab::refreshPresets()
+{
+	v4l2_dv_enum_preset preset;
+	m_videoPreset->clear();
+	if (enum_dv_preset(preset, true)) {
+		do {
+			m_videoPreset->addItem((char *)preset.name);
+		} while (enum_dv_preset(preset));
+	}
 }
 
 void GeneralTab::updatePreset()
@@ -508,6 +784,70 @@ void GeneralTab::updatePreset()
 		"Frame %ux%u\n",
 		p.preset, p.width, p.height);
 	m_videoPreset->setWhatsThis(what);
+	updateVidCapFormat();
+}
+
+void GeneralTab::qryPresetClicked()
+{
+	v4l2_dv_preset preset;
+
+	if (query_dv_preset(preset)) {
+		s_dv_preset(preset.preset);
+		updatePreset();
+	}
+}
+
+void GeneralTab::refreshTimings()
+{
+	v4l2_enum_dv_timings timings;
+	m_videoTimings->clear();
+	if (enum_dv_timings(timings, true)) {
+		do {
+			v4l2_bt_timings &bt = timings.timings.bt;
+			char buf[100];
+
+			sprintf(buf, "%dx%d%c%.2f", bt.width, bt.height,
+					bt.interlaced ? 'i' : 'p',
+					(double)bt.pixelclock /
+						((bt.width + bt.hfrontporch + bt.hsync + bt.hbackporch) *
+						 (bt.height + bt.vfrontporch + bt.vsync + bt.vbackporch +
+						  bt.il_vfrontporch + bt.il_vsync + bt.il_vbackporch)));
+			m_videoTimings->addItem(buf);
+		} while (enum_dv_timings(timings));
+	}
+}
+
+void GeneralTab::updateTimings()
+{
+	v4l2_dv_timings timings;
+	v4l2_enum_dv_timings p;
+	QString what;
+
+	g_dv_timings(timings);
+	if (enum_dv_timings(p, true)) {
+		do {
+			if (!memcmp(&timings, &p.timings, sizeof(timings)))
+				break;
+		} while (enum_dv_timings(p));
+	}
+	if (memcmp(&timings, &p.timings, sizeof(timings)))
+		return;
+	m_videoTimings->setCurrentIndex(p.index);
+	what.sprintf("Video Timings (%u)\n"
+		"Frame %ux%u\n",
+		p.index, p.timings.bt.width, p.timings.bt.height);
+	m_videoTimings->setWhatsThis(what);
+	updateVidCapFormat();
+}
+
+void GeneralTab::qryTimingsClicked()
+{
+	v4l2_dv_timings timings;
+
+	if (query_dv_timings(timings)) {
+		s_dv_timings(timings);
+		updateTimings();
+	}
 }
 
 void GeneralTab::updateFreq()
@@ -517,7 +857,7 @@ void GeneralTab::updateFreq()
 	g_frequency(f);
 	/* m_freq listens to valueChanged block it to avoid recursion */
 	m_freq->blockSignals(true);
-	m_freq->setValue(f.frequency);
+	m_freq->setText(QString::number(f.frequency / 16.0));
 	m_freq->blockSignals(false);
 }
 
@@ -535,11 +875,14 @@ void GeneralTab::updateVidCapFormat()
 	v4l2_fmtdesc desc;
 	v4l2_format fmt;
 
+	if (isVbi())
+		return;
 	g_fmt_cap(fmt);
 	m_pixelformat = fmt.fmt.pix.pixelformat;
 	m_width       = fmt.fmt.pix.width;
 	m_height      = fmt.fmt.pix.height;
 	updateFrameSize();
+	updateFrameInterval();
 	if (enum_fmt_cap(desc, true)) {
 		do {
 			if (desc.pixelformat == fmt.fmt.pix.pixelformat)
@@ -605,15 +948,20 @@ void GeneralTab::updateFrameInterval()
 	m_frameInterval->clear();
 
 	ok = enum_frameintervals(frmival, m_pixelformat, m_width, m_height);
-	curr_ok = get_interval(curr);
-	if (ok && frmival.type == V4L2_FRMIVAL_TYPE_DISCRETE) {
+	m_has_interval = ok && frmival.type == V4L2_FRMIVAL_TYPE_DISCRETE;
+	m_frameInterval->setEnabled(m_has_interval);
+	if (m_has_interval) {
+	        m_interval = frmival.discrete;
+        	curr_ok = v4l2::get_interval(curr);
 		do {
 			m_frameInterval->addItem(QString("%1 fps")
 				.arg((double)frmival.discrete.denominator / frmival.discrete.numerator));
 			if (curr_ok &&
 			    frmival.discrete.numerator == curr.numerator &&
-			    frmival.discrete.denominator == curr.denominator)
+			    frmival.discrete.denominator == curr.denominator) {
 				m_frameInterval->setCurrentIndex(frmival.index);
+				m_interval = frmival.discrete;
+                        }
 		} while (enum_frameintervals(frmival));
 	}
 }
@@ -633,4 +981,12 @@ void GeneralTab::updateVidOutFormat()
 	if (desc.pixelformat != fmt.fmt.pix.pixelformat)
 		return;
 	m_vidCapFormats->setCurrentIndex(desc.index);
+}
+
+bool GeneralTab::get_interval(struct v4l2_fract &interval)
+{
+	if (m_has_interval)
+		interval = m_interval;
+
+	return m_has_interval;
 }
