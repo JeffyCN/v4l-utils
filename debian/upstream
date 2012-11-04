@@ -1,0 +1,5 @@
+Name: v4l-utils
+Contact: Linux Media Mailing List <linux-media@vger.kernel.org>
+Repository: git://linuxtv.org/v4l-utils.git
+Repository-Browse: http://git.linuxtv.org/v4l-utils.git
+Watch: http://linuxtv.org/downloads/v4l-utils/v4l-utils-([\d\.]*)\.tar\.bz2
