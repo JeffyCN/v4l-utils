@@ -1,3 +1,12 @@
+v4l-utils (0.8.9-2) unstable; urgency=low
+
+  * Dropped deprecated DM-Upload-Allowed flag
+  * Added Upstream Metadata file
+  * Remove bashisms from bugreport helper script (Closes: #701548)
+  * Add two upside down table entries from the upstream 0.8.x branch
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Sun, 17 Mar 2013 20:08:40 +0100
+
 v4l-utils (0.8.9-1) unstable; urgency=low
 
   * Imported Upstream version 0.8.9
