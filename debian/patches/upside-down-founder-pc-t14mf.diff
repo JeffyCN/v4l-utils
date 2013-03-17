@@ -1,0 +1,17 @@
+From: Gregor Jasny <gjasny@googlemail.com>
+Date: Sun, 27 Jan 2013 16:57:54 +0100
+Subject: [PATCH] libv4l: Add Founder PC T14MF to upside down table
+Origin: upstream, http://git.linuxtv.org/v4l-utils.git/patch/911315171d89537a940de8b09f96aa62d5c5c172
+
+--- a/lib/libv4lconvert/control/libv4lcontrol.c
++++ b/lib/libv4lconvert/control/libv4lcontrol.c
+@@ -72,6 +72,9 @@
+ 	{ 0x046d, 0x09b2, 0, "FUJITSU", "FJNB1C9",
+ 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED, 0,
+ 		"FUJITSU", "LifeBook P7230" },
++	/* A re-branded ASUS notebook */
++	{ 0x04f2, 0xb012, 0, "Founder PC", "T14MF",
++		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
+ 	/* Note no whitespace padding for board vendor, this is not a typo */
+ 	{ 0x04f2, 0xb012, 0, "PEGATRON CORPORATION", "X71TL     ",
+ 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
