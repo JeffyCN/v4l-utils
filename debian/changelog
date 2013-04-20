@@ -1,3 +1,10 @@
+v4l-utils (0.8.9-3) unstable; urgency=low
+
+  * Added other active authors to copyright file
+  * Add patch to use openat syscall on platforms that support it
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Sat, 20 Apr 2013 21:19:06 +0200
+
 v4l-utils (0.8.9-2) unstable; urgency=low
 
   * Dropped deprecated DM-Upload-Allowed flag
