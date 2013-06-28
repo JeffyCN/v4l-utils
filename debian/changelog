@@ -1,3 +1,10 @@
+v4l-utils (0.8.9-4) unstable; urgency=low
+
+  * Fix crashes found by Mayhem
+  * Bumped standards to version 3.9.4 (no changes needed)
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Fri, 28 Jun 2013 22:29:07 +0200
+
 v4l-utils (0.8.9-3) unstable; urgency=low
 
   * Added other active authors to copyright file
