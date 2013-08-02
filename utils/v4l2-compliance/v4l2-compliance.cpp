@@ -46,6 +46,7 @@
 enum Option {
 	OptSetDevice = 'd',
 	OptHelp = 'h',
+	OptNoWarnings = 'n',
 	OptSetRadioDevice = 'r',
 	OptTest = 't',
 	OptTrace = 'T',
@@ -61,8 +62,9 @@ static int app_result;
 static int tests_total, tests_ok;
 
 // Globals
-int verbose;
-int wrapper;
+bool show_info;
+bool show_warnings = true;
+bool wrapper;
 int kernel_version;
 unsigned warnings;
 
@@ -71,7 +73,8 @@ static struct option long_options[] = {
 	{"radio-device", required_argument, 0, OptSetRadioDevice},
 	{"vbi-device", required_argument, 0, OptSetVbiDevice},
 	{"help", no_argument, 0, OptHelp},
-	{"verbose", required_argument, 0, OptVerbose},
+	{"verbose", no_argument, 0, OptVerbose},
+	{"no-warnings", no_argument, 0, OptNoWarnings},
 	{"trace", no_argument, 0, OptTrace},
 	{"wrapper", no_argument, 0, OptUseWrapper},
 	{0, 0, 0, 0}
@@ -82,16 +85,15 @@ static void usage(void)
 	printf("Usage:\n");
 	printf("Common options:\n");
 	printf("  -d, --device=<dev> use device <dev> as the video device\n");
-	printf("                     if <dev> is a single digit, then /dev/video<dev> is used\n");
+	printf("                     if <dev> starts with a digit, then /dev/video<dev> is used\n");
 	printf("  -r, --radio-device=<dev> use device <dev> as the radio device\n");
-	printf("                     if <dev> is a single digit, then /dev/radio<dev> is used\n");
+	printf("                     if <dev> starts with a digit, then /dev/radio<dev> is used\n");
 	printf("  -V, --vbi-device=<dev> use device <dev> as the vbi device\n");
-	printf("                     if <dev> is a single digit, then /dev/vbi<dev> is used\n");
+	printf("                     if <dev> starts with a digit, then /dev/vbi<dev> is used\n");
 	printf("  -h, --help         display this help message\n");
-	printf("  -v, --verbose=<level> turn on verbose reporting.\n");
-	printf("                     level 1: show warnings\n");
-	printf("                     level 2: show warnings and info messages\n");
+	printf("  -n, --no-warnings  turn off warning messages.\n");
 	printf("  -T, --trace        trace all called ioctls.\n");
+	printf("  -v, --verbose      turn on verbose reporting.\n");
 	printf("  -w, --wrapper      use the libv4l2 wrapper library.\n");
 	exit(0);
 }
@@ -256,11 +258,10 @@ static int testCap(struct node *node)
 	const __u32 input_caps = V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_VIDEO_OVERLAY |
 			V4L2_CAP_VBI_CAPTURE | V4L2_CAP_SLICED_VBI_CAPTURE |
 			V4L2_CAP_VIDEO_CAPTURE_MPLANE | V4L2_CAP_HW_FREQ_SEEK |
-			V4L2_CAP_RDS_CAPTURE | V4L2_CAP_TUNER;
+			V4L2_CAP_TUNER;
 	const __u32 output_caps = V4L2_CAP_VIDEO_OUTPUT | V4L2_CAP_VIDEO_OUTPUT_MPLANE |
 			V4L2_CAP_VIDEO_OUTPUT_OVERLAY | V4L2_CAP_VBI_OUTPUT |
-			V4L2_CAP_SLICED_VBI_OUTPUT | V4L2_CAP_MODULATOR |
-			V4L2_CAP_RDS_OUTPUT;
+			V4L2_CAP_SLICED_VBI_OUTPUT | V4L2_CAP_MODULATOR;
 	const __u32 m2m_caps = V4L2_CAP_VIDEO_M2M | V4L2_CAP_VIDEO_M2M_MPLANE;
 	const __u32 io_caps = V4L2_CAP_STREAMING | V4L2_CAP_READWRITE;
 	const __u32 mplane_caps = V4L2_CAP_VIDEO_CAPTURE_MPLANE | V4L2_CAP_VIDEO_OUTPUT_MPLANE |
@@ -316,10 +317,15 @@ static int testCap(struct node *node)
 		if (dcaps & output_caps)
 			fail_on_test(dcaps & input_caps);
 	}
-	if (node->can_capture || node->can_output)
-		fail_on_test(!(dcaps & io_caps));
-	else
+	if (node->can_capture || node->can_output) {
+		// whether io_caps need to be set for RDS capture/output is
+		// checked elsewhere as that depends on the tuner/modulator
+		// capabilities.
+		if (!(dcaps & (V4L2_CAP_RDS_CAPTURE | V4L2_CAP_RDS_OUTPUT)))
+			fail_on_test(!(dcaps & io_caps));
+	} else {
 		fail_on_test(dcaps & io_caps);
+	}
 	// having both mplane and splane caps is not allowed (at least for now)
 	fail_on_test((dcaps & mplane_caps) && (dcaps & splane_caps));
 
@@ -412,36 +418,36 @@ int main(int argc, char **argv)
 			return 0;
 		case OptSetDevice:
 			video_device = optarg;
-			if (video_device[0] >= '0' && video_device[0] <= '9' && video_device[1] == 0) {
+			if (video_device[0] >= '0' && video_device[0] <= '9' && strlen(video_device) <= 3) {
 				static char newdev[20];
-				char dev = video_device[0];
 
-				sprintf(newdev, "/dev/video%c", dev);
+				sprintf(newdev, "/dev/video%s", video_device);
 				video_device = newdev;
 			}
 			break;
 		case OptSetRadioDevice:
 			radio_device = optarg;
-			if (radio_device[0] >= '0' && radio_device[0] <= '9' && radio_device[1] == 0) {
+			if (radio_device[0] >= '0' && radio_device[0] <= '9' && strlen(radio_device) <= 3) {
 				static char newdev[20];
-				char dev = radio_device[0];
 
-				sprintf(newdev, "/dev/radio%c", dev);
+				sprintf(newdev, "/dev/radio%s", radio_device);
 				radio_device = newdev;
 			}
 			break;
 		case OptSetVbiDevice:
 			vbi_device = optarg;
-			if (vbi_device[0] >= '0' && vbi_device[0] <= '9' && vbi_device[1] == 0) {
+			if (vbi_device[0] >= '0' && vbi_device[0] <= '9' && strlen(vbi_device) <= 3) {
 				static char newdev[20];
-				char dev = vbi_device[0];
 
-				sprintf(newdev, "/dev/vbi%c", dev);
+				sprintf(newdev, "/dev/vbi%s", vbi_device);
 				vbi_device = newdev;
 			}
 			break;
+		case OptNoWarnings:
+			show_warnings = false;
+			break;
 		case OptVerbose:
-			verbose = atoi(optarg);
+			show_info = true;
 			break;
 		case ':':
 			fprintf(stderr, "Option `%s' requires a value\n",
@@ -604,7 +610,6 @@ int main(int argc, char **argv)
 	/* Debug ioctls */
 
 	printf("Debug ioctls:\n");
-	printf("\ttest VIDIOC_DBG_G_CHIP_IDENT: %s\n", ok(testChipIdent(&node)));
 	printf("\ttest VIDIOC_DBG_G/S_REGISTER: %s\n", ok(testRegister(&node)));
 	printf("\ttest VIDIOC_LOG_STATUS: %s\n", ok(testLogStatus(&node)));
 	printf("\n");
@@ -650,7 +655,6 @@ int main(int argc, char **argv)
 
 	printf("Input/Output configuration ioctls:\n");
 	printf("\ttest VIDIOC_ENUM/G/S/QUERY_STD: %s\n", ok(testStd(&node)));
-	printf("\ttest VIDIOC_ENUM/G/S/QUERY_DV_PRESETS: %s\n", ok(testPresets(&node)));
 	printf("\ttest VIDIOC_ENUM/G/S/QUERY_DV_TIMINGS: %s\n", ok(testTimings(&node)));
 	printf("\ttest VIDIOC_DV_TIMINGS_CAP: %s\n", ok(testTimingsCap(&node)));
 	printf("\n");
@@ -686,7 +690,7 @@ int main(int argc, char **argv)
 
 	   VIDIOC_CROPCAP, VIDIOC_G/S_CROP, VIDIOC_G/S_SELECTION
 	   VIDIOC_S_FBUF/OVERLAY
-	   VIDIOC_QBUF/DQBUF/QUERYBUF/PREPARE_BUFS
+	   VIDIOC_QBUF/DQBUF/QUERYBUF/PREPARE_BUFS/EXPBUF
 	   VIDIOC_STREAMON/OFF
 	   */
 

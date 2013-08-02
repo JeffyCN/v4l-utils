@@ -153,7 +153,7 @@ static int checkQCtrl(struct node *node, struct test_queryctrl &qctrl)
 		qmenu.index = i;
 		ret = doioctl(node, VIDIOC_QUERYMENU, &qmenu);
 		if (ret && ret != EINVAL)
-			return fail("invalid QUERYMENU return code\n");
+			return fail("invalid QUERYMENU return code (%d)\n", ret);
 		if (ret)
 			continue;
 		if (i < qctrl.minimum || i > qctrl.maximum)
@@ -194,7 +194,7 @@ int testQueryControls(struct node *node)
 		if (ret == ENOTTY)
 			return ret;
 		if (ret && ret != EINVAL)
-			return fail("invalid queryctrl return code\n");
+			return fail("invalid queryctrl return code (%d)\n", ret);
 		if (ret)
 			break;
 		if (checkQCtrl(node, qctrl))
@@ -244,7 +244,7 @@ int testQueryControls(struct node *node)
 		qctrl.id = id;
 		ret = doioctl(node, VIDIOC_QUERYCTRL, &qctrl);
 		if (ret && ret != EINVAL)
-			return fail("invalid queryctrl return code\n");
+			return fail("invalid queryctrl return code (%d)\n", ret);
 		if (ret)
 			continue;
 		if (qctrl.id != id)
@@ -260,7 +260,7 @@ int testQueryControls(struct node *node)
 		qctrl.id = id;
 		ret = doioctl(node, VIDIOC_QUERYCTRL, &qctrl);
 		if (ret && ret != EINVAL)
-			return fail("invalid queryctrl return code\n");
+			return fail("invalid queryctrl return code (%d)\n", ret);
 		if (ret)
 			break;
 		if (qctrl.id != id)
@@ -352,7 +352,7 @@ int testSimpleControls(struct node *node)
 			ctrl.id = iter->id;
 			ctrl.value = iter->default_value;
 		} else if (ret)
-			return fail("g_ctrl returned an error\n");
+			return fail("g_ctrl returned an error (%d)\n", ret);
 		else if (checkSimpleCtrl(ctrl, *iter))
 			return fail("invalid control %08x\n", iter->id);
 		
@@ -417,7 +417,7 @@ int testSimpleControls(struct node *node)
 				if (!valid && !ret)
 					return fail("could set invalid menu item %d\n", i);
 				if (ret && ret != EINVAL)
-					return fail("setting invalid menu item returned wrong error\n");
+					return fail("setting invalid menu item returned wrong error (%d)\n", ret);
 			}
 		} else {
 			// at least min, max and default values should work
@@ -581,7 +581,7 @@ int testExtendedControls(struct node *node)
 			if (ctrls.error_idx != 0)
 				return fail("invalid error index read only control\n");
 		} else if (ret) {
-			return fail("try_ext_ctrls returned an error\n");
+			return fail("try_ext_ctrls returned an error (%d)\n", ret);
 		}
 		
 		// Try to set the current value (or the default value for write only controls)
@@ -597,7 +597,7 @@ int testExtendedControls(struct node *node)
 				ret = 0;
 			}
 			if (ret)
-				return fail("s_ext_ctrls returned an error\n");
+				return fail("s_ext_ctrls returned an error (%d)\n", ret);
 		
 			if (checkExtendedCtrl(ctrl, *iter))
 				return fail("s_ext_ctrls returned invalid control contents (%08x)\n", iter->id);
@@ -614,7 +614,7 @@ int testExtendedControls(struct node *node)
 	if (ret != EINVAL)
 		return fail("g_ext_ctrls accepted invalid control ID\n");
 	if (ctrls.error_idx != ctrls.count)
-		return fail("g_ext_ctrls(0) invalid error_idx\n");
+		return fail("g_ext_ctrls(0) invalid error_idx %u\n", ctrls.error_idx);
 	ctrl.id = 0;
 	ctrl.size = 0;
 	ctrl.value = 0;
@@ -622,12 +622,12 @@ int testExtendedControls(struct node *node)
 	if (ret != EINVAL)
 		return fail("try_ext_ctrls accepted invalid control ID\n");
 	if (ctrls.error_idx != 0)
-		return fail("try_ext_ctrls(0) invalid error_idx\n");
+		return fail("try_ext_ctrls(0) invalid error_idx %u\n", ctrls.error_idx);
 	ret = doioctl(node, VIDIOC_S_EXT_CTRLS, &ctrls);
 	if (ret != EINVAL)
 		return fail("s_ext_ctrls accepted invalid control ID\n");
 	if (ctrls.error_idx != ctrls.count)
-		return fail("s_ext_ctrls(0) invalid error_idx\n");
+		return fail("s_ext_ctrls(0) invalid error_idx %u\n", ctrls.error_idx);
 
 	for (iter = node->controls.begin(); iter != node->controls.end(); ++iter) {
 		struct v4l2_ext_control ctrl;

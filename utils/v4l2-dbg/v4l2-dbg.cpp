@@ -30,10 +30,13 @@
 #include <sys/ioctl.h>
 #include <sys/time.h>
 #include <math.h>
+#include <config.h>
+
+#ifdef HAVE_SYS_KLOG_H
 #include <sys/klog.h>
+#endif
 
 #include <linux/videodev2.h>
-#include <media/v4l2-chip-ident.h>
 
 #include <list>
 #include <vector>
@@ -110,13 +113,6 @@ static const struct board_list boards[] = {
 	},
 };
 
-struct chipid {
-	const char *name;
-	unsigned id;
-};
-
-extern struct chipid chipids[];
-
 /* Short option list
 
    Please keep in alphabetical order.
@@ -131,8 +127,7 @@ enum Option {
 	OptSetDevice = 'd',
 	OptGetDriverInfo = 'D',
 	OptChip = 'c',
-	OptScanChipIdents = 'S',
-	OptGetChipIdent = 'i',
+	OptScanChips = 'n',
 	OptSetStride = 'w',
 	OptHelp = 'h',
 
@@ -153,8 +148,7 @@ static struct option long_options[] = {
 	{"get-register", required_argument, 0, OptGetRegister},
 	{"set-register", required_argument, 0, OptSetRegister},
 	{"chip", required_argument, 0, OptChip},
-	{"scan-chip-idents", no_argument, 0, OptScanChipIdents},
-	{"get-chip-ident", no_argument, 0, OptGetChipIdent},
+	{"scan-chips", no_argument, 0, OptScanChips},
 	{"info", no_argument, 0, OptGetDriverInfo},
 	{"verbose", no_argument, 0, OptVerbose},
 	{"log-status", no_argument, 0, OptLogStatus},
@@ -168,16 +162,14 @@ static void usage(void)
 	printf("Usage: v4l2-dbg [options] [values]\n"
 	       "  -D, --info         Show driver info [VIDIOC_QUERYCAP]\n"
 	       "  -d, --device=<dev> Use device <dev> instead of /dev/video0\n"
-	       "                     If <dev> is a single digit, then /dev/video<dev> is used\n"
+	       "                     If <dev> starts with a digit, then /dev/video<dev> is used\n"
 	       "  -h, --help         Display this help message\n"
 	       "  --verbose          Turn on verbose ioctl error reporting\n"
 	       "  -c, --chip=<chip>  The chip identifier to use with other commands\n"
 	       "                     It can be one of:\n"
-	       "                         I2C driver name\n"
-	       "                         I2C 7-bit address\n"
-	       "                         AC97: for ac97 anciliary mixer\n"
-	       "                         host<num>: host chip number <num>\n"
-	       "                         host (default): same as host0\n"
+	       "                         bridge<num>: bridge chip number <num>\n"
+	       "                         bridge (default): same as bridge0\n"
+	       "                         subdev<num>: sub-device number <num>\n"
 	       "  -l, --list-registers[=min=<addr>[,max=<addr>]]\n"
 	       "		     Dump registers from <min> to <max> [VIDIOC_DBG_G_REGISTER]\n"
 	       "  -g, --get-register=<addr>\n"
@@ -185,10 +177,7 @@ static void usage(void)
 	       "  -s, --set-register=<addr>\n"
 	       "		     Set the register with the commandline arguments\n"
 	       "                     The register will autoincrement [VIDIOC_DBG_S_REGISTER]\n"
-	       "  -S, --scan-chip-idents\n"
-	       "		     Scan the available host and i2c chips [VIDIOC_DBG_G_CHIP_IDENT]\n"
-	       "  -i, --get-chip-ident\n"
-	       "		     Get the chip identifier [VIDIOC_DBG_G_CHIP_IDENT]\n"
+	       "  -n, --scan-chips   Scan the available bridge and subdev chips [VIDIOC_DBG_G_CHIP_INFO]\n"
 	       "  -w, --wide=<reg length>\n"
 	       "		     Sets step between two registers\n"
 	       "  --list-symbols     List the symbolic register names you can use, if any\n"
@@ -257,8 +246,8 @@ static void print_regs(int fd, struct v4l2_dbg_register *reg, unsigned long min,
 		}
 		reg->reg = i;
 		if (ioctl(fd, VIDIOC_DBG_G_REGISTER, reg) < 0) {
-			fprintf(stderr, "ioctl: VIDIOC_DBG_G_REGISTER "
-					"failed for 0x%llx\n", reg->reg);
+			perror("ioctl: VIDIOC_DBG_G_REGISTER failed\n");
+			break;
 		} else {
 			printf("%0*llx ", 2 * stride, reg->val);
 		}
@@ -267,20 +256,11 @@ static void print_regs(int fd, struct v4l2_dbg_register *reg, unsigned long min,
 	printf("\n");
 }
 
-static void print_chip(struct v4l2_dbg_chip_ident *chip)
+static void print_name(struct v4l2_dbg_chip_info *chip)
 {
-	const char *name = NULL;
-
-	for (int i = 0; chipids[i].name; i++) {
-		if (chipids[i].id == chip->ident) {
-			name = chipids[i].name;
-			break;
-		}
-	}
-	if (name)
-		printf("%-10s revision 0x%08x\n", name, chip->revision);
-	else
-		printf("%-10d revision 0x%08x\n", chip->ident, chip->revision);
+	printf("%-10s (%c%c)\n", chip->name,
+		(chip->flags & V4L2_CHIP_FL_READABLE) ? 'r' : '-',
+		(chip->flags & V4L2_CHIP_FL_WRITABLE) ? 'w' : '-');
 }
 
 static unsigned long long parse_reg(const struct board_list *curr_bd, const std::string &reg)
@@ -371,7 +351,7 @@ static int parse_subopt(char **subs, const char * const *subopts, char **value)
 		usage();
 		exit(1);
 	}
-	if (value == NULL) {
+	if (*value == NULL) {
 		fprintf(stderr, "No value given to suboption <%s>\n",
 				subopts[opt]);
 		usage();
@@ -393,7 +373,7 @@ int main(int argc, char **argv)
 	struct v4l2_capability vcap;	/* list_cap */
 	struct v4l2_dbg_register set_reg;
 	struct v4l2_dbg_register get_reg;
-	struct v4l2_dbg_chip_ident chip_id;
+	struct v4l2_dbg_chip_info chip_info;
 	const struct board_list *curr_bd = NULL;
 	char short_options[26 * 2 * 2 + 1];
 	int idx = 0;
@@ -402,12 +382,12 @@ int main(int argc, char **argv)
 	unsigned long long reg_min = 0, reg_max = 0;
 	std::vector<std::string> get_regs;
 	struct v4l2_dbg_match match;
+	char *p;
 
-	match.type = V4L2_CHIP_MATCH_HOST;
+	match.type = V4L2_CHIP_MATCH_BRIDGE;
 	match.addr = 0;
 	memset(&set_reg, 0, sizeof(set_reg));
 	memset(&get_reg, 0, sizeof(get_reg));
-	memset(&chip_id, 0, sizeof(chip_id));
 
 	if (argc == 1) {
 		usage();
@@ -437,34 +417,27 @@ int main(int argc, char **argv)
 
 		case OptSetDevice:
 			device = optarg;
-			if (device[0] >= '0' && device[0] <= '9' && device[1] == 0) {
+			if (device[0] >= '0' && device[0] <= '9' && strlen(device) <= 3) {
 				static char newdev[20];
-				char dev = device[0];
 
-				sprintf(newdev, "/dev/video%c", dev);
+				sprintf(newdev, "/dev/video%s", device);
 				device = newdev;
 			}
 			break;
 
 		case OptChip:
-			if (isdigit(optarg[0])) {
-				match.type = V4L2_CHIP_MATCH_I2C_ADDR;
-				match.addr = strtoul(optarg, NULL, 0);
+			if (!memcmp(optarg, "subdev", 6) && isdigit(optarg[6])) {
+				match.type = V4L2_CHIP_MATCH_SUBDEV;
+				match.addr = strtoul(optarg + 6, NULL, 0);
 				break;
 			}
-			if (!memcmp(optarg, "host", 4)) {
-				match.type = V4L2_CHIP_MATCH_HOST;
-				match.addr = strtoul(optarg + 4, NULL, 0);
+			if (!memcmp(optarg, "bridge", 6)) {
+				match.type = V4L2_CHIP_MATCH_BRIDGE;
+				match.addr = strtoul(optarg + 6, NULL, 0);
 				break;
 			}
-			if (!strcasecmp(optarg, "ac97")) {
-				match.type = V4L2_CHIP_MATCH_AC97;
-				match.addr = 0;
-				break;
-			}
-			match.type = V4L2_CHIP_MATCH_I2C_DRIVER;
-			strncpy(match.name, optarg, sizeof(match.name));
-			match.name[sizeof(match.name) - 1] = '\0';
+			match.type = V4L2_CHIP_MATCH_BRIDGE;
+			match.addr = 0;
 			break;
 
 		case OptSetRegister:
@@ -504,7 +477,6 @@ int main(int argc, char **argv)
 			}
 			break;
 
-		case OptGetChipIdent:
 		case OptListSymbols:
 			break;
 
@@ -546,20 +518,21 @@ int main(int argc, char **argv)
 		printf("%s", cap2s(vcap.capabilities).c_str());
 	}
 
-	if (match.type == V4L2_CHIP_MATCH_AC97) {
-		curr_bd = &boards[AC97_BOARD];
-	} else if (match.type == V4L2_CHIP_MATCH_HOST) {
-		for (int board = ARRAY_SIZE(boards) - 1; board >= 0; board--) {
-			if (!strcasecmp((char *)vcap.driver, boards[board].name)) {
-				curr_bd = &boards[board];
-				break;
-			}
-		}
-	} else if (match.type == V4L2_CHIP_MATCH_I2C_DRIVER) {
-		for (int board = ARRAY_SIZE(boards) - 1; board >= 0; board--) {
-			if (!strcasecmp(match.name, boards[board].name)) {
-				curr_bd = &boards[board];
-				break;
+	chip_info.name[0] = '\0';
+	if (options[OptChip]) {
+		/* try to figure out which chip it is */
+		chip_info.match = match;
+		if (doioctl(fd, VIDIOC_DBG_G_CHIP_INFO, &chip_info, "VIDIOC_DBG_G_CHIP_INFO") != 0)
+			chip_info.name[0] = '\0';
+
+		if (!strncasecmp(match.name, "ac97", 4)) {
+			curr_bd = &boards[AC97_BOARD];
+		} else {
+			for (int board = ARRAY_SIZE(boards) - 1; board >= 0; board--) {
+				if (!strcasecmp(chip_info.name, boards[board].name)) {
+					curr_bd = &boards[board];
+					break;
+				}
 			}
 		}
 	}
@@ -593,31 +566,21 @@ int main(int argc, char **argv)
 		}
 	}
 
-	if (options[OptGetChipIdent]) {
-		chip_id.match = match;
-		if (doioctl(fd, VIDIOC_DBG_G_CHIP_IDENT, &chip_id, "VIDIOC_DBG_G_CHIP_IDENT") == 0)
-			print_chip(&chip_id);
-	}
+	if (options[OptScanChips]) {
+		chip_info.match.type = V4L2_CHIP_MATCH_BRIDGE;
+		chip_info.match.addr = 0;
 
-	if (options[OptScanChipIdents]) {
-		int i;
-
-		chip_id.match.type = V4L2_CHIP_MATCH_HOST;
-		chip_id.match.addr = 0;
-
-		while (doioctl(fd, VIDIOC_DBG_G_CHIP_IDENT, &chip_id, "VIDIOC_DBG_G_CHIP_IDENT") == 0 && chip_id.ident) {
-			printf("host%d: ", chip_id.match.addr);
-			print_chip(&chip_id);
-			chip_id.match.addr++;
+		while (doioctl(fd, VIDIOC_DBG_G_CHIP_INFO, &chip_info, "VIDIOC_DBG_G_CHIP_INFO") == 0 && chip_info.name[0]) {
+			printf("bridge%d: ", chip_info.match.addr);
+			print_name(&chip_info);
+			chip_info.match.addr++;
 		}
 
-		chip_id.match.type = V4L2_CHIP_MATCH_I2C_ADDR;
-		for (i = 0; i < 128; i++) {
-			chip_id.match.addr = i;
-			if (doioctl(fd, VIDIOC_DBG_G_CHIP_IDENT, &chip_id, "VIDIOC_DBG_G_CHIP_IDENT") == 0 && chip_id.ident) {
-				printf("i2c 0x%02x: ", i);
-				print_chip(&chip_id);
-			}
+		chip_info.match.type = V4L2_CHIP_MATCH_SUBDEV;
+		chip_info.match.addr = 0;
+		while (doioctl(fd, VIDIOC_DBG_G_CHIP_INFO, &chip_info, "VIDIOC_DBG_G_CHIP_INFO") == 0 && chip_info.name[0]) {
+			printf("subdev%d: ", chip_info.match.addr++);
+			print_name(&chip_info);
 		}
 	}
 
@@ -654,7 +617,7 @@ int main(int argc, char **argv)
 		get_reg.match = match;
 		if (forcedstride) {
 			stride = forcedstride;
-		} else if (get_reg.match.type == V4L2_CHIP_MATCH_HOST) {
+		} else if (get_reg.match.type == V4L2_CHIP_MATCH_BRIDGE) {
 			stride = 4;
 		}
 		printf("ioctl: VIDIOC_DBG_G_REGISTER\n");
@@ -707,27 +670,10 @@ int main(int argc, char **argv)
 			goto list_done;
 		}
 
-		/* try to figure out which chip it is */
-		chip_id.match = match;
-		if (doioctl(fd, VIDIOC_DBG_G_CHIP_IDENT, &chip_id, "VIDIOC_DBG_G_CHIP_IDENT") != 0) {
-			chip_id.ident = V4L2_IDENT_NONE;
-		}
-		switch (chip_id.ident) {
-		case V4L2_IDENT_CX23415:
-		case V4L2_IDENT_CX23416:
-			name = "cx23416";
-			break;
-		case V4L2_IDENT_CX23418:
-			name = "cx23418";
-			break;
-		case V4L2_IDENT_CAFE:
-			name = "cafe";
-			break;
-		default:
-			if (get_reg.match.type == V4L2_CHIP_MATCH_I2C_DRIVER)
-				name = get_reg.match.name;
-			break;
-		}
+		p = strchr(chip_info.name, ' ');
+		if (p)
+			*p = '\0';
+		name = chip_info.name;
 
 		if (name == "saa7115") {
 			print_regs(fd, &get_reg, 0, 0xff, stride);
@@ -764,20 +710,24 @@ list_done:
 
 	if (options[OptLogStatus]) {
 		static char buf[40960];
-		int len;
+		int len = -1;
 
 		if (doioctl(fd, VIDIOC_LOG_STATUS, NULL, "VIDIOC_LOG_STATUS") == 0) {
 			printf("\nStatus Log:\n\n");
+#ifdef HAVE_KLOGCTL
 			len = klogctl(3, buf, sizeof(buf) - 1);
+#endif
 			if (len >= 0) {
+				bool found_status = false;
 				char *p = buf;
 				char *q;
 
 				buf[len] = 0;
-				while ((q = strstr(p, "START STATUS CARD #"))) {
+				while ((q = strstr(p, "START STATUS"))) {
+					found_status = true;
 					p = q + 1;
 				}
-				if (p) {
+				if (found_status) {
 					while (p > buf && *p != '<') p--;
 					q = p;
 					while ((q = strstr(q, "<6>"))) {

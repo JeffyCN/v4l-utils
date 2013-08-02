@@ -19,6 +19,7 @@
  */
 
 #include "dvb-file.h"
+#include <config.h>
 #include <argp.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -112,7 +113,7 @@ int main(int argc, char *argv[])
 #endif
 	if (get) {
 		dvb_fe_get_parms(parms);
-		dvb_fe_prt_parms(stdout, parms);
+		dvb_fe_prt_parms(parms);
 	}
 
 	dvb_fe_close(parms);

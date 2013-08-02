@@ -1,6 +1,6 @@
 #!/usr/bin/perl
 
-#   Copyright (C) 2011 Mauro Carvalho Chehab <mchehab@redhat.com>
+#   Copyright (C) 2011-2012 Mauro Carvalho Chehab <mchehab@redhat.com>
 #
 #   This program is free software; you can redistribute it and/or modify
 #   it under the terms of the GNU General Public License as published by
@@ -28,6 +28,10 @@ use strict;
 #use warnings;
 use Getopt::Long;
 use Pod::Usage;
+use File::Find;
+
+# Enable autoflush
+BEGIN { $| = 1 }
 
 # Debug levels:
 #	1 - frame request and frame response
@@ -38,13 +42,19 @@ my $debug = 0;
 my $man = 0;
 my $help = 0;
 my $pcap = 0;
+my $all = 0;
+my $list_devices = 0;
 my $device;
+my $usbdev = -1;
 
 GetOptions('debug=i' => \$debug,
 	   'help|?' => \$help,
 	   'pcap' => \$pcap,
+	   'all' => \$all,
 	   'device=s' => \$device,
-	    man => \$man
+	    man => \$man,
+	   'usbdev=i' => \$usbdev,
+	   'list-devices' => \$list_devices,
 	  ) or pod2usage(2);
 pod2usage(1) if $help;
 pod2usage(-exitstatus => 0, -verbose => 2) if $man;
@@ -53,7 +63,7 @@ my $filename = shift;
 
 $pcap = 1 if ($device);
 $device = "usbmon1" if ($pcap && !$device);
-die "Or use pcap or specify a filename" if ($pcap && $filename);
+die "Either use pcap or specify a filename" if ($pcap && $filename);
 
 #
 # tcpdump code imported from Tcpdumplog.pm
@@ -135,7 +145,7 @@ sub get_header {
 		($ident,$major,$minor,$zoneoffset,$accuracy,$dumplength,
 		 $linktype) = unpack('a4nnNNNN',$header);
 	}
-	if ($ident =~ /^\324\303\262\241/) {
+	elsif ($ident =~ /^\324\303\262\241/) {
 		#
 		#  Standard format little endian, header "d4c3b2a1"
 		#  Seen from:
@@ -146,7 +156,7 @@ sub get_header {
 		($ident,$major,$minor,$zoneoffset,$accuracy,$dumplength,
 		 $linktype) = unpack('a4vvVVVV',$header);
 	}
-	if ($ident =~ /^\241\262\315\064/) {
+	elsif ($ident =~ /^\241\262\315\064/) {
 		#
 		#  Modified format big endian, header "a1b2cd34"
 		#  Seen from:
@@ -157,7 +167,7 @@ sub get_header {
 		($ident,$major,$minor,$zoneoffset,$accuracy,$dumplength,
 		 $linktype) = unpack('a4nnNNNN',$header);
 	}
-	if ($ident =~ /^\064\315\262\241/) {
+	elsif ($ident =~ /^\064\315\262\241/) {
 		#
 		#  Modified format little endian, header "cd34a1b2"
 		#  Seen from:
@@ -169,7 +179,9 @@ sub get_header {
 		($ident,$major,$minor,$zoneoffset,$accuracy,$dumplength,
 		 $linktype) = unpack('a4vvVVVV',$header);
 	}
-
+	else {
+		die "unknown magic in header, cannot parse this file, make sure it is pcap and not a pcapng (run file <filename> to find out) and than convert with wireshark.";
+	}
 	### Store values
 	$self->{version} = $version;
 	$self->{major} = $major;
@@ -374,6 +386,13 @@ sub print_frame($$)
 	return;
 }
 
+my %frametype = (
+	0 => "ISOC",
+	1 => "Interrupt",
+	2 => "Control",
+	3 => "Bulk",
+);
+
 sub process_frame($) {
 	my %frame = %{ $_[0] };
 
@@ -385,12 +404,19 @@ sub process_frame($) {
 	}
 
 	# For now, we'll take a look only on control frames
-	return if ($frame{"TransferType"} ne "2");
+	if ($frame{"TransferType"} ne "2" && $all) {
+		printf "Transfer type: %s\n", $frametype{$frame{"TransferType"}};
+		return;
+	}
 
 	if ($frame{"Status"} eq "-115") {
 		push @pending, \%frame;
 		return;
 	}
+
+# skip unwanted URBs
+	return
+		if $usbdev != -1 and $usbdev != $frame{'Device'};
 
 	# Seek for operation origin
 	my $related = $frame{"ID"};
@@ -516,6 +542,39 @@ sub handle_pcap_packet($$$)
 	process_frame(\%frame);
 }
 
+my $pcap_descr;
+sub sigint_handler {
+	# Close pcap gracefully after CTRL/C
+	if ($pcap_descr) {
+		Net::Pcap::close($pcap_descr);
+		print "End of capture.\n";
+		exit(0);
+	}
+}
+
+#
+# Ancillary routines to list what's connected to each USB port
+#
+sub parse_devices {
+	my $file = $File::Find::name;
+
+	return if (!($file =~ m/product/));
+	return if (!($file =~ m/[0-9]+\-[0-9]+/));
+	return if (($file =~ m/subsystem/));
+
+	my $name = qx(cat $file);
+	$name =~ s/\n//g;
+
+	my ($bus, $port);
+	($bus, $port) = ($1, $2) if ($file =~ m/([0-9]+)\-([0-9]+)/);
+
+	printf("usbmon%s ==> %s (level %s)\n",$bus, $name, $port);
+}
+
+if ($list_devices) {
+	find({follow => 1, follow_skip => 2, wanted => \&parse_devices, no_chdir => 1}, "/sys/bus/usb/devices/");
+	exit;
+}
 
 # Main program, reading from a file. A small change is needed to allow it to
 # accept a pipe
@@ -543,17 +602,23 @@ if (!$pcap) {
 } else {
 	my $err;
 
-	$pcap = Net::Pcap::open_live($device, 65535, 0, 1000, \$err);
+	$pcap_descr = Net::Pcap::open_live($device, 65535, 0, 1000, \$err);
 	die $err if ($err);
 
-	my $dl = Net::Pcap::datalink($pcap);
+	# Trap  signals to exit nicely
+	$SIG{HUP} = \&sigint_handler;
+	$SIG{INT} = \&sigint_handler;
+	$SIG{QUIT} = \&sigint_handler;
+	$SIG{TERM} = \&sigint_handler;
+
+	my $dl = Net::Pcap::datalink($pcap_descr);
 	if ($dl != 220) {
 		printf"Link type %d\n", $dl;
 		die "ERROR: Link type is not USB";
 	}
 
-	Net::Pcap::loop($pcap, -1, \&handle_pcap_packet, '');
-	Net::Pcap::close($pcap);
+	Net::Pcap::loop($pcap_descr, -1, \&handle_pcap_packet, '');
+	Net::Pcap::close($pcap_descr);
 	die $err;
 }
 
@@ -579,6 +644,10 @@ Options:
 
 	--device [usbmon dev]	allow changing the usbmon device (default: usbmon1)
 
+	--usbdev [usbdev id]    filter only traffic for a specific device
+
+	--list-devices          list the available USB devices for each usbmon port
+
 =head1 OPTIONS
 
 =over 8
@@ -593,7 +662,13 @@ Prints the manual page and exits.
 
 =item B<--debug> [log level]
 
-Changes the debug log level.
+Changes the debug log level. The available levels are:
+
+	1 - frame request and frame response
+
+	2 - parsed frames
+
+	4 - raw data
 
 =item B<--pcap>
 
@@ -607,6 +682,15 @@ Enables the capture from the usbmon directly, using Net::Pcap, using an
 interface different than usbmon1. It should be noticed, however, that the
 only datalink that this script can parse is the one provided by usbmon,
 e. g. datalink equal to 220 (LINKTYPE_USB_LINUX_MMAPPED).
+
+=item B<--list-devices>
+
+Lists all connected USB devices, and the associated usbmon device.
+
+=item B<--usbdev [id]>
+
+Filter traffic with given usbdev-id. By default no filtering is done
+and usbdev is -1.
 
 =back
 
@@ -664,7 +748,7 @@ Report bugs to Mauro Carvalho Chehab <mchehab@redhat.com>
 
 =head1 COPYRIGHT
 
-Copyright (c) 2011 by Mauro Carvalho Chehab <mchehab@redhat.com>.
+Copyright (c) 2011-2012 by Mauro Carvalho Chehab <mchehab@redhat.com>.
 
 License GPLv2: GNU GPL version 2 <http://gnu.org/licenses/gpl.html>.
 

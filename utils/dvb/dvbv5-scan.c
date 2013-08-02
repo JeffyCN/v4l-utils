@@ -30,10 +30,13 @@
 #include <sys/time.h>
 #include <argp.h>
 
+#include <config.h>
+
 #include <linux/dvb/dmx.h>
 #include "dvb-file.h"
 #include "dvb-demux.h"
-#include "libscan.h"
+#include "dvb-v5-std.h"
+#include "dvb-scan.h"
 
 #define PROGRAM_NAME	"dvbv5-scan"
 #define DEFAULT_OUTPUT  "dvb_channel.conf"
@@ -44,10 +47,13 @@ const char *argp_program_bug_address = "Mauro Carvalho Chehab <mchehab@redhat.co
 struct arguments {
 	char *confname, *lnb_name, *output, *demux_dev;
 	unsigned adapter, frontend, demux, get_detected, get_nit;
-	int lnb, sat_number, freq_bpf;
+	int force_dvbv3, lnb, sat_number, freq_bpf;
 	unsigned diseqc_wait, dont_add_new_freqs, timeout_multiply;
 	unsigned other_nit;
 	enum file_formats input_format, output_format;
+
+	/* Used by status print */
+	unsigned n_status_lines;
 };
 
 static const struct argp_option options[] = {
@@ -67,6 +73,7 @@ static const struct argp_option options[] = {
 	{"parse-other-nit", 'p', NULL,			0, "Parse the other NIT/SDT tables", 0},
 	{"input-format", 'I',	"format",		0, "Input format: CHANNEL, DVBV5 (default: DVBV5)", 0},
 	{"output-format", 'O',	"format",		0, "Output format: CHANNEL, ZAP, DVBV5 (default: DVBV5)", 0},
+	{"dvbv3",	'3',	0,			0, "Use DVBv3 only", 0},
 	{ 0, 0, 0, 0, 0, 0 }
 };
 
@@ -87,47 +94,107 @@ static int verbose = 0;
 		fprintf(stderr, " (%s)\n", strerror(errno));		\
 	} while (0)
 
-static int check_frontend(struct dvb_v5_fe_parms *parms, int timeout)
+static int print_frontend_stats(struct arguments *args,
+				struct dvb_v5_fe_parms *parms)
 {
-	int rc, i;
-	fe_status_t status;
-	uint32_t snr = 0, _signal = 0;
-	uint32_t ber = 0, uncorrected_blocks = 0;
+	char buf[512], *p;
+	int rc, i, len, show;
+	uint32_t status = 0;
 
-	for (i = 0; i < timeout * 10; i++) {
-		rc = dvb_fe_get_stats(parms);
-		if (rc < 0)
-			PERROR("dvb_fe_get_stats failed");
+	/* Move cursor up and cleans down */
+	if (isatty(STDERR_FILENO) && args->n_status_lines)
+		fprintf(stderr, "\r\x1b[%dA\x1b[J", args->n_status_lines);
 
+	args->n_status_lines = 0;
+
+	if (isatty(STDERR_FILENO)) {
 		rc = dvb_fe_retrieve_stats(parms, DTV_STATUS, &status);
+		if (rc)
+			status = 0;
 		if (status & FE_HAS_LOCK)
-			break;
-		usleep(100000);
-	};
-	dvb_fe_retrieve_stats(parms, DTV_STATUS, &status);
-	dvb_fe_retrieve_stats(parms, DTV_BER, &ber);
-	dvb_fe_retrieve_stats(parms, DTV_SIGNAL_STRENGTH, &_signal);
-	dvb_fe_retrieve_stats(parms, DTV_UNCORRECTED_BLOCKS,
-				    &uncorrected_blocks);
-	dvb_fe_retrieve_stats(parms, DTV_SNR, &snr);
-
-	printf("status %02x | signal %3u%% | snr %3u%% | ber %d | unc %d ",
-		status, (_signal * 100) / 0xffff, (snr * 100) / 0xffff,
-		ber, uncorrected_blocks);
-
-	if (status & FE_HAS_LOCK)
-		printf("| FE_HAS_LOCK\n");
-	else {
-		printf("| tune failed\n");
-		return -1;
+			fprintf(stderr, "\x1b[1;32m");
+		else
+			fprintf(stderr, "\x1b[33m");
 	}
+
+	p = buf;
+	len = sizeof(buf);
+	dvb_fe_snprintf_stat(parms,  DTV_STATUS, NULL, 0, &p, &len, &show);
+
+	for (i = 0; i < MAX_DTV_STATS; i++) {
+		show = 1;
+
+		dvb_fe_snprintf_stat(parms, DTV_QUALITY, "Quality",
+				     i, &p, &len, &show);
+
+		dvb_fe_snprintf_stat(parms, DTV_STAT_SIGNAL_STRENGTH, "Signal",
+				     i, &p, &len, &show);
+
+		dvb_fe_snprintf_stat(parms, DTV_STAT_CNR, "C/N",
+				     i, &p, &len, &show);
+
+		dvb_fe_snprintf_stat(parms, DTV_STAT_ERROR_BLOCK_COUNT, "UCB",
+				     i,  &p, &len, &show);
+
+		dvb_fe_snprintf_stat(parms, DTV_BER, "postBER",
+				     i,  &p, &len, &show);
+
+		dvb_fe_snprintf_stat(parms, DTV_PRE_BER, "preBER",
+				     i,  &p, &len, &show);
+
+		dvb_fe_snprintf_stat(parms, DTV_PER, "PER",
+				     i,  &p, &len, &show);
+
+		if (p != buf) {
+			if (args->n_status_lines)
+				fprintf(stderr, "\t%s\n", buf);
+			else
+				fprintf(stderr, "%s\n", buf);
+
+			args->n_status_lines++;
+
+			p = buf;
+			len = sizeof(buf);
+		}
+	}
+
+	fflush(stderr);
 
 	return 0;
 }
 
+static int check_frontend(struct arguments *args, struct dvb_v5_fe_parms *parms)
+{
+	int rc, i;
+	fe_status_t status;
+
+	args->n_status_lines = 0;
+	for (i = 0; i < args->timeout_multiply * 40; i++) {
+		rc = dvb_fe_get_stats(parms);
+		if (rc)
+			PERROR("dvb_fe_get_stats failed");
+
+		rc = dvb_fe_retrieve_stats(parms, DTV_STATUS, &status);
+		if (rc)
+			status = 0;
+		print_frontend_stats(args, parms);
+		if (status & FE_HAS_LOCK)
+			break;
+		usleep(100000);
+	};
+
+	if (isatty(STDERR_FILENO)) {
+		fprintf(stderr, "\x1b[37m");
+	}
+
+	return (status & FE_HAS_LOCK) ? 0 : -1;
+}
+
 static int new_freq_is_needed(struct dvb_entry *entry,
 			      struct dvb_entry *last_entry,
-			      uint32_t freq, int shift)
+			      uint32_t freq,
+			      enum dvb_sat_polarization pol,
+			      int shift)
 {
 	int i;
 	uint32_t data;
@@ -135,6 +202,10 @@ static int new_freq_is_needed(struct dvb_entry *entry,
 	for (; entry != last_entry; entry = entry->next) {
 		for (i = 0; i < entry->n_props; i++) {
 			data = entry->props[i].u.data;
+			if (entry->props[i].cmd == DTV_POLARIZATION) {
+				if (data != pol)
+					continue;
+			}
 			if (entry->props[i].cmd == DTV_FREQUENCY) {
 				if (( freq >= data - shift) && (freq <= data + shift))
 					return 0;
@@ -152,6 +223,11 @@ static void add_new_freq(struct dvb_entry *entry, uint32_t freq)
 
 	/* Clone the current entry into a new entry */
 	new_entry = calloc(sizeof(*new_entry), 1);
+	if (!new_entry) {
+		PERROR("not enough memory ofr a new scanning frequency");
+		return;
+	}
+
 	memcpy(new_entry, entry, sizeof(*entry));
 
 	/*
@@ -184,6 +260,7 @@ static int estimate_freq_shift(struct dvb_v5_fe_parms *parms)
 {
 	uint32_t shift = 0, bw = 0, symbol_rate, ro;
 	int rolloff = 0;
+	int divisor = 100;
 
 	/* Need to handle only cable/satellite and ATSC standards */
 	switch (parms->current_sys) {
@@ -195,11 +272,13 @@ static int estimate_freq_shift(struct dvb_v5_fe_parms *parms)
 		break;
 	case SYS_DVBS:
 	case SYS_ISDBS:	/* FIXME: not sure if this rollof is right for ISDB-S */
+		divisor = 100000;
 		rolloff = 135;
 		break;
 	case SYS_DVBS2:
 	case SYS_DSS:
 	case SYS_TURBO:
+		divisor = 100000;
 		dvb_fe_retrieve_parm(parms, DTV_ROLLOFF, &ro);
 		switch (ro) {
 		case ROLLOFF_20:
@@ -229,7 +308,7 @@ static int estimate_freq_shift(struct dvb_v5_fe_parms *parms)
 		 * purposes of estimating a max frequency shift here.
 		 */
 		dvb_fe_retrieve_parm(parms, DTV_SYMBOL_RATE, &symbol_rate);
-		bw = (symbol_rate * rolloff) / 100;
+		bw = (symbol_rate * rolloff) / divisor;
 	}
 	if (!bw)
 		dvb_fe_retrieve_parm(parms, DTV_BANDWIDTH_HZ, &bw);
@@ -244,25 +323,28 @@ static int estimate_freq_shift(struct dvb_v5_fe_parms *parms)
 }
 
 static void add_other_freq_entries(struct dvb_file *dvb_file,
-				    struct dvb_v5_fe_parms *parms,
-				   struct dvb_descriptors *dvb_desc)
+				   struct dvb_v5_fe_parms *parms,
+				   struct dvb_v5_descriptors *dvb_desc)
 {
 	int i;
 	uint32_t freq, shift = 0;
+	enum dvb_sat_polarization pol = POLARIZATION_OFF;
 
 	if (!dvb_desc->nit_table.frequency)
 		return;
+
+	pol = dvb_desc->nit_table.pol;
 
 	shift = estimate_freq_shift(parms);
 
 	for (i = 0; i < dvb_desc->nit_table.frequency_len; i++) {
 		freq = dvb_desc->nit_table.frequency[i];
 
-		if (new_freq_is_needed(dvb_file->first_entry, NULL, freq, shift))
+		if (new_freq_is_needed(dvb_file->first_entry, NULL, freq, pol,
+				       shift))
 			add_new_freq(dvb_file->first_entry, freq);
 	}
 }
-
 
 static int run_scan(struct arguments *args,
 		    struct dvb_v5_fe_parms *parms)
@@ -293,7 +375,7 @@ static int run_scan(struct arguments *args,
 		sys = SYS_UNDEFINED;
 		break;
 	}
-	dvb_file = read_file_format(args->confname, sys,
+	dvb_file = dvb_read_file_format(args->confname, sys,
 				    args->input_format);
 	if (!dvb_file)
 		return -2;
@@ -305,7 +387,7 @@ static int run_scan(struct arguments *args,
 	}
 
 	for (entry = dvb_file->first_entry; entry != NULL; entry = entry->next) {
-		struct dvb_descriptors *dvb_desc = NULL;
+		struct dvb_v5_descriptors *dvb_desc = NULL;
 
 		/* First of all, set the delivery system */
 		for (i = 0; i < entry->n_props; i++)
@@ -368,8 +450,8 @@ static int run_scan(struct arguments *args,
 		if (!freq)
 			continue;
 		shift = estimate_freq_shift(parms);
-		if (!new_freq_is_needed(dvb_file->first_entry, entry,
-					freq, shift))
+		if (dvb_desc && !new_freq_is_needed(dvb_file->first_entry, entry,
+					freq, dvb_desc->nit_table.pol, shift))
 			continue;
 
 		rc = dvb_fe_set_parms(parms);
@@ -383,15 +465,15 @@ static int run_scan(struct arguments *args,
 
 		dvb_fe_retrieve_parm(parms, DTV_FREQUENCY, &freq);
 		count++;
-		printf("Scanning frequency #%d %d\n", count, freq);
+		dvb_log("Scanning frequency #%d %d", count, freq);
 		if (verbose)
-			dvb_fe_prt_parms(stdout, parms);
+			dvb_fe_prt_parms(parms);
 
-		rc = check_frontend(parms, 4);
+		rc = check_frontend(args, parms);
 		if (rc < 0)
 			continue;
 
-		dvb_desc = get_dvb_ts_tables(dmx_fd,
+		dvb_desc = dvb_get_ts_tables(parms, dmx_fd,
 					     parms->current_sys,
 					     args->other_nit,
 					     args->timeout_multiply,
@@ -418,7 +500,7 @@ static int run_scan(struct arguments *args,
 		if (!args->dont_add_new_freqs)
 			add_other_freq_entries(dvb_file, parms, dvb_desc);
 
-		free_dvb_ts_tables(dvb_desc);
+		dvb_free_ts_tables(dvb_desc);
 	}
 
 	if (dvb_file_new)
@@ -485,6 +567,9 @@ static error_t parse_opt(int k, char *optarg, struct argp_state *state)
 	case 'o':
 		args->output = optarg;
 		break;
+	case '3':
+		args->force_dvbv3 = 1;
+		break;
 	default:
 		return ARGP_ERR_UNKNOWN;
 	};
@@ -507,11 +592,14 @@ int main(int argc, char **argv)
 	args.output = DEFAULT_OUTPUT;
 	args.input_format = FILE_DVBV5;
 	args.output_format = FILE_DVBV5;
+	args.timeout_multiply = 1;
 
 	argp_parse(&argp, argc, argv, 0, &idx, &args);
+	if (args.timeout_multiply == 0)
+		args.timeout_multiply = 1;
 
 	if (args.lnb_name) {
-		lnb = search_lnb(args.lnb_name);
+		lnb = dvb_sat_search_lnb(args.lnb_name);
 		if (lnb < 0) {
 			printf("Please select one of the LNBf's below:\n");
 			print_all_lnb();
@@ -543,12 +631,14 @@ int main(int argc, char **argv)
 	if (verbose)
 		fprintf(stderr, "using demux '%s'\n", args.demux_dev);
 
-	parms = dvb_fe_open(args.adapter, args.frontend, verbose, 0);
+	struct dvb_v5_fe_parms *parms = dvb_fe_open(args.adapter,
+						    args.frontend,
+						    verbose, args.force_dvbv3);
 	if (!parms)
 		return -1;
-	if (lnb)
-		parms->lnb = get_lnb(lnb);
-	if (args.sat_number > 0)
+	if (lnb >= 0)
+		parms->lnb = dvb_sat_get_lnb(lnb);
+	if (args.sat_number >= 0)
 		parms->sat_number = args.sat_number % 3;
 	parms->diseqc_wait = args.diseqc_wait;
 	parms->freq_bpf = args.freq_bpf;

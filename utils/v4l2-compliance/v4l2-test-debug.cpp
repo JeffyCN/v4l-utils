@@ -34,43 +34,14 @@
 #include <math.h>
 #include "v4l2-compliance.h"
 
-int testChipIdent(struct node *node)
-{
-	struct v4l2_dbg_chip_ident chip;
-	int ret;
-
-	memset(&chip, 0, sizeof(chip));
-	chip.match.type = V4L2_CHIP_MATCH_HOST;
-	chip.match.addr = 0;
-	ret = doioctl(node, VIDIOC_DBG_G_CHIP_IDENT, &chip);
-	// Must return either 0 (OK) or EINVAL (not supported)
-	if (ret == 0) {
-		struct v4l2_dbg_chip_ident orig;
-
-		memset(&orig, 0, sizeof(orig));
-		// set invalid match_type
-		chip.match.type = V4L2_CHIP_MATCH_I2C_ADDR + 1;
-		chip.match.addr = 0xdeadbeef;
-		chip.ident = 0xdeadbeef;
-		chip.revision = 0xdeadbeef;
-		orig = chip;
-		ret = doioctl(node, VIDIOC_DBG_G_CHIP_IDENT, &chip);
-		if (ret != EINVAL)
-			return fail("Invalid match_type accepted\n");
-		fail_on_test(memcmp(&orig, &chip, sizeof(chip)));
-		return 0;
-	}
-	return ret;
-}
-
 int testRegister(struct node *node)
 {
 	struct v4l2_dbg_register reg;
-	struct v4l2_dbg_chip_ident chip;
+	struct v4l2_dbg_chip_info chip;
 	int ret;
 	int uid = getuid();
 
-	reg.match.type = V4L2_CHIP_MATCH_HOST;
+	reg.match.type = V4L2_CHIP_MATCH_BRIDGE;
 	reg.match.addr = 0;
 	reg.reg = 0;
 	ret = doioctl(node, VIDIOC_DBG_G_REGISTER, &reg);
@@ -78,10 +49,11 @@ int testRegister(struct node *node)
 		return ret;
 	// Not allowed to call VIDIOC_DBG_G_REGISTER unless root
 	fail_on_test(uid && ret != EPERM);
-	fail_on_test(uid == 0 && ret);
-	chip.match.type = V4L2_CHIP_MATCH_HOST;
+	fail_on_test(uid == 0 && ret && ret != EINVAL);
+	fail_on_test(uid == 0 && !ret && reg.size == 0);
+	chip.match.type = V4L2_CHIP_MATCH_BRIDGE;
 	chip.match.addr = 0;
-	fail_on_test(doioctl(node, VIDIOC_DBG_G_CHIP_IDENT, &chip));
+	fail_on_test(doioctl(node, VIDIOC_DBG_G_CHIP_INFO, &chip));
 	if (uid) {
 		// Don't test S_REGISTER as root, don't want to risk
 		// messing with registers in the compliance test.

@@ -19,13 +19,15 @@
 #ifndef __LIBV4LCONVERT_PRIV_H
 #define __LIBV4LCONVERT_PRIV_H
 
+#include <config.h>
 #include <stdio.h>
 #include <stdint.h>
 #include <sys/types.h>
-#ifndef DISABLE_LIBJPEG
+#ifdef HAVE_JPEG
 #include <jpeglib.h>
 #endif
 #include <setjmp.h>
+#include "libv4l-plugin.h"
 #include "libv4lconvert.h"
 #include "control/libv4lcontrol.h"
 #include "processing/libv4lprocessing.h"
@@ -52,13 +54,13 @@ struct v4lconvert_data {
 	int64_t supported_src_formats; /* bitfield */
 	char error_msg[V4LCONVERT_ERROR_MSG_SIZE];
 	struct jdec_private *tinyjpeg;
-#ifndef DISABLE_LIBJPEG
+#ifdef HAVE_JPEG
 	struct jpeg_error_mgr jerr;
 	int jerr_errno;
 	jmp_buf jerr_jmp_state;
 	struct jpeg_decompress_struct cinfo;
 	int cinfo_initialized;
-#endif
+#endif // HAVE_JPEG
 	struct v4l2_frmsizeenum framesizes[V4LCONVERT_MAX_FRAMESIZES];
 	unsigned int no_framesizes;
 	int bandwidth;
@@ -75,6 +77,8 @@ struct v4lconvert_data {
 	unsigned char *convert_pixfmt_buf;
 	struct v4lcontrol_data *control;
 	struct v4lprocessing_data *processing;
+	void *dev_ops_priv;
+	const struct libv4l_dev_ops *dev_ops;
 
 	/* Data for external decompression helpers code */
 	pid_t decompress_pid;
@@ -113,28 +117,28 @@ void v4lconvert_yuv420_to_bgr24(const unsigned char *src, unsigned char *dst,
 		int width, int height, int yvu);
 
 void v4lconvert_yuyv_to_rgb24(const unsigned char *src, unsigned char *dst,
-		int width, int height);
+		int width, int height, int stride);
 
 void v4lconvert_yuyv_to_bgr24(const unsigned char *src, unsigned char *dst,
-		int width, int height);
+		int width, int height, int stride);
 
 void v4lconvert_yuyv_to_yuv420(const unsigned char *src, unsigned char *dst,
-		int width, int height, int yvu);
+		int width, int height, int stride, int yvu);
 
 void v4lconvert_yvyu_to_rgb24(const unsigned char *src, unsigned char *dst,
-		int width, int height);
+		int width, int height, int stride);
 
 void v4lconvert_yvyu_to_bgr24(const unsigned char *src, unsigned char *dst,
-		int width, int height);
+		int width, int height, int stride);
 
 void v4lconvert_uyvy_to_rgb24(const unsigned char *src, unsigned char *dst,
-		int width, int height);
+		int width, int height, int stride);
 
 void v4lconvert_uyvy_to_bgr24(const unsigned char *src, unsigned char *dst,
-		int width, int height);
+		int width, int height, int stride);
 
 void v4lconvert_uyvy_to_yuv420(const unsigned char *src, unsigned char *dst,
-		int width, int height, int yvu);
+		int width, int height, int stride, int yvu);
 
 void v4lconvert_swap_rgb(const unsigned char *src, unsigned char *dst,
 		int width, int height);

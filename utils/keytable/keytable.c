@@ -12,6 +12,7 @@
    GNU General Public License for more details.
  */
 
+#include <config.h>
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -26,9 +27,6 @@
 #include <argp.h>
 
 #include "parse.h"
-
-/* Default place where the keymaps will be stored */
-#define CFGDIR "/etc/rc_keymaps"
 
 struct input_keymap_entry_v2 {
 #define KEYMAP_BY_INDEX	(1 << 0)
@@ -93,9 +91,9 @@ enum ir_protocols {
 
 static int parse_code(char *string)
 {
-	struct parse_key *p;
+	struct parse_event *p;
 
-	for (p = keynames; p->name != NULL; p++) {
+	for (p = key_events; p->name != NULL; p++) {
 		if (!strcasecmp(p->name, string))
 			return p->value;
 	}
@@ -141,7 +139,7 @@ static const char args_doc[] =
 
 /* Static vars to store the parameters */
 static char *devclass = "rc0";
-static char *devname = NULL;
+static char *devicename = NULL;
 static int readtable = 0;
 static int clear = 0;
 static int debug = 0;
@@ -196,7 +194,6 @@ static error_t parse_keyfile(char *fname, char **table)
 
 	fin = fopen(fname, "r");
 	if (!fin) {
-		perror("opening keycode file");
 		return errno;
 	}
 
@@ -210,13 +207,19 @@ static error_t parse_keyfile(char *fname, char **table)
 			p++;
 			p = strtok(p, "\n\t =:");
 			do {
+				if (!p)
+					goto err_einval;
 				if (!strcmp(p, "table")) {
 					p = strtok(NULL,"\n, ");
+					if (!p)
+						goto err_einval;
 					*table = malloc(strlen(p) + 1);
 					strcpy(*table, p);
 				} else if (!strcmp(p, "type")) {
 					p = strtok(NULL, " ,\n");
 					do {
+						if (!p)
+							goto err_einval;
 						if (!strcasecmp(p,"rc5") || !strcasecmp(p,"rc-5"))
 							ch_proto |= RC_5;
 						else if (!strcasecmp(p,"rc6") || !strcasecmp(p,"rc-6"))
@@ -389,7 +392,7 @@ static error_t parse_opt(int k, char *arg, struct argp_state *state)
 		period = atoi(arg);
 		break;
 	case 'd':
-		devname = arg;
+		devicename = arg;
 		break;
 	case 's':
 		devclass = arg;
@@ -434,7 +437,7 @@ static error_t parse_opt(int k, char *arg, struct argp_state *state)
 			nextkey->codes[1] = key;
 
 			if (debug)
-				fprintf(stderr, "scancode %u=%u\n",
+				fprintf(stderr, "scancode 0x%04x=%u\n",
 					nextkey->codes[0], nextkey->codes[1]);
 
 			nextkey->next = calloc(1, sizeof(keys));
@@ -450,6 +453,8 @@ static error_t parse_opt(int k, char *arg, struct argp_state *state)
 	case 'p':
 		p = strtok(arg, ",;");
 		do {
+			if (!p)
+				goto err_inval;
 			if (!strcasecmp(p,"rc5") || !strcasecmp(p,"rc-5"))
 				ch_proto |= RC_5;
 			else if (!strcasecmp(p,"rc6") || !strcasecmp(p,"rc-6"))
@@ -491,9 +496,9 @@ static struct argp argp = {
 
 static void prtcode(int *codes)
 {
-	struct parse_key *p;
+	struct parse_event *p;
 
-	for (p = keynames; p->name != NULL; p++) {
+	for (p = key_events; p->name != NULL; p++) {
 		if (p->value == (unsigned)codes[1]) {
 			printf("scancode 0x%04x = %s (0x%02x)\n", codes[0], p->name, codes[1]);
 			return;
@@ -501,9 +506,9 @@ static void prtcode(int *codes)
 	}
 
 	if (isprint (codes[1]))
-		printf("scancode %d = '%c' (0x%02x)\n", codes[0], codes[1], codes[1]);
+		printf("scancode 0x%04x = '%c' (0x%02x)\n", codes[0], codes[1], codes[1]);
 	else
-		printf("scancode %d = 0x%02x\n", codes[0], codes[1]);
+		printf("scancode 0x%04x = 0x%02x\n", codes[0], codes[1]);
 }
 
 static void free_names(struct sysfs_names *names)
@@ -816,13 +821,18 @@ static int v1_get_sw_enabled_protocol(char *dirname)
 		return 0;
 	}
 
-	p = strtok(buf, " \n");
-	rc = atoi(p);
-
 	if (fclose(fp)) {
 		perror(name);
 		return errno;
 	}
+
+	p = strtok(buf, " \n");
+	if (!p) {
+		fprintf(stderr, "%s has invalid content: '%s'\n", name, buf);
+		return 0;
+	}
+
+	rc = atoi(p);
 
 	if (debug)
 		fprintf(stderr, "protocol %s is %s\n",
@@ -1239,6 +1249,18 @@ static void display_proto(struct rc_device *rc_dev)
 	fprintf(stderr, "\n");
 }
 
+
+static char *get_event_name(struct parse_event *event, u_int16_t code)
+{
+	struct parse_event *p;
+
+	for (p = event; p->name != NULL; p++) {
+		if (p->value == code)
+			return p->name;
+	}
+	return "";
+}
+
 static void test_event(int fd)
 {
 	struct input_event ev[64];
@@ -1254,45 +1276,52 @@ static void test_event(int fd)
 		}
 
 		for (i = 0; i < rd / sizeof(struct input_event); i++) {
+			printf("%ld.%06ld: event type %s(0x%02x)",
+				ev[i].time.tv_sec, ev[i].time.tv_usec,
+				get_event_name(events_type, ev[i].type), ev[i].type);
+
 			switch (ev[i].type) {
-			case EV_MSC:
-				if (ev[i].code != MSC_SCAN)
-					break;
-				printf("%ld.%06ld: event MSC: scancode = %02x\n",
-					ev[i].time.tv_sec, ev[i].time.tv_usec, ev[i].value);
+			case EV_SYN:
+				printf(".\n");
 				break;
-			case EV_KEY: 			{
-				struct parse_key *p;
-				char *name = "";
-
-				printf("%ld.%06ld: event key %s: ",
-					ev[i].time.tv_sec, ev[i].time.tv_usec,
-					(ev[i].value == 0) ? "up" : "down"
-					);
-
-				for (p = keynames; p->name != NULL; p++) {
-					if (p->value == ev[i].code) {
-						name = p->name;
-						break;
-					}
-				}
-				printf("%s (0x%04x)\n", name, ev[i].code);
-
+			case EV_KEY:
+				printf(" key_%s: %s(0x%04x)\n",
+					(ev[i].value == 0) ? "up" : "down",
+					get_event_name(key_events, ev[i].code),
+					ev[i].type);
 				break;
-			}
-			case EV_REP:
-				printf("%ld.%06ld: event repeat: %d\n",
-					ev[i].time.tv_sec, ev[i].time.tv_usec,
+			case EV_REL:
+				printf(": %s (0x%04x) value=%d\n",
+					get_event_name(rel_events, ev[i].code),
+					ev[i].type,
 					ev[i].value);
 				break;
-			case EV_SYN:
-				printf("%ld.%06ld: event sync\n",
-					ev[i].time.tv_sec, ev[i].time.tv_usec);
+			case EV_ABS:
+				printf(": %s (0x%04x) value=%d\n",
+					get_event_name(abs_events, ev[i].code),
+					ev[i].type,
+					ev[i].value);
 				break;
+			case EV_MSC:
+				if (ev[i].code == MSC_SCAN)
+					printf(": scancode = 0x%02x\n", ev[i].value);
+				else
+					printf(": code = %s(0x%02x), value = %d\n",
+						get_event_name(msc_events, ev[i].code),
+						ev[i].code, ev[i].value);
+				break;
+			case EV_REP:
+				printf(": value = %d\n", ev[i].value);
+				break;
+			case EV_SW:
+			case EV_LED:
+			case EV_SND:
+			case EV_FF:
+			case EV_PWR:
+			case EV_FF_STATUS:
 			default:
-				printf("%ld.%06ld: event type %d: value: %d\n",
-					ev[i].time.tv_sec, ev[i].time.tv_usec,
-					ev[i].type, ev[i].value);
+				printf(": code = 0x%02x, value = %d\n",
+					ev[i].code, ev[i].value);
 				break;
 			}
 		}
@@ -1334,7 +1363,7 @@ static void display_table_v2(struct rc_device *rc_dev, int fd)
 			break;
 
 		/* FIXME: Extend it to support scancodes > 32 bits */
-		codes[0] = ((u_int32_t *)entry.scancode)[0];
+		memcpy(&codes[0], entry.scancode, sizeof(codes[0]));
 		codes[1] = entry.keycode;
 
 		prtcode(codes);
@@ -1386,6 +1415,27 @@ static void show_evdev_attribs(int fd)
 	get_rate(fd, &delay, &period);
 }
 
+static void device_info(int fd, char *prepend)
+{
+	struct input_id id;
+	char buf[32];
+	int rc;
+
+	rc = ioctl(fd, EVIOCGNAME(sizeof(buf)), buf);
+	if (rc >= 0)
+		fprintf(stderr,"%sName: %.*s\n",prepend, rc, buf);
+	else
+		perror ("EVIOCGNAME");
+
+	rc = ioctl(fd, EVIOCGID, &id);
+	if (rc >= 0)
+		fprintf(stderr,
+			"%sbus: %d, vendor/product: %04x:%04x, version: 0x%04x\n",
+			prepend, id.bustype, id.vendor, id.product, id.version);
+	else
+		perror ("EVIOCGID");
+}
+
 static int show_sysfs_attribs(struct rc_device *rc_dev)
 {
 	static struct sysfs_names *names, *cur;
@@ -1410,6 +1460,7 @@ static int show_sysfs_attribs(struct rc_device *rc_dev)
 			display_proto(rc_dev);
 			fd = open(rc_dev->input_name, O_RDONLY);
 			if (fd > 0) {
+				device_info(fd, "\t");
 				show_evdev_attribs(fd);
 				close(fd);
 			} else {
@@ -1431,17 +1482,27 @@ int main(int argc, char *argv[])
 
 	/* Just list all devices */
 	if (!clear && !readtable && !keys.next && !ch_proto && !cfg.next && !test && !delay && !period) {
+		if (devicename) {
+			fd = open(devicename, O_RDONLY);
+			if (fd < 0) {
+				perror("Can't open device");
+				return -1;
+			}
+			device_info(fd, "");
+			close(fd);
+			return 0;
+		}
 		if (show_sysfs_attribs(&rc_dev))
 			return -1;
 
 		return 0;
 	}
 
-	if (cfg.next && (clear || keys.next || ch_proto || devname)) {
+	if (cfg.next && (clear || keys.next || ch_proto || devicename)) {
 		fprintf (stderr, "Auto-mode can be used only with --read, --debug and --sysdev options\n");
 		return -1;
 	}
-	if (!devname) {
+	if (!devicename) {
 		names = find_device(devclass);
 		if (!names)
 			return -1;
@@ -1453,7 +1514,7 @@ int main(int argc, char *argv[])
 		names->name = NULL;
 		free_names(names);
 
-		devname = rc_dev.input_name;
+		devicename = rc_dev.input_name;
 		dev_from_class++;
 	}
 
@@ -1482,29 +1543,45 @@ int main(int argc, char *argv[])
 				cur->fname);
 		if (cur->fname[0] == '/' || ((cur->fname[0] == '.') && strchr(cur->fname, '/'))) {
 			fname = cur->fname;
+			rc = parse_keyfile(fname, &name);
+			if (rc < 0) {
+				fprintf(stderr, "Can't load %s table\n", fname);
+				return -1;
+			}
 		} else {
-			fname = malloc(strlen(cur->fname) + strlen(CFGDIR) + 2);
-			strcpy(fname, CFGDIR);
+			fname = malloc(strlen(cur->fname) + strlen(IR_KEYTABLE_USER_DIR) + 2);
+			strcpy(fname, IR_KEYTABLE_USER_DIR);
 			strcat(fname, "/");
 			strcat(fname, cur->fname);
+			rc = parse_keyfile(fname, &name);
+			if (rc != 0) {
+				fname = malloc(strlen(cur->fname) + strlen(IR_KEYTABLE_SYSTEM_DIR) + 2);
+				strcpy(fname, IR_KEYTABLE_SYSTEM_DIR);
+				strcat(fname, "/");
+				strcat(fname, cur->fname);
+				rc = parse_keyfile(fname, &name);
+			}
+			if (rc != 0) {
+				fprintf(stderr, "Can't load %s table from %s or %s\n", cur->fname, IR_KEYTABLE_USER_DIR, IR_KEYTABLE_SYSTEM_DIR);
+				return -1;
+			}
 		}
-		rc = parse_keyfile(fname, &name);
-		if (rc < 0 || !keys.next) {
-			fprintf(stderr, "Can't load %s table or empty table\n", fname);
+		if (!keys.next) {
+			fprintf(stderr, "Empty table %s\n", fname);
 			return -1;
 		}
 		clear = 1;
 	}
 
 	if (debug)
-		fprintf(stderr, "Opening %s\n", devname);
-	fd = open(devname, O_RDONLY);
+		fprintf(stderr, "Opening %s\n", devicename);
+	fd = open(devicename, O_RDONLY);
 	if (fd < 0) {
-		perror(devname);
+		perror(devicename);
 		return -1;
 	}
 	if (dev_from_class)
-		free(devname);
+		free(devicename);
 	if (get_input_protocol_version(fd))
 		return -1;
 

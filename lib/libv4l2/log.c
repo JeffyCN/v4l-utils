@@ -18,6 +18,7 @@
 # Foundation, Inc., 51 Franklin Street, Suite 500, Boston, MA  02110-1335  USA
  */
 
+#include <config.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -95,17 +96,23 @@ const char *v4l2_ioctls[] = {
 	[_IOC_NR(VIDIOC_TRY_ENCODER_CMD)]  = "VIDIOC_TRY_ENCODER_CMD",
 	[_IOC_NR(VIDIOC_DBG_S_REGISTER)]   = "VIDIOC_DBG_S_REGISTER",
 	[_IOC_NR(VIDIOC_DBG_G_REGISTER)]   = "VIDIOC_DBG_G_REGISTER",
-	[_IOC_NR(VIDIOC_DBG_G_CHIP_IDENT)] = "VIDIOC_DBG_G_CHIP_IDENT",
 	[_IOC_NR(VIDIOC_S_HW_FREQ_SEEK)]   = "VIDIOC_S_HW_FREQ_SEEK",
-	[_IOC_NR(VIDIOC_ENUM_DV_PRESETS)]  = "VIDIOC_ENUM_DV_PRESETS",
-	[_IOC_NR(VIDIOC_S_DV_PRESET)]	   = "VIDIOC_S_DV_PRESET",
-	[_IOC_NR(VIDIOC_G_DV_PRESET)]	   = "VIDIOC_G_DV_PRESET",
-	[_IOC_NR(VIDIOC_QUERY_DV_PRESET)]  = "VIDIOC_QUERY_DV_PRESET",
 	[_IOC_NR(VIDIOC_S_DV_TIMINGS)]	   = "VIDIOC_S_DV_TIMINGS",
 	[_IOC_NR(VIDIOC_G_DV_TIMINGS)]	   = "VIDIOC_G_DV_TIMINGS",
 	[_IOC_NR(VIDIOC_DQEVENT)]	   = "VIDIOC_DQEVENT",
 	[_IOC_NR(VIDIOC_SUBSCRIBE_EVENT)]  = "VIDIOC_SUBSCRIBE_EVENT",
 	[_IOC_NR(VIDIOC_UNSUBSCRIBE_EVENT)] = "VIDIOC_UNSUBSCRIBE_EVENT",
+	[_IOC_NR(VIDIOC_CREATE_BUFS)]      = "VIDIOC_CREATE_BUFS",
+	[_IOC_NR(VIDIOC_PREPARE_BUF)]      = "VIDIOC_PREPARE_BUF",
+	[_IOC_NR(VIDIOC_G_SELECTION)]      = "VIDIOC_G_SELECTION",
+	[_IOC_NR(VIDIOC_S_SELECTION)]      = "VIDIOC_S_SELECTION",
+	[_IOC_NR(VIDIOC_DECODER_CMD)]      = "VIDIOC_DECODER_CMD",
+	[_IOC_NR(VIDIOC_TRY_DECODER_CMD)]  = "VIDIOC_TRY_DECODER_CMD",
+	[_IOC_NR(VIDIOC_ENUM_DV_TIMINGS)]  = "VIDIOC_ENUM_DV_TIMINGS",
+	[_IOC_NR(VIDIOC_QUERY_DV_TIMINGS)] = "VIDIOC_QUERY_DV_TIMINGS",
+	[_IOC_NR(VIDIOC_DV_TIMINGS_CAP)]   = "VIDIOC_DV_TIMINGS_CAP",
+	[_IOC_NR(VIDIOC_ENUM_FREQ_BANDS)]  = "VIDIOC_ENUM_FREQ_BANDS",
+	[_IOC_NR(VIDIOC_DBG_G_CHIP_INFO)]  = "VIDIOC_DBG_G_CHIP_INFO",
 };
 
 void v4l2_log_ioctl(unsigned long int request, void *arg, int result)
@@ -149,7 +156,7 @@ void v4l2_log_ioctl(unsigned long int request, void *arg, int result)
 					pixfmt >> 24,
 					fmt->fmt.pix.width,
 					fmt->fmt.pix.height);
-			fprintf(v4l2_log_file, "  field: %d bytesperline: %d imagesize%d\n",
+			fprintf(v4l2_log_file, "  field: %d bytesperline: %d imagesize: %d\n",
 					(int)fmt->fmt.pix.field, (int)fmt->fmt.pix.bytesperline,
 					(int)fmt->fmt.pix.sizeimage);
 			fprintf(v4l2_log_file, "  colorspace: %d, priv: %x\n",
@@ -164,6 +171,13 @@ void v4l2_log_ioctl(unsigned long int request, void *arg, int result)
 
 		fprintf(v4l2_log_file, "  count: %u type: %d memory: %d\n",
 				req->count, (int)req->type, (int)req->memory);
+		break;
+	}
+	case VIDIOC_DQBUF: {
+		struct v4l2_buffer *buf = arg;
+		fprintf(v4l2_log_file, "  timestamp %ld.%06ld\n",
+			(long)buf->timestamp.tv_sec,
+			(long)buf->timestamp.tv_usec);
 		break;
 	}
 	case VIDIOC_ENUM_FRAMESIZES: {

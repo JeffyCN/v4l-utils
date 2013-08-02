@@ -21,6 +21,7 @@
 
 #define _LARGEFILE64_SOURCE 1
 
+#include <config.h>
 #include <stdlib.h>
 #include <stdarg.h>
 #include <fcntl.h>
@@ -35,7 +36,7 @@
 #error open/read/mmap is a prepocessor macro !!
 #endif
 
-#if __GNUC__ >= 4
+#if HAVE_VISIBILITY
 #define LIBV4L_PUBLIC __attribute__ ((visibility("default")))
 #else
 #define LIBV4L_PUBLIC
@@ -50,7 +51,7 @@ LIBV4L_PUBLIC int open(const char *file, int oflag, ...)
 		mode_t mode;
 
 		va_start(ap, oflag);
-		mode = va_arg(ap, mode_t);
+		mode = va_arg(ap, PROMOTED_MODE_T);
 
 		fd = v4l1_open(file, oflag, mode);
 

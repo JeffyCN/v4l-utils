@@ -44,6 +44,15 @@
 		fprintf(stderr, "libv4l2: error " __VA_ARGS__); \
 	} while (0)
 
+#define V4L2_PERROR(format, ...)		\
+	do { 					\
+		if (errno == ENODEV) {		\
+			devices[index].gone = 1;\
+			break;			\
+		}				\
+		V4L2_LOG_ERR(format ": %s\n", ##__VA_ARGS__, strerror(errno)); \
+	} while (0)
+
 #define V4L2_LOG_WARN(...) 			\
 	do { 					\
 		if (v4l2_log_file) { 		\
@@ -67,7 +76,8 @@ struct v4l2_dev_info {
 	int fd;
 	int flags;
 	int open_count;
-	/* actually format of the cam */
+	int gone; /* Set to 1 when a device is detached (ENODEV encountered) */
+	/* actual format of the cam */
 	struct v4l2_format src_fmt;
 	/* fmt as seen by the application (iow after conversion) */
 	struct v4l2_format dest_fmt;
@@ -87,7 +97,17 @@ struct v4l2_dev_info {
 	/* buffer when doing conversion and using read() for read() */
 	int readbuf_size;
 	unsigned char *readbuf;
+	/* plugin info */
+	void *plugin_library;
+	void *dev_ops_priv;
+	const struct libv4l_dev_ops *dev_ops;
 };
+
+/* From v4l2-plugin.c */
+void v4l2_plugin_init(int fd, void **plugin_lib_ret, void **plugin_priv_ret,
+		      const struct libv4l_dev_ops **dev_ops_ret);
+void v4l2_plugin_cleanup(void *plugin_lib, void *plugin_priv,
+			 const struct libv4l_dev_ops *dev_ops);
 
 /* From log.c */
 extern const char *v4l2_ioctls[];

@@ -13,8 +13,9 @@
 #include <sys/time.h>
 #include <dirent.h>
 #include <math.h>
+#include <config.h>
 
-#ifdef __linux__
+#ifdef HAVE_SYS_KLOG_H
 #include <sys/klog.h>
 #endif
 
@@ -57,7 +58,7 @@ void common_usage(void)
 	       "                     set the value of the controls [VIDIOC_S_EXT_CTRLS]\n"
 	       "  -D, --info         show driver info [VIDIOC_QUERYCAP]\n"
 	       "  -d, --device=<dev> use device <dev> instead of /dev/video0\n"
-	       "                     if <dev> is a single digit, then /dev/video<dev> is used\n"
+	       "                     if <dev> starts with a digit, then /dev/video<dev> is used\n"
 	       "  -h, --help         display this help message\n"
 	       "  --help-all         all options\n"
 	       "  --help-io          input/output options\n"
@@ -70,6 +71,7 @@ void common_usage(void)
 	       "  --help-vbi         VBI format options\n"
 	       "  --help-vidcap      video capture format options\n"
 	       "  --help-vidout      vidout output format options\n"
+	       "  -k, --concise      be more concise if possible.\n"
 	       "  -l, --list-ctrls   display all controls and their values [VIDIOC_QUERYCTRL]\n"
 	       "  -L, --list-ctrls-menus\n"
 	       "		     display all controls and their menus [VIDIOC_QUERYMENU]\n"
@@ -455,7 +457,7 @@ void common_process_controls(int fd)
 	find_controls(fd);
 	for (ctrl_get_list::iterator iter = get_ctrls.begin(); iter != get_ctrls.end(); ++iter) {
 	    if (ctrl_str2q.find(*iter) == ctrl_str2q.end()) {
-		fprintf(stderr, "unknown control '%s'\n", (*iter).c_str());
+		fprintf(stderr, "unknown control '%s'\n", iter->c_str());
 		exit(1);
 	    }
 	}
@@ -481,6 +483,9 @@ void common_control_event(const struct v4l2_event *ev)
 	}
 	if (ctrl->changes & V4L2_EVENT_CTRL_CH_FLAGS)
 		printf("\tflags: %s\n", ctrlflags2s(ctrl->flags).c_str());
+	if (ctrl->changes & V4L2_EVENT_CTRL_CH_RANGE)
+		printf("\trange: min=%d max=%d step=%d default=%d\n",
+			ctrl->minimum, ctrl->maximum, ctrl->step, ctrl->default_value);
 }
 
 static bool parse_next_subopt(char **subs, char **value)
@@ -490,7 +495,7 @@ static bool parse_next_subopt(char **subs, char **value)
 	};
 	int opt = getsubopt(subs, subopts, value);
 
-	if (value == NULL) {
+	if (*value == NULL) {
 		fprintf(stderr, "No value given to suboption <%s>\n",
 				subopts[opt]);
 		return true;
@@ -694,7 +699,7 @@ void common_get(int fd)
 
 		if (doioctl(fd, VIDIOC_LOG_STATUS, NULL) == 0) {
 			printf("\nStatus Log:\n\n");
-#ifdef __linux__
+#ifdef HAVE_KLOGCTL
 			len = klogctl(3, buf, sizeof(buf) - 1);
 #endif
 			if (len >= 0) {
