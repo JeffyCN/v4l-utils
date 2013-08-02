@@ -1,3 +1,11 @@
+v4l-utils (1.0.0-1) unstable; urgency=low
+
+  * Imported Upstream version 1.0.0
+    - ir-keytable now searches in /etc/rc_keymaps and
+      /lib/udev/rc_keymaps for keytables (Closes: #675567)
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Fri, 02 Aug 2013 23:04:00 +0200
+
 v4l-utils (0.8.9-4) unstable; urgency=low
 
   * Fix crashes found by Mayhem

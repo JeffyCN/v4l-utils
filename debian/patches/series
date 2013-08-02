@@ -1,6 +1,1 @@
-kfreebsd.diff
-upside-down-asus-f2f.diff
-upside-down-founder-pc-t14mf.diff
-use-openat.diff
-keytable-fix-strtok.diff
-ov51x-width-height-bounds.diff
+kfreebsd-dvb-frontend-fix.diff
