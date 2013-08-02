@@ -16,6 +16,7 @@
 # Foundation, Inc., 51 Franklin Street, Suite 500, Boston, MA  02110-1335  USA
  */
 
+#include <config.h>
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
@@ -27,6 +28,44 @@
 #include "libv4lsyscall-priv.h"
 
 #define MIN(a, b) (((a) < (b)) ? (a) : (b))
+
+static void *dev_init(int fd)
+{
+	return NULL;
+}
+
+static void dev_close(void *dev_ops_priv)
+{
+}
+
+static int dev_ioctl(void *dev_ops_priv, int fd, unsigned long cmd, void *arg)
+{
+	return SYS_IOCTL(fd, cmd, arg);
+}
+
+static ssize_t dev_read(void *dev_ops_priv, int fd, void *buf, size_t len)
+{
+	return SYS_READ(fd, buf, len);
+}
+
+static ssize_t dev_write(void *dev_ops_priv, int fd, const void *buf,
+                         size_t len)
+{
+	return SYS_WRITE(fd, buf, len);
+}
+
+static const struct libv4l_dev_ops default_dev_ops = {
+	.init = dev_init,
+	.close = dev_close,
+	.ioctl = dev_ioctl,
+	.read = dev_read,
+	.write = dev_write,
+};
+
+const struct libv4l_dev_ops *v4lconvert_get_default_dev_ops()
+{
+	return &default_dev_ops;
+}
 
 static void v4lconvert_get_framesizes(struct v4lconvert_data *data,
 		unsigned int pixelformat, int index);
@@ -78,7 +117,7 @@ static const struct v4lconvert_pixfmt supported_src_pixfmts[] = {
 	{ V4L2_PIX_FMT_SN9C2028,	 0,	 9,	 9,	1 },
 	{ V4L2_PIX_FMT_PAC207,		 0,	 9,	 9,	1 },
 	{ V4L2_PIX_FMT_MR97310A,	 0,	 9,	 9,	1 },
-#ifndef DISABLE_LIBJPEG
+#ifdef HAVE_JPEG
 	{ V4L2_PIX_FMT_JL2005BCD,	 0,	 9,	 9,	1 },
 #endif
 	{ V4L2_PIX_FMT_SQ905C,		 0,	 9,	 9,	1 },
@@ -86,6 +125,8 @@ static const struct v4lconvert_pixfmt supported_src_pixfmts[] = {
 	{ V4L2_PIX_FMT_SE401,		 0,	 8,	 9,	1 },
 	/* grey formats */
 	{ V4L2_PIX_FMT_GREY,		 8,	20,	20,	0 },
+	{ V4L2_PIX_FMT_Y4,		 8,	20,	20,	0 },
+	{ V4L2_PIX_FMT_Y6,		 8,	20,	20,	0 },
 	{ V4L2_PIX_FMT_Y10BPACK,	10,	20,	20,	0 },
 };
 
@@ -108,6 +149,12 @@ static const int v4lconvert_crop_res[][2] = {
 
 struct v4lconvert_data *v4lconvert_create(int fd)
 {
+	return v4lconvert_create_with_dev_ops(fd, NULL, &default_dev_ops); 
+}
+
+struct v4lconvert_data *v4lconvert_create_with_dev_ops(int fd, void *dev_ops_priv,
+		const struct libv4l_dev_ops *dev_ops)
+{
 	int i, j;
 	struct v4lconvert_data *data = calloc(1, sizeof(struct v4lconvert_data));
 	struct v4l2_capability cap;
@@ -122,6 +169,8 @@ struct v4lconvert_data *v4lconvert_create(int fd)
 	}
 
 	data->fd = fd;
+	data->dev_ops = dev_ops;
+	data->dev_ops_priv = dev_ops_priv;
 	data->decompress_pid = -1;
 	data->fps = 30;
 
@@ -131,7 +180,8 @@ struct v4lconvert_data *v4lconvert_create(int fd)
 
 		fmt.index = i;
 
-		if (SYS_IOCTL(data->fd, VIDIOC_ENUM_FMT, &fmt))
+		if (data->dev_ops->ioctl(data->dev_ops_priv, data->fd,
+				VIDIOC_ENUM_FMT, &fmt))
 			break;
 
 		for (j = 0; j < ARRAY_SIZE(supported_src_pixfmts); j++)
@@ -139,7 +189,7 @@ struct v4lconvert_data *v4lconvert_create(int fd)
 				break;
 
 		if (j < ARRAY_SIZE(supported_src_pixfmts)) {
-			data->supported_src_formats |= 1 << j;
+			data->supported_src_formats |= 1ULL << j;
 			v4lconvert_get_framesizes(data, fmt.pixelformat, j);
 			if (!supported_src_pixfmts[j].needs_conversion)
 				always_needs_conversion = 0;
@@ -150,15 +200,19 @@ struct v4lconvert_data *v4lconvert_create(int fd)
 	data->no_formats = i;
 
 	/* Check if this cam has any special flags */
-	if (SYS_IOCTL(data->fd, VIDIOC_QUERYCAP, &cap) == 0) {
+	if (data->dev_ops->ioctl(data->dev_ops_priv, data->fd,
+			VIDIOC_QUERYCAP, &cap) == 0) {
 		if (!strcmp((char *)cap.driver, "uvcvideo"))
 			data->flags |= V4LCONVERT_IS_UVC;
 
+		if (cap.capabilities & V4L2_CAP_DEVICE_CAPS)
+			cap.capabilities = cap.device_caps;
 		if ((cap.capabilities & 0xff) & ~V4L2_CAP_VIDEO_CAPTURE)
 			always_needs_conversion = 0;
 	}
 
-	data->control = v4lcontrol_create(fd, always_needs_conversion);
+	data->control = v4lcontrol_create(fd, dev_ops_priv, dev_ops,
+						always_needs_conversion);
 	if (!data->control) {
 		free(data);
 		return NULL;
@@ -180,6 +234,9 @@ struct v4lconvert_data *v4lconvert_create(int fd)
 
 void v4lconvert_destroy(struct v4lconvert_data *data)
 {
+	if (!data)
+		return;
+
 	v4lprocessing_destroy(data->processing);
 	v4lcontrol_destroy(data->control);
 	if (data->tinyjpeg) {
@@ -188,10 +245,10 @@ void v4lconvert_destroy(struct v4lconvert_data *data)
 		tinyjpeg_set_components(data->tinyjpeg, comps, 3);
 		tinyjpeg_free(data->tinyjpeg);
 	}
-#ifndef DISABLE_LIBJPEG
+#ifdef HAVE_JPEG
 	if (data->cinfo_initialized)
 		jpeg_destroy_decompress(&data->cinfo);
-#endif
+#endif // HAVE_JPEG
 	v4lconvert_helper_cleanup(data);
 	free(data->convert1_buf);
 	free(data->convert2_buf);
@@ -228,11 +285,12 @@ int v4lconvert_enum_fmt(struct v4lconvert_data *data, struct v4l2_fmtdesc *fmt)
 	if (fmt->type != V4L2_BUF_TYPE_VIDEO_CAPTURE ||
 			(!v4lconvert_supported_dst_fmt_only(data) &&
 			 fmt->index < data->no_formats))
-		return SYS_IOCTL(data->fd, VIDIOC_ENUM_FMT, fmt);
+		return data->dev_ops->ioctl(data->dev_ops_priv, data->fd,
+				VIDIOC_ENUM_FMT, fmt);
 
 	for (i = 0; i < ARRAY_SIZE(supported_dst_pixfmts); i++)
 		if (v4lconvert_supported_dst_fmt_only(data) ||
-				!(data->supported_src_formats & (1 << i))) {
+				!(data->supported_src_formats & (1ULL << i))) {
 			faked_fmts[no_faked_fmts] = supported_dst_pixfmts[i].fmt;
 			no_faked_fmts++;
 		}
@@ -387,19 +445,20 @@ static int v4lconvert_do_try_format(struct v4lconvert_data *data,
 
 	for (i = 0; i < ARRAY_SIZE(supported_src_pixfmts); i++) {
 		/* is this format supported? */
-		if (!(data->supported_src_formats & (1 << i)))
+		if (!(data->supported_src_formats & (1ULL << i)))
 			continue;
 
 		try_fmt = *dest_fmt;
 		try_fmt.fmt.pix.pixelformat = supported_src_pixfmts[i].fmt;
-		if (SYS_IOCTL(data->fd, VIDIOC_TRY_FMT, &try_fmt))
+		if (data->dev_ops->ioctl(data->dev_ops_priv, data->fd,
+				VIDIOC_TRY_FMT, &try_fmt))
 			continue;
 
 		if (try_fmt.fmt.pix.pixelformat !=
 		    supported_src_pixfmts[i].fmt)
 			continue;
 
-		/* Did we get a better match then before? */
+		/* Did we get a better match than before? */
 		size_x_diff = (int)try_fmt.fmt.pix.width -
 			      (int)dest_fmt->fmt.pix.width;
 		size_y_diff = (int)try_fmt.fmt.pix.height -
@@ -466,7 +525,8 @@ int v4lconvert_try_format(struct v4lconvert_data *data,
 	if (!v4lconvert_supported_dst_format(dest_fmt->fmt.pix.pixelformat) ||
 			dest_fmt->type != V4L2_BUF_TYPE_VIDEO_CAPTURE ||
 			v4lconvert_do_try_format(data, &try_dest, &try_src)) {
-		result = SYS_IOCTL(data->fd, VIDIOC_TRY_FMT, dest_fmt);
+		result = data->dev_ops->ioctl(data->dev_ops_priv, data->fd,
+				VIDIOC_TRY_FMT, dest_fmt);
 		if (src_fmt)
 			*src_fmt = *dest_fmt;
 		return result;
@@ -475,7 +535,7 @@ int v4lconvert_try_format(struct v4lconvert_data *data,
 	/* In case of a non exact resolution match, try again with a slightly larger
 	   resolution as some weird devices are not able to crop of the number of
 	   extra (border) pixels most sensors have compared to standard resolutions,
-	   which we will then just crop of in software */
+	   which we will then just crop off in software */
 	if (try_dest.fmt.pix.width != desired_width ||
 			try_dest.fmt.pix.height != desired_height) {
 		try2_dest = *dest_fmt;
@@ -584,7 +644,9 @@ static int v4lconvert_processing_needs_double_conversion(
 	case V4L2_PIX_FMT_SN9C10X:
 	case V4L2_PIX_FMT_PAC207:
 	case V4L2_PIX_FMT_MR97310A:
+#ifdef HAVE_JPEG
 	case V4L2_PIX_FMT_JL2005BCD:
+#endif
 	case V4L2_PIX_FMT_SN9C2028:
 	case V4L2_PIX_FMT_SQ905C:
 	case V4L2_PIX_FMT_SBGGR8:
@@ -639,13 +701,13 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 	/* JPG and variants */
 	case V4L2_PIX_FMT_MJPEG:
 	case V4L2_PIX_FMT_JPEG:
-#ifndef DISABLE_LIBJPEG
+#ifdef HAVE_JPEG
 		if (data->flags & V4LCONVERT_USE_TINYJPEG) {
-#endif
+#endif // HAVE_JPEG
 			result = v4lconvert_decode_jpeg_tinyjpeg(data,
 							src, src_size, dest,
 							fmt, dest_pix_fmt, 0);
-#ifndef DISABLE_LIBJPEG
+#ifdef HAVE_JPEG
 		} else {
 			result = v4lconvert_decode_jpeg_libjpeg(data,
 							src, src_size, dest,
@@ -660,7 +722,7 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 							fmt, dest_pix_fmt, 0);
 			}
 		}
-#endif
+#endif // HAVE_JPEG
 		break;
 	case V4L2_PIX_FMT_PJPG:
 		result = v4lconvert_decode_jpeg_tinyjpeg(data, src, src_size,
@@ -733,7 +795,7 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 			}
 			break;
 		case V4L2_PIX_FMT_OV511:
-			if (v4lconvert_helper_decompress(data, LIBDIR "/" LIBSUBDIR "/ov511-decomp",
+			if (v4lconvert_helper_decompress(data, LIBV4LCONVERT_PRIV_DIR "/ov511-decomp",
 						src, src_size, d, d_size, width, height, yvu)) {
 				/* Corrupt frame, better get another one */
 				errno = EAGAIN;
@@ -741,7 +803,7 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 			}
 			break;
 		case V4L2_PIX_FMT_OV518:
-			if (v4lconvert_helper_decompress(data, LIBDIR "/" LIBSUBDIR "/ov518-decomp",
+			if (v4lconvert_helper_decompress(data, LIBV4LCONVERT_PRIV_DIR "/ov518-decomp",
 						src, src_size, d, d_size, width, height, yvu)) {
 				/* Corrupt frame, better get another one */
 				errno = EAGAIN;
@@ -786,7 +848,7 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 	case V4L2_PIX_FMT_SN9C10X:
 	case V4L2_PIX_FMT_PAC207:
 	case V4L2_PIX_FMT_MR97310A:
-#ifndef DISABLE_LIBJPEG
+#ifdef HAVE_JPEG
 	case V4L2_PIX_FMT_JL2005BCD:
 #endif
 	case V4L2_PIX_FMT_SN9C2028:
@@ -827,7 +889,7 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 			}
 			tmpfmt.fmt.pix.pixelformat = V4L2_PIX_FMT_SBGGR8;
 			break;
-#ifndef DISABLE_LIBJPEG
+#ifdef HAVE_JPEG
 		case V4L2_PIX_FMT_JL2005BCD:
 			if (v4lconvert_decode_jl2005bcd(data, src, src_size,
 							tmpbuf,
@@ -928,6 +990,8 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 	}
 
 	case V4L2_PIX_FMT_GREY:
+	case V4L2_PIX_FMT_Y4:
+	case V4L2_PIX_FMT_Y6:
 		switch (dest_pix_fmt) {
 		case V4L2_PIX_FMT_RGB24:
 	        case V4L2_PIX_FMT_BGR24:
@@ -1082,16 +1146,16 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 	case V4L2_PIX_FMT_YUYV:
 		switch (dest_pix_fmt) {
 		case V4L2_PIX_FMT_RGB24:
-			v4lconvert_yuyv_to_rgb24(src, dest, width, height);
+			v4lconvert_yuyv_to_rgb24(src, dest, width, height, bytesperline);
 			break;
 		case V4L2_PIX_FMT_BGR24:
-			v4lconvert_yuyv_to_bgr24(src, dest, width, height);
+			v4lconvert_yuyv_to_bgr24(src, dest, width, height, bytesperline);
 			break;
 		case V4L2_PIX_FMT_YUV420:
-			v4lconvert_yuyv_to_yuv420(src, dest, width, height, 0);
+			v4lconvert_yuyv_to_yuv420(src, dest, width, height, bytesperline, 0);
 			break;
 		case V4L2_PIX_FMT_YVU420:
-			v4lconvert_yuyv_to_yuv420(src, dest, width, height, 1);
+			v4lconvert_yuyv_to_yuv420(src, dest, width, height, bytesperline, 1);
 			break;
 		}
 		if (src_size < (width * height * 2)) {
@@ -1104,18 +1168,18 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 	case V4L2_PIX_FMT_YVYU:
 		switch (dest_pix_fmt) {
 		case V4L2_PIX_FMT_RGB24:
-			v4lconvert_yvyu_to_rgb24(src, dest, width, height);
+			v4lconvert_yvyu_to_rgb24(src, dest, width, height, bytesperline);
 			break;
 		case V4L2_PIX_FMT_BGR24:
-			v4lconvert_yvyu_to_bgr24(src, dest, width, height);
+			v4lconvert_yvyu_to_bgr24(src, dest, width, height, bytesperline);
 			break;
 		case V4L2_PIX_FMT_YUV420:
 			/* Note we use yuyv_to_yuv420 not v4lconvert_yvyu_to_yuv420,
 			   with the last argument reversed to make it have as we want */
-			v4lconvert_yuyv_to_yuv420(src, dest, width, height, 1);
+			v4lconvert_yuyv_to_yuv420(src, dest, width, height, bytesperline, 1);
 			break;
 		case V4L2_PIX_FMT_YVU420:
-			v4lconvert_yuyv_to_yuv420(src, dest, width, height, 0);
+			v4lconvert_yuyv_to_yuv420(src, dest, width, height, bytesperline, 0);
 			break;
 		}
 		if (src_size < (width * height * 2)) {
@@ -1128,16 +1192,16 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 	case V4L2_PIX_FMT_UYVY:
 		switch (dest_pix_fmt) {
 		case V4L2_PIX_FMT_RGB24:
-			v4lconvert_uyvy_to_rgb24(src, dest, width, height);
+			v4lconvert_uyvy_to_rgb24(src, dest, width, height, bytesperline);
 			break;
 		case V4L2_PIX_FMT_BGR24:
-			v4lconvert_uyvy_to_bgr24(src, dest, width, height);
+			v4lconvert_uyvy_to_bgr24(src, dest, width, height, bytesperline);
 			break;
 		case V4L2_PIX_FMT_YUV420:
-			v4lconvert_uyvy_to_yuv420(src, dest, width, height, 0);
+			v4lconvert_uyvy_to_yuv420(src, dest, width, height, bytesperline, 0);
 			break;
 		case V4L2_PIX_FMT_YVU420:
-			v4lconvert_uyvy_to_yuv420(src, dest, width, height, 1);
+			v4lconvert_uyvy_to_yuv420(src, dest, width, height, bytesperline, 1);
 			break;
 		}
 		if (src_size < (width * height * 2)) {
@@ -1344,7 +1408,8 @@ static void v4lconvert_get_framesizes(struct v4lconvert_data *data,
 
 	for (i = 0; ; i++) {
 		frmsize.index = i;
-		if (SYS_IOCTL(data->fd, VIDIOC_ENUM_FRAMESIZES, &frmsize))
+		if (data->dev_ops->ioctl(data->dev_ops_priv, data->fd,
+				VIDIOC_ENUM_FRAMESIZES, &frmsize))
 			break;
 
 		/* We got a framesize, check we don't have the same one already */
@@ -1404,7 +1469,8 @@ int v4lconvert_enum_framesizes(struct v4lconvert_data *data,
 			errno = EINVAL;
 			return -1;
 		}
-		return SYS_IOCTL(data->fd, VIDIOC_ENUM_FRAMESIZES, frmsize);
+		return data->dev_ops->ioctl(data->dev_ops_priv, data->fd,
+				VIDIOC_ENUM_FRAMESIZES, frmsize);
 	}
 
 	if (frmsize->index >= data->no_framesizes) {
@@ -1440,7 +1506,8 @@ int v4lconvert_enum_frameintervals(struct v4lconvert_data *data,
 			errno = EINVAL;
 			return -1;
 		}
-		res = SYS_IOCTL(data->fd, VIDIOC_ENUM_FRAMEINTERVALS, frmival);
+		res = data->dev_ops->ioctl(data->dev_ops_priv, data->fd,
+				VIDIOC_ENUM_FRAMEINTERVALS, frmival);
 		if (res)
 			V4LCONVERT_ERR("%s\n", strerror(errno));
 		return res;
@@ -1485,7 +1552,8 @@ int v4lconvert_enum_frameintervals(struct v4lconvert_data *data,
 	frmival->pixel_format = src_fmt.fmt.pix.pixelformat;
 	frmival->width = src_fmt.fmt.pix.width;
 	frmival->height = src_fmt.fmt.pix.height;
-	res = SYS_IOCTL(data->fd, VIDIOC_ENUM_FRAMEINTERVALS, frmival);
+	res = data->dev_ops->ioctl(data->dev_ops_priv, data->fd,
+			VIDIOC_ENUM_FRAMEINTERVALS, frmival);
 	if (res) {
 		int dest_pixfmt = dest_fmt.fmt.pix.pixelformat;
 		int src_pixfmt  = src_fmt.fmt.pix.pixelformat;

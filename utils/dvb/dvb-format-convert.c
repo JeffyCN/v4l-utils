@@ -29,9 +29,11 @@
 #include <sys/time.h>
 #include <argp.h>
 
+#include <config.h>
+
 #include "dvb-file.h"
 #include "dvb-demux.h"
-#include "libscan.h"
+#include "dvb-scan.h"
 
 #define PROGRAM_NAME	"dvb-format-convert"
 
@@ -77,7 +79,7 @@ static int convert_file(struct arguments *args)
 
 	printf("Reading file %s\n", args->input_file);
 
-	dvb_file = read_file_format(args->input_file, args->delsys,
+	dvb_file = dvb_read_file_format(args->input_file, args->delsys,
 				    args->input_format);
 	if (!dvb_file) {
 		fprintf(stderr, "Error reading file %s\n", args->input_file);

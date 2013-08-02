@@ -20,6 +20,7 @@ enum Option {
 	OptHelp = 'h',
 	OptGetInput = 'I',
 	OptSetInput = 'i',
+	OptConcise = 'k',
 	OptListCtrls = 'l',
 	OptListCtrlsMenus = 'L',
 	OptListOutputs = 'N',
@@ -117,10 +118,6 @@ enum Option {
 	OptWaitForEvent,
 	OptGetPriority,
 	OptSetPriority,
-	OptListDvPresets,
-	OptSetDvPreset,
-	OptGetDvPreset,
-	OptQueryDvPreset,
 	OptListDvTimings,
 	OptQueryDvTimings,
 	OptGetDvTimings,
@@ -140,6 +137,7 @@ enum Option {
 	OptListBuffersSlicedVbiOut,
 	OptStreamCount,
 	OptStreamSkip,
+	OptStreamLoop,
 	OptStreamPoll,
 	OptStreamTo,
 	OptStreamMmap,
@@ -195,7 +193,7 @@ std::string service2s(unsigned service);
 std::string field2s(int val);
 void print_v4lstd(v4l2_std_id std);
 int parse_fmt(char *optarg, __u32 &width, __u32 &height, __u32 &pixelformat);
-__u32 find_pixel_format(int fd, unsigned index, bool mplane);
+__u32 find_pixel_format(int fd, unsigned index, bool output, bool mplane);
 void printfmt(const struct v4l2_format &vfmt);
 void print_video_formats(int fd, enum v4l2_buf_type type);
 
@@ -266,6 +264,8 @@ void selection_set(int fd);
 void selection_get(int fd);
 
 // v4l2-ctl-misc.cpp
+// This one is also used by the streaming code.
+extern struct v4l2_decoder_cmd dec_cmd;
 void misc_usage(void);
 void misc_cmd(int ch, char *optarg);
 void misc_set(int fd);
@@ -276,5 +276,9 @@ void streaming_usage(void);
 void streaming_cmd(int ch, char *optarg);
 void streaming_set(int fd);
 void streaming_list(int fd);
+
+// v4l2-ctl-test-patterns.cpp
+void fill_buffer(void *buffer, struct v4l2_pix_format *pix);
+bool precalculate_bars(__u32 pixfmt, unsigned pattern);
 
 #endif

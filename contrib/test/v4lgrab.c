@@ -11,6 +11,9 @@
  *      Copied from http://www.tazenda.demon.co.uk/phil/vgrabber.c
  *      with minor modifications (Dave Forrest, drf5n@virginia.edu).
  *
+ * NOTE: This utility uses the old, discontinued V4L version 1 API.
+ * It is kept here solely for the purposes of testing the libv4l1
+ * compatibility layer, as the V4L1 API were removed on kernel 2.6.39.
  */
 
 #include <unistd.h>
@@ -22,7 +25,7 @@
 #include <stdlib.h>
 
 #include <linux/types.h>
-#include <linux/videodev.h>
+#include "../../lib/include/libv4l1-videodev.h"
 
 #define FILE "/dev/video0"
 
@@ -80,6 +83,7 @@
 	}                                                               \
 }
 
+#ifdef CONFIG_VIDEO_V4L1_COMPAT
 static int get_brightness_adj(unsigned char *image, long size, int *brightness)
 {
 	long i, tot = 0;
@@ -88,6 +92,7 @@ static int get_brightness_adj(unsigned char *image, long size, int *brightness)
 	*brightness = (128 - tot/(size*3))/3;
 	return !((tot/(size*3)) >= 126 && (tot/(size*3)) <= 130);
 }
+#endif
 
 int main(int argc, char **argv)
 {

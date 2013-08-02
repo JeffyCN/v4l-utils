@@ -1,45 +1,299 @@
-v4l-utils-0.8.9
+v4l-utils-1.0.0
 ---------------
-* libv4l changes (0.9.x backports)
-  * libv4lconvert: Various Pixart JPEG fixes
-  * libv4lconvert: Add more notebooks to the upside down device table
-* Utils changes (0.9.x backports)
-  * keytable: Add support for Sanyo IR and RC-5-SZ protocol
-  * keytable: Add missing buttons in shipped keytables
-  * v4l2-compliance, v4l-ctl, qv4l2: Sync with development branch
 
-v4l-utils-0.8.8
----------------
-* Utils changes (0.9.x backports)
-  * dvb-format-convert: fix argument check and helper message
-* libv4l changes (0.9.x backports)
-  * tinyjpeg: Better luminance quantization table for Pixart JPEG (Jean-Francois Moine)
-  * tinyjpeg: Fix out of bounds array usage
-  * libv4lconvert: Use bytesperline instead of width (Robert Abel)
-  * libv4lconvert: Revert Lenovo X201 upside down table entry
-  * libv4lconver: Add 06f8:301b pac7302 based cam to the quirk table
+Devin Heitmueller (1):
+      Don't call G_TUNER unless actually performing a tuning related call
 
-v4l-utils-0.8.7
+Diego Viola (1):
+      Fix spelling of Qt in .desktop file (typo)
+
+Gregor Jasny (20):
+      qv4l2: Silence Qt build tools invocation if silent mode is enabled
+      buildsystem: Do not bootstrap complete gettext for testing iconv
+      libdvb: Disable library installation by default
+      keytable: Always check if strtok return value is null
+      libv4lconvert: Prevent integer overflow by checking width and height
+      xc3082: Fix use after free in free_firmware()
+      libdvbv5: Fix reallocation in parse_lcn
+      rds-ctl: Always terminate strings properly
+      libdvbv5: Fix copy and paste error in parse_service()
+      libv4lconvert: Avoid division by 0 if gamma value is corrupted
+      pixfmt-test: Explicitely mention fall-through
+      v4l2-ctl: Do not read past end of num_planes array
+      libv4lconvert: Fix resource leak in sq905 error path
+      xc3028: Remove duplicate const
+      libdvbv5: Actually check for lock
+      libdvbv5: Free all memory in read_dvb_file error path
+      libdvbv5: Free all memory in parse_format_oneline error path
+      libdvbv5: Free tbl in dvb_read_section_with_id error paths
+      libdvbv5: Properly free temporary variables at end of parse_string
+      libdvbv5: Remove dead code in read_dvb_file.
+
+Guy Martin (6):
+      libdvbv5: Remove buggy parsing of extra DTV_foo parameters
+      libdvbv5: Add parsing of POLARIZATION
+      libdvbv5: Export dvb_fe_is_satellite()
+      libdvbv5: Fix satellite handling and apply polarization parameter to the frontend
+      libdvbv5: Use a temporary copy of the dvb parameters when tuning
+      dvbv5-zap: Parse the LNB from the channel file
+
+Hans Verkuil (20):
+      v4l2-dbg: remove unused source.
+      v4l2-compliance: refactor code to create invalid formats.
+      v4l2-compliance: improve overlay clipping tests.
+      v4l2-compliance: check that g_register fills the size field.
+      rds-ctl: fix percentage handling.
+      rds-ctl: support -d10 to refer to radio10.
+      v4l2-compliance: fix typo
+      v4l2-ctl: fix wrong array accesses in selection code.
+      v4l2-ctl: V4L2_BUF_TYPE_PRIVATE is no longer used.
+      Remove references to v4l2-chip-ident.h
+      Sync with latest 3.10.0-rc7  kernel.
+      libv4l2/log.c: add entry for new VIDIOC_DBG_G_CHIP_INFO ioctl.
+      Remove committed v4l2-chip-ident.h headers.
+      Sync with 3.11 kernel.
+      qv4l2: always update controls by default
+      libv4l2rds: fix coverity issues.
+      rds-ctl: fix coverity issues.
+      v4l2-dbg: fix coverity issues.
+      v4l2-ctl: fix coverity issues.
+      v4l2-ctl: (*XX).Foo -> XX->Foo
+
+Hans de Goede (3):
+      libv4l2: Add logging of dqbuf timestamps to debug logging
+      libv4l2: Add V4L2_PERROR convenience macro
+      libv4l2: do not log a ton of errors on device unplug
+
+Konke Radlow (3):
+      libv4l2rds: support RDS-EON and TMC-tuning info
+      rds-ctl: support RDS-EON and TMC-tuning info
+      libv4l2rds.c: moving functions to get rid of declarations
+
+Mauro Carvalho Chehab (3):
+      dvbv5-zap: sort the params by the key letter
+      dvbv5-zap: add an option to not filter pids
+      parse_string: fix encodings for Taiwan
+
+Ricardo Ribalda Delgado (1):
+      v4l2_compliance: -EINVAL is expected when ret is not 0
+
+v4l-utils-0.9.5
 ---------------
-* Utils changes (0.9.x backports)
-  * ir-keytable: Fixed file parsing errors
-  * qv4l2: fix segfault when there are no inputs or outputs
-  * dvb: Merged DVB tools from development branch
-* libv4l changes (0.9.x backports)
+
+Gregor Jasny (1):
+      contrib: Add missing dist files for ioctl-test
+
+v4l-utils-0.9.4
+---------------
+
+André Roth (3):
+      libv4l-mplane: Fix compile flags to allow anonymous unions with gcc 4.5.5
+      libdvbv5: fix compile error
+      libdvbv5: fix anonymous unions on older gcc
+
+Antonio Ospite (2):
+      contrib/m920x/m920x_parse.pl: stricter check when extracting firmware
+      contrib/m920x/m920x_parse.pl: silence a warning
+
+Gregor Jasny (4):
+      libv4l: Add ASUS F2F with STK DC-1125 to upside down list
+      libv4l: Add Founder PC T14MF to upside down table
+      contrib: Add missing files to distribution list
+
+Hans Petter Selasky (1):
+      libv4l: Don't try to access sysfs 256 times when there is no sysfs
+
+Hans Verkuil (52):
+      qv4l2: add missing information for string and integer controls
+      qv4l2: add support for control events.
+      v4l2-compliance: allow EINVAL to be returned by S/TRY_FMT.
+      qv4l2: fix setting frequency for radio modulators
+      v4l-utils: sync with latest kernel.
+      v4l2-ctl: show used timestamp type.
+      v4l2-compliance: add check whether the timestamp is monotonic.
+      v4l-utils: fix make install problems with ln -s
+      v4l-utils: fix two 'dereferencing type-punned pointer' warnings
+      v4l2-compliance: reorganize verbosity options
+      ioctl-test: improve comments and add checks against ioctl num changes.
+      v4l2-compliance: improve read/write error reporting.
+      qv4l2: don't show "Query Standard" button if QUERYSTD isn't supported.
+      qv4l2: correctly update frame width and height for fixed resolutions.
+      v4l2-ctl: improve interval reporting.
+      v4l2-ctl: when streaming to file use bytesused instead of the full buffer.
+      v4l2-ctl: improve dv_timings reporting.
+      v4l2-ctl: support data_offset when streaming multiplanar formats.
+      v4l2-ctl: show buffers or key/P/B-frames when capturing.
+      v4l2-* utils: allow -d11 to refer to /dev/video11
+      v4l-utils: run sync-with-kernel.
+      v4l2-ctl: add support for 'COPY' timestamp and ctrl range events.
+      v4l2-compliance: add support for the new 'COPY' timestamp type.
+      v4l2-compliance: missing check on the frameinterval
+      v4l2-compliance: improve tests when TRY/S_FMT returns EINVAL.
+      qv4l2: do nothing if querystd does not detect a standard.
+      qv4l2: handle control range updates.
+      libv4l2/log.c: update list of ioctls.
+      v4l2-compliance: fix s_std test: ENODATA is a valid error code.
+      v4l2-ctl: don't produce verbose output for QBUF while streaming.
+      qv4l2: fix the way interlaced formats are displayed
+      v4l2-ctl: fix the field-per-second calculation
+      qv4l2/v4l2-ctl: fix the fields-per-second calculation
+      qv4l2/v4l2-ctl: fix rounding error in field-per-second calculation
+      v4l2-ctl: add the --concise option.
+      v4l-utils: sync with kernel, remove all references to the DV_PRESET API.
+      v4l-utils: sync to the latest kernel.
+      v4l-utils: sync-with-kernel.
+      v4l2-compliance: remove ChipIdent tests
+      v4l2-ctl: set bytesused for streaming to the output.
+      v4l2-compliance: fix RDS + CAP_READWRITE tests.
+      v4l2-compliance: really fix the RDS and V4L2_CAP_READWRITE tests
+      v4l2-ctl: add eos and decoder-stop support.
+      v4l2-ctl: use references instead of pointers.
+      v4l2-ctl: fix a small bug in the stream-count/skip handling.
+      v4l2-ctl: split off test pattern generation in a separate source.
+      v4l2-ctl: small improvements.
+      v4l2-ctl: poll/non-poll behavior fixes
+      v4l2-ctl: find_pixel_format couldn't handle output streams.
+      v4l-utils: sync with latest kernel.
+      v4l2-dbg: replace CHIP_IDENT with CHIP_INFO.
+      v4l2-ctl: introduce buffers class to simplify the streaming code
+
+Jean Delvare (1):
+      dvbv5-zap: Fix build warning
+
+Laurent Pinchart (2):
+      v4l2-compliance: Print invalid return codes in control tests
+      v4l2-compliance: Print invalid error_idx values in control tests
+
+Mauro Carvalho Chehab (50):
+      ir-keytable: Add support for testing EV_ABS events
+      keytable: merge two identical structures into one
+      keytable: reorder functions to put similar code together
+      keytable: Add handler for EV_REL type
+      keytable: also print code for unknown/unhandled events
+      keytable: Put events in numeric order
+      keytable: Add the remaining other unhandled events
+      keytable: Make the parsing code more generic
+      keytable: properly print the other MSC_* event names
+      keytable: be clear when a value is in hexadecimal
+      keytable: always use hexadecimal values for scancodes
+      dvbv5-zap: Allow to enable FE debug
+      Sync with kernel, with DVB stats
+      dvb-fe: add support for DVBv5 stats
+      dvbv5-zap: use the new DVBv5 stats API
+      dvb-fe: Add a flag to indicate if DVBv5 stats is in use
+      dvb-fe: Improve BER measurements for DVBv5
+      dvb-fe: Allow returning BER in a float value
+      dvbv5-zap: better display BER
+      dvb-fe: Add a method to report PER
+      dvb: Move the core of the stats logic to dvb-fe
+      dvb-fe: Fix PER statistics measurement
+      dvb-fe: Add support for a quality measurement
+      dvb: Rename a few DVB statistics
+      dvb: Add support for retrieving pre-BER data
+      dvb: use a macro for the number of Kernel stats
+      dvb: Better name the post-BER data
+      dvb: add support for pre-BER measurement
+      dvb: if the signal vanishes, bit/block error counters should vanish
+      dvbv5-zap: improve status display
+      dvbv5-scan: use library support for stats print
+      dvbv5-scan: also prints signal strength on tuner fail
+      ioctl-test: Auto-generate the list of ioctls to test
+      Add DVB headers to make sync-with-kernel
+      ioctl-test: expand it to also test DVB frontend/demux
+      dvbv5-scan: Fix get_signal logic
+      dvb-fe: Fix check for stats property
+      dvb-fe: Reserve space for the other DVBv5 properties
+      dvbv5-zap: Only go back if is there anything to clean
+      dvb5-scan: Improve output to better show the status
+      dvbv5-scan: don't be too verbose with status
+      dvb-scan: Don't call dvb_fe_get_stats() twice
+      dvb-fe: Supress statistics if signal lock vanishes
+      dvbv5-scan: timeout-multiply should also affect the timeout for scan
+      dvbv5-zap: add traffic monitor support
+      dvbv5-zap: output stats to stdout on monitor mode
+      dvbv5-zap: Better output at monitor mode
+      dvbv5-zap: don't stop monitoring for buffer underrun
+      dvbv5-zap: better represent low_traffic data in monitor mode
+      dvbv5-zap: print elapsed time when buffer overflow happens
+
+Riku Voipio (1):
+      v4l-utils: use openat when available
+
+Tzu-Jung Lee (2):
+      v4l2-ctl: break down the streaming_set()
+      v4l2-ctl: initial attempt to support M2M device streaming
+
+v4l-utils-0.9.3
+---------------
+* Synced with latest kernel headers
+
+* v4l2-ctl changes
+  * fixed bug in parse_subopt
+  * --list-buffers didn't work for multiplanar formats
+
+* v4l2-compliance
+  * work around missing ENODATA on (k)FreeBSD
+  * add test whether V4L2_MEMORY_DMABUF is supported
+  * add the new EXPBUF ioctl
+
+v4l-utils-0.9.2
+---------------
+* libv4l changes
+  * Add a libv4l plugin for mplane handling
+
+* v4l2-ctl changes
+  * load initial frames from the file as well
+  * add --stream-loop for streaming to an output
+  * zero bytesperline
+
+* test utility changes
+  * Add an OpenGL test application to test utilities in contrib
+
+* buildsystem changes
+  * Use udev pkgconfig file to populate installation directory
+  * Query Qt rcc tool location and fall back to rcc if not available
+
+v4l-utils-0.9.1
+---------------
+* libv4l changes
+  * Various Pixart JPEG fixes
+  * Add more notebooks to the upside down device table
+  * Use bytesperline instead of width (Robert Abel)
+  * Better luminance quantization table for Pixart JPEG (Jean-Francois Moine)
+  * Fix out of bounds array usage
   * Prevent GCC 4.7 inlining error
-  * Add some more laptop models to the upside down devices table
-
-v4l-utils-0.8.6
----------------
-* libv4l changes (0.9.x backports)
   * Add support for libjpeg >= v7
-  * Add new matching algorithm for upside down table (gjasny)
-  * Add some more laptop models to the upside down devices table (hdegoede, gjasny)
-  * Retry with another frame on JPEG header decode errors (hdegoede)
-  * Improved JL2005BCD support (Theodore Kilgore, hdegoede)
-  * Set errno to EIO if getting 4 consecutive EAGAIN convert errors (hdegoede)
-  * Make software autowhitebalance converge faster (hdegoede)
-  * Add quirk support for forced tinyjpeg fallback (hdegoede)
+  * Add new matching algorithm for upside down table
+  * Retry with another frame on JPEG header decode errors
+  * Improved JL2005BCD support (Theodore Kilgore)
+  * Set errno to EIO if getting 4 consecutive EAGAIN convert errors
+  * Make software autowhitebalance converge faster
+  * Add quirk support for forced tinyjpeg fallback
+
+* ir-keytable changes
+  * Fixed file parsing errors
+  * Add support for Sanyo IR and RC-5-SZ protocol
+  * Add missing mouse buttons in shipped keytables
+
+* libdvbv5 changes
+  * Initial release
+
+* libv4l2rds and rds-ctl
+  * Initial release (Konke Radlow)
+
+* qv4l2 changes
+  * Fix segfault when there are no inputs or outputs
+  * Fix endianess issues
+  * Add support for new timing ioctls
+  * Improve frequency and radio support
+  * Add VBI support
+  * Add ability to make a snapshot
+  * Add support to stream raw frames into a file
+
+* buildsystem changes
+  * Converted buildsystem to autotools
+  * Made buildsystem cross compiling friendly
+  * Support out of tree builds
 
 v4l-utils-0.8.5
 ---------------

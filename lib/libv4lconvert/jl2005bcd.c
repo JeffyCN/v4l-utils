@@ -23,9 +23,11 @@
  * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
  */
 
+#include <config.h>
 #include <stdlib.h>
 #include <string.h>
 
+#ifdef HAVE_JPEG
 #include "libv4lconvert-priv.h"
 #include "jpeg_memsrcdest.h"
 #include "libv4lsyscall-priv.h"
@@ -168,7 +170,7 @@ int v4lconvert_decode_jl2005bcd(struct v4lconvert_data *data,
 
 		size = eoi - jpeg_data_idx;
 		if ((JPEG_HEADER_SIZE + size) > sizeof(jpeg_stripe)) {
-			V4LCONVERT_ERR("stripe size too big %d > %ld\n",
+			V4LCONVERT_ERR("stripe size too big %d > %zd\n",
 				       JPEG_HEADER_SIZE + size,
 				       sizeof(jpeg_stripe));
 			return 1;
@@ -210,3 +212,5 @@ int v4lconvert_decode_jl2005bcd(struct v4lconvert_data *data,
 	jpeg_destroy_decompress(&dinfo);
 	return 0;
 }
+
+#endif /* HAVE_JPEG */

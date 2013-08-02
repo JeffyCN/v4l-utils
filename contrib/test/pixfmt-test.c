@@ -20,6 +20,8 @@
 
 #define _GNU_SOURCE 1
 
+#include <config.h>
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
@@ -372,8 +374,6 @@ typedef struct {
 	size_t			length;
 } io_buffer;
 
-#define VERSION "1.0"
-
 static const char *		my_name;
 
 static const char *		dev_name = "/dev/video";
@@ -437,18 +437,23 @@ write_rgb_pixel			(uint8_t *		dst,
 		/* fall through */
 	case LE * 256 + 24:
 		dst[2] = dst_pixel >> 16;
+		/* fall through */
 	case LE * 256 + 16:
 		dst[1] = dst_pixel >> 8;
+		/* fall through */
 	case LE * 256 + 8:
 		dst[0] = dst_pixel;
 		break;
 
 	case BE * 256 + 32:
 		*dst++ = dst_pixel >> 24;
+		/* fall through */
 	case BE * 256 + 24:
 		*dst++ = dst_pixel >> 16;
+		/* fall through */
 	case BE * 256 + 16:
 		*dst++ = dst_pixel >> 8;
+		/* fall through */
 	case BE * 256 + 8:
 		*dst = dst_pixel;
 		break;
@@ -1695,19 +1700,18 @@ init_device			(void)
 		}
 	}
 
-	switch (io_method) {
-	case 0:
+	if (io_method == 0) {
 		if (cap.capabilities & V4L2_CAP_STREAMING) {
 			io_method = IO_METHOD_MMAP;
 		} else if (cap.capabilities & V4L2_CAP_READWRITE) {
 			io_method = IO_METHOD_READ;
 		} else {
 			error_exit ("%s does not support reading or "
-				    "streaming.\n");
+					"streaming.\n");
 		}
+	}
 
-		break;
-
+	switch (io_method) {
 	case IO_METHOD_READ:
 		if (0 == (cap.capabilities & V4L2_CAP_READWRITE)) {
 			error_exit ("%s does not support read i/o.\n");
@@ -1868,7 +1872,7 @@ usage				(FILE *			fp,
 				 char **		argv)
 {
 	fprintf (fp, "\
-V4L2 pixfmt test " VERSION "\n\
+V4L2 pixfmt test " V4L_UTILS_VERSION "\n\
 Copyright (C) 2007 Michael H. Schimek\n\
 This program is licensed under GPL 2 or later. NO WARRANTIES.\n\n\
 Usage: %s [options]\n\n\

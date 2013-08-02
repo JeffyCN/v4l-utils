@@ -35,7 +35,11 @@
 #include <sys/time.h>
 #include <dirent.h>
 #include <math.h>
+#include <config.h>
+
+#ifdef HAVE_SYS_KLOG_H
 #include <sys/klog.h>
+#endif
 
 #include <linux/videodev2.h>
 #include <libv4l2.h>
@@ -86,6 +90,7 @@ static struct option long_options[] = {
 	{"help-streaming", no_argument, 0, OptHelpStreaming},
 	{"help-all", no_argument, 0, OptHelpAll},
 	{"wrapper", no_argument, 0, OptUseWrapper},
+	{"concise", no_argument, 0, OptConcise},
 	{"get-output", no_argument, 0, OptGetOutput},
 	{"set-output", required_argument, 0, OptSetOutput},
 	{"list-outputs", no_argument, 0, OptListOutputs},
@@ -171,10 +176,6 @@ static struct option long_options[] = {
 	{"overlay", required_argument, 0, OptOverlay},
 	{"sleep", required_argument, 0, OptSleep},
 	{"list-devices", no_argument, 0, OptListDevices},
-	{"list-dv-presets", no_argument, 0, OptListDvPresets},
-	{"set-dv-presets", required_argument, 0, OptSetDvPreset},
-	{"get-dv-presets", no_argument, 0, OptGetDvPreset},
-	{"query-dv-presets", no_argument, 0, OptQueryDvPreset},
 	{"list-dv-timings", no_argument, 0, OptListDvTimings},
 	{"query-dv-timings", no_argument, 0, OptQueryDvTimings},
 	{"get-dv-timings", no_argument, 0, OptGetDvTimings},
@@ -194,6 +195,7 @@ static struct option long_options[] = {
 	{"list-buffers-sliced-vbi-out", no_argument, 0, OptListBuffersSlicedVbiOut},
 	{"stream-count", required_argument, 0, OptStreamCount},
 	{"stream-skip", required_argument, 0, OptStreamSkip},
+	{"stream-loop", no_argument, 0, OptStreamLoop},
 	{"stream-poll", no_argument, 0, OptStreamPoll},
 	{"stream-to", required_argument, 0, OptStreamTo},
 	{"stream-mmap", optional_argument, 0, OptStreamMmap},
@@ -283,8 +285,6 @@ std::string buftype2s(int type)
 		return "Sliced VBI Output";
 	case V4L2_BUF_TYPE_VIDEO_OUTPUT_OVERLAY:
 		return "Video Output Overlay";
-	case V4L2_BUF_TYPE_PRIVATE:
-		return "Private";
 	default:
 		return "Unknown (" + num2s(type) + ")";
 	}
@@ -414,12 +414,10 @@ void printfmt(const struct v4l2_format &vfmt)
 		printf("\tField             : %s\n", field2s(vfmt.fmt.pix_mp.field).c_str());
 		printf("\tNumber of planes  : %u\n", vfmt.fmt.pix_mp.num_planes);
 		printf("\tColorspace        : %s\n", colorspace2s(vfmt.fmt.pix_mp.colorspace).c_str());
-		for (int i = 0; i < vfmt.fmt.pix_mp.num_planes; i++) {
+		for (int i = 0; i < vfmt.fmt.pix_mp.num_planes && i < VIDEO_MAX_PLANES; i++) {
 			printf("\tPlane %d           :\n", i);
 			printf("\t   Bytes per Line : %u\n", vfmt.fmt.pix_mp.plane_fmt[i].bytesperline);
 			printf("\t   Size Image     : %u\n", vfmt.fmt.pix_mp.plane_fmt[i].sizeimage);
-			if (i >= VIDEO_MAX_PLANES)
-				break;
 		}
 		break;
 	case V4L2_BUF_TYPE_VIDEO_OUTPUT_OVERLAY:
@@ -459,8 +457,6 @@ void printfmt(const struct v4l2_format &vfmt)
 			       service2s(vfmt.fmt.sliced.service_lines[1][i]).c_str());
 		}
 		printf("\tI/O Size       : %u\n", vfmt.fmt.sliced.io_size);
-		break;
-	case V4L2_BUF_TYPE_PRIVATE:
 		break;
 	}
 }
@@ -554,7 +550,7 @@ int parse_subopt(char **subs, const char * const *subopts, char **value)
 		fprintf(stderr, "Invalid suboptions specified\n");
 		return -1;
 	}
-	if (value == NULL) {
+	if (*value == NULL) {
 		fprintf(stderr, "No value given to suboption <%s>\n",
 				subopts[opt]);
 		return -1;
@@ -729,13 +725,17 @@ static __u32 parse_event(const char *e, const char **name)
 	return event;
 }
 
-__u32 find_pixel_format(int fd, unsigned index, bool mplane)
+__u32 find_pixel_format(int fd, unsigned index, bool output, bool mplane)
 {
 	struct v4l2_fmtdesc fmt;
 
 	fmt.index = index;
-	fmt.type = mplane ?
-		V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE : V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	if (output)
+		fmt.type = mplane ?  V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE :
+			V4L2_BUF_TYPE_VIDEO_OUTPUT;
+	else
+		fmt.type = mplane ?  V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE :
+			V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	if (doioctl(fd, VIDIOC_ENUM_FMT, &fmt))
 		return 0;
 	return fmt.pixelformat;
@@ -821,11 +821,10 @@ int main(int argc, char **argv)
 			return 0;
 		case OptSetDevice:
 			device = optarg;
-			if (device[0] >= '0' && device[0] <= '9' && device[1] == 0) {
+			if (device[0] >= '0' && device[0] <= '9' && strlen(device) <= 3) {
 				static char newdev[20];
-				char dev = device[0];
 
-				sprintf(newdev, "/dev/video%c", dev);
+				sprintf(newdev, "/dev/video%s", device);
 				device = newdev;
 			}
 			break;
@@ -926,7 +925,6 @@ int main(int argc, char **argv)
 		options[OptGetCropCap] = 1;
 		options[OptGetOutputCropCap] = 1;
 		options[OptGetJpegComp] = 1;
-		options[OptGetDvPreset] = 1;
 		options[OptGetDvTimings] = 1;
 		options[OptGetDvTimingsCap] = 1;
 		options[OptGetPriority] = 1;
@@ -967,8 +965,8 @@ int main(int argc, char **argv)
 	overlay_set(fd);
 	vbi_set(fd);
 	selection_set(fd);
-	misc_set(fd);
 	streaming_set(fd);
+	misc_set(fd);
 
 	/* Get options */
 

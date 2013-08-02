@@ -72,6 +72,9 @@ static const struct v4lcontrol_flags_info v4lcontrol_flags[] = {
 	{ 0x046d, 0x09b2, 0, "FUJITSU", "FJNB1C9",
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED, 0,
 		"FUJITSU", "LifeBook P7230" },
+	/* A re-branded ASUS notebook */
+	{ 0x04f2, 0xb012, 0, "Founder PC", "T14MF",
+		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
 	/* Note no whitespace padding for board vendor, this is not a typo */
 	{ 0x04f2, 0xb012, 0, "PEGATRON CORPORATION", "X71TL     ",
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
@@ -268,7 +271,7 @@ static const char *asus_board_vendor[] = {
 static const char *asus_board_name[] = {
 	"A3[A-Z]*",
 	"B50[A-Z]*",
-	"F[3579][A-Z]*", "F70[A-Z]*", "F[58]2[A-Z]*",
+	"F[23579][A-Z]*", "F70[A-Z]*", "F[58]2[A-Z]*",
 	"G[12][A-Z]*", "G[57]0[A-Z]*",
 	"K[4567]0[A-Z]*", "K[56]1[A-Z]*", "K52[A-Z]*", "K[45]3[A-Z]*",
 	"N[12579]0[A-Z]*", "N[56]1[A-Z]*", "N82[A-Z]*", "N[47]3[A-Z]*",
@@ -314,6 +317,7 @@ static const struct v4lcontrol_usb_id asus_camera_id[] = {
 	{ 0x174f, 0x8a31 },
 	{ 0x174f, 0xa311 },
 	{ 0x1d4d, 0x1002 },
+	{ 0x05e1, 0x0501 },
 	{ 0x0000, 0x0000 }
 };
 
@@ -358,6 +362,13 @@ static int v4lcontrol_get_usb_info(struct v4lcontrol_data *data,
 	struct stat st;
 	char sysfs_name[512];
 	char c, *s, buf[32];
+
+	snprintf(sysfs_name, sizeof(sysfs_name),
+	    "%s/sys/class/video4linux", sysfs_prefix);
+
+	/* Check for sysfs mounted before trying to search */
+	if (stat(sysfs_name, &st) != 0)
+		return 0; /* Not found, sysfs not mounted? */
 
 	if (fstat(data->fd, &st) || !S_ISCHR(st.st_mode))
 		return 0; /* Should never happen */
@@ -550,7 +561,8 @@ static void v4lcontrol_get_flags_from_db(struct v4lcontrol_data *data,
 		}
 }
 
-struct v4lcontrol_data *v4lcontrol_create(int fd, int always_needs_conversion)
+struct v4lcontrol_data *v4lcontrol_create(int fd, void *dev_ops_priv,
+	const struct libv4l_dev_ops *dev_ops, int always_needs_conversion)
 {
 	int shm_fd;
 	int i, rc, got_usb_info, speed, init = 0;
@@ -570,10 +582,14 @@ struct v4lcontrol_data *v4lcontrol_create(int fd, int always_needs_conversion)
 	}
 
 	data->fd = fd;
+	data->dev_ops = dev_ops;
+	data->dev_ops_priv = dev_ops_priv;
 
 	/* Check if the driver has indicated some form of flipping is needed */
-	if ((SYS_IOCTL(data->fd, VIDIOC_G_INPUT, &input.index) == 0) &&
-			(SYS_IOCTL(data->fd, VIDIOC_ENUMINPUT, &input) == 0)) {
+	if ((data->dev_ops->ioctl(data->dev_ops_priv, data->fd,
+				  VIDIOC_G_INPUT, &input.index) == 0) &&
+	    (data->dev_ops->ioctl(data->dev_ops_priv, data->fd,
+	    			VIDIOC_ENUMINPUT, &input) == 0)) {
 		if (input.status & V4L2_IN_ST_HFLIP)
 			data->flags |= V4LCONTROL_HFLIPPED;
 		if (input.status & V4L2_IN_ST_VFLIP)
@@ -611,7 +627,8 @@ struct v4lcontrol_data *v4lcontrol_create(int fd, int always_needs_conversion)
 		data->flags = strtol(s, NULL, 0);
 
 	ctrl.id = V4L2_CTRL_FLAG_NEXT_CTRL;
-	if (SYS_IOCTL(data->fd, VIDIOC_QUERYCTRL, &ctrl) == 0)
+	if (data->dev_ops->ioctl(data->dev_ops_priv, data->fd,
+			VIDIOC_QUERYCTRL, &ctrl) == 0)
 		data->priv_flags |= V4LCONTROL_SUPPORTS_NEXT_CTRL;
 
 	/* If the device always needs conversion, we can add fake controls at no cost
@@ -619,8 +636,11 @@ struct v4lcontrol_data *v4lcontrol_create(int fd, int always_needs_conversion)
 	if (always_needs_conversion || v4lcontrol_needs_conversion(data)) {
 		for (i = 0; i < V4LCONTROL_AUTO_ENABLE_COUNT; i++) {
 			ctrl.id = fake_controls[i].id;
-			rc = SYS_IOCTL(data->fd, VIDIOC_QUERYCTRL, &ctrl);
-			if (rc == -1 || (rc == 0 && (ctrl.flags & V4L2_CTRL_FLAG_DISABLED)))
+			rc = data->dev_ops->ioctl(data->dev_ops_priv, data->fd,
+					VIDIOC_QUERYCTRL, &ctrl);
+			if (rc == -1 ||
+			    (rc == 0 &&
+			     (ctrl.flags & V4L2_CTRL_FLAG_DISABLED)))
 				data->controls |= 1 << i;
 		}
 	}
@@ -631,17 +651,20 @@ struct v4lcontrol_data *v4lcontrol_create(int fd, int always_needs_conversion)
 	   different sensors with / without autogain or the necessary controls. */
 	while (data->flags & V4LCONTROL_WANTS_AUTOGAIN) {
 		ctrl.id = V4L2_CID_AUTOGAIN;
-		rc = SYS_IOCTL(data->fd, VIDIOC_QUERYCTRL, &ctrl);
+		rc = data->dev_ops->ioctl(data->dev_ops_priv, data->fd,
+				VIDIOC_QUERYCTRL, &ctrl);
 		if (rc == 0 && !(ctrl.flags & V4L2_CTRL_FLAG_DISABLED))
 			break;
 
 		ctrl.id = V4L2_CID_EXPOSURE;
-		rc = SYS_IOCTL(data->fd, VIDIOC_QUERYCTRL, &ctrl);
+		rc = data->dev_ops->ioctl(data->dev_ops_priv, data->fd,
+				VIDIOC_QUERYCTRL, &ctrl);
 		if (rc != 0 || (ctrl.flags & V4L2_CTRL_FLAG_DISABLED))
 			break;
 
 		ctrl.id = V4L2_CID_GAIN;
-		rc = SYS_IOCTL(data->fd, VIDIOC_QUERYCTRL, &ctrl);
+		rc = data->dev_ops->ioctl(data->dev_ops_priv, data->fd,
+				VIDIOC_QUERYCTRL, &ctrl);
 		if (rc != 0 || (ctrl.flags & V4L2_CTRL_FLAG_DISABLED))
 			break;
 
@@ -658,7 +681,8 @@ struct v4lcontrol_data *v4lcontrol_create(int fd, int always_needs_conversion)
 	if (data->controls == 0)
 		return data; /* No need to create a shared memory segment */
 
-	if (SYS_IOCTL(fd, VIDIOC_QUERYCAP, &cap)) {
+	if (data->dev_ops->ioctl(data->dev_ops_priv, fd,
+			VIDIOC_QUERYCAP, &cap)) {
 		perror("libv4lcontrol: error querying device capabilities");
 		goto error;
 	}
@@ -844,7 +868,8 @@ int v4lcontrol_vidioc_queryctrl(struct v4lcontrol_data *data, void *arg)
 		}
 
 	/* find out what the kernel driver would respond. */
-	retval = SYS_IOCTL(data->fd, VIDIOC_QUERYCTRL, arg);
+	retval = data->dev_ops->ioctl(data->dev_ops_priv, data->fd,
+			VIDIOC_QUERYCTRL, arg);
 
 	if ((data->priv_flags & V4LCONTROL_SUPPORTS_NEXT_CTRL) &&
 			(orig_id & V4L2_CTRL_FLAG_NEXT_CTRL)) {
@@ -881,7 +906,8 @@ int v4lcontrol_vidioc_g_ctrl(struct v4lcontrol_data *data, void *arg)
 			return 0;
 		}
 
-	return SYS_IOCTL(data->fd, VIDIOC_G_CTRL, arg);
+	return data->dev_ops->ioctl(data->dev_ops_priv, data->fd,
+			VIDIOC_G_CTRL, arg);
 }
 
 int v4lcontrol_vidioc_s_ctrl(struct v4lcontrol_data *data, void *arg)
@@ -902,7 +928,8 @@ int v4lcontrol_vidioc_s_ctrl(struct v4lcontrol_data *data, void *arg)
 			return 0;
 		}
 
-	return SYS_IOCTL(data->fd, VIDIOC_S_CTRL, arg);
+	return data->dev_ops->ioctl(data->dev_ops_priv, data->fd,
+			VIDIOC_S_CTRL, arg);
 }
 
 int v4lcontrol_get_bandwidth(struct v4lcontrol_data *data)

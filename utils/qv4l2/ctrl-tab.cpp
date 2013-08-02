@@ -38,8 +38,6 @@
 #include <sys/ioctl.h>
 #include <errno.h>
 
-#define CTRL_FLAG_DISABLED (V4L2_CTRL_FLAG_READ_ONLY | V4L2_CTRL_FLAG_INACTIVE | V4L2_CTRL_FLAG_GRABBED)
-
 static bool is_valid_type(__u32 type)
 {
 	switch (type) {
@@ -198,7 +196,7 @@ void ApplicationWindow::finishGrid(QGridLayout *grid, unsigned ctrl_class)
 	m_sigMapper->setMapping(button, ctrl_class | CTRL_UPDATE);
 	connect(cbox, SIGNAL(toggled(bool)), button, SLOT(setDisabled(bool)));
 
-	cbox->setChecked(ctrl_class == V4L2_CTRL_CLASS_USER);
+	cbox->setChecked(true);
 
 	refresh(ctrl_class);
 }
@@ -326,6 +324,12 @@ void ApplicationWindow::addCtrl(QGridLayout *grid, const v4l2_queryctrl &qctrl)
 	default:
 		return;
 	}
+	struct v4l2_event_subscription sub;
+	memset(&sub, 0, sizeof(sub));
+	sub.type = V4L2_EVENT_CTRL;
+	sub.id = qctrl.id;
+	subscribe_event(sub);
+
 	m_sigMapper->setMapping(m_widgetMap[qctrl.id], qctrl.id);
 	if (qctrl.flags & CTRL_FLAG_DISABLED)
 		m_widgetMap[qctrl.id]->setDisabled(true);
@@ -639,7 +643,11 @@ void ApplicationWindow::setWhat(QWidget *w, unsigned id, const QString &v)
 	switch (qctrl.type) {
 	case V4L2_CTRL_TYPE_STRING:
 		w->setWhatsThis(QString("Type: String\n"
-					"Current: %1").arg(v) + flags);
+					"Minimum: %1\n"
+					"Maximum: %2\n"
+					"Step: %3\n"
+					"Current: %4")
+			.arg(qctrl.minimum).arg(qctrl.maximum).arg(qctrl.step).arg(v) + flags);
 		w->setStatusTip(w->whatsThis());
 		break;
 	default:
@@ -658,9 +666,10 @@ void ApplicationWindow::setWhat(QWidget *w, unsigned id, long long v)
 		w->setWhatsThis(QString("Type: Integer\n"
 					"Minimum: %1\n"
 					"Maximum: %2\n"
-					"Current: %3\n"
-					"Default: %4")
-			.arg(qctrl.minimum).arg(qctrl.maximum).arg(v).arg(qctrl.default_value) + flags);
+					"Step: %3\n"
+					"Current: %4\n"
+					"Default: %5")
+			.arg(qctrl.minimum).arg(qctrl.maximum).arg(qctrl.step).arg(v).arg(qctrl.default_value) + flags);
 		w->setStatusTip(w->whatsThis());
 		break;
 

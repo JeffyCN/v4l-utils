@@ -13,6 +13,7 @@
 #include <sys/time.h>
 #include <dirent.h>
 #include <math.h>
+#include <config.h>
 
 #include <linux/videodev2.h>
 #include <libv4l2.h>
@@ -75,9 +76,8 @@ static std::string status2s(__u32 status)
 
 
 static const flag_def input_cap_def[] = {
-	{V4L2_IN_CAP_PRESETS, "DV presets" },
 	{V4L2_IN_CAP_DV_TIMINGS, "DV timings" },
-	{V4L2_IN_CAP_STD, "SD presets" },
+	{V4L2_IN_CAP_STD, "SDTV standards" },
 	{ 0, NULL }
 };
 
@@ -87,9 +87,8 @@ static std::string input_cap2s(__u32 capabilities)
 }
 
 static const flag_def output_cap_def[] = {
-	{V4L2_OUT_CAP_PRESETS, "DV presets" },
 	{V4L2_OUT_CAP_DV_TIMINGS, "DV timings" },
-	{V4L2_OUT_CAP_STD, "SD presets" },
+	{V4L2_OUT_CAP_STD, "SDTV standards" },
 	{ 0, NULL }
 };
 

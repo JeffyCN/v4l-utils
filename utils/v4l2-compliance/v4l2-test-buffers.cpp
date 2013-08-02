@@ -40,13 +40,18 @@ static int testQueryBuf(struct node *node, unsigned type, unsigned count)
 	memset(&buf, 0, sizeof(buf));
 	buf.type = type;
 	for (i = 0; i < count; i++) {
+		unsigned timestamp;
+
 		buf.index = i;
 		fail_on_test(doioctl(node, VIDIOC_QUERYBUF, &buf));
+		timestamp = buf.flags & V4L2_BUF_FLAG_TIMESTAMP_MASK;
 		fail_on_test(buf.index != i);
 		fail_on_test(buf.type != type);
 		fail_on_test(buf.flags & (V4L2_BUF_FLAG_QUEUED |
 					V4L2_BUF_FLAG_DONE |
 					V4L2_BUF_FLAG_ERROR));
+		fail_on_test(timestamp != V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC &&
+			     timestamp != V4L2_BUF_FLAG_TIMESTAMP_COPY);
 	}
 	buf.index = count;
 	ret = doioctl(node, VIDIOC_QUERYBUF, &buf);
@@ -63,6 +68,7 @@ int testReqBufs(struct node *node)
 	bool can_rw = node->caps & V4L2_CAP_READWRITE;
 	bool mmap_valid;
 	bool userptr_valid;
+	bool dmabuf_valid;
 	int ret;
 	unsigned i;
 	
@@ -87,17 +93,24 @@ int testReqBufs(struct node *node)
 		fmt.type = i;
 		fail_on_test(doioctl(node, VIDIOC_G_FMT, &fmt));
 		bufs.type = fmt.type;
+
 		fail_on_test(doioctl(node, VIDIOC_REQBUFS, &bufs) != EINVAL);
 		bufs.memory = V4L2_MEMORY_MMAP;
 		ret = doioctl(node, VIDIOC_REQBUFS, &bufs);
 		fail_on_test(ret && ret != EINVAL);
 		mmap_valid = !ret;
+
 		bufs.memory = V4L2_MEMORY_USERPTR;
 		ret = doioctl(node, VIDIOC_REQBUFS, &bufs);
 		fail_on_test(ret && ret != EINVAL);
 		userptr_valid = !ret;
-		fail_on_test(can_stream && !mmap_valid && !userptr_valid);
-		fail_on_test(!can_stream && (mmap_valid || userptr_valid));
+
+		bufs.memory = V4L2_MEMORY_DMABUF;
+		ret = doioctl(node, VIDIOC_REQBUFS, &bufs);
+		fail_on_test(ret && ret != EINVAL);
+		dmabuf_valid = !ret;
+		fail_on_test(can_stream && !mmap_valid && !userptr_valid && !dmabuf_valid);
+		fail_on_test(!can_stream && (mmap_valid || userptr_valid || dmabuf_valid));
 		if (!can_stream)
 			continue;
 
@@ -111,12 +124,24 @@ int testReqBufs(struct node *node)
 			fail_on_test(doioctl(node, VIDIOC_REQBUFS, &bufs));
 			testQueryBuf(node, i, bufs.count);
 		}
+
 		if (userptr_valid) {
 			bufs.count = 1;
 			bufs.memory = V4L2_MEMORY_USERPTR;
 			fail_on_test(doioctl(node, VIDIOC_REQBUFS, &bufs));
 			fail_on_test(bufs.count == 0);
 			fail_on_test(bufs.memory != V4L2_MEMORY_USERPTR);
+			fail_on_test(bufs.type != i);
+			fail_on_test(doioctl(node, VIDIOC_REQBUFS, &bufs));
+			testQueryBuf(node, i, bufs.count);
+		}
+
+		if (dmabuf_valid) {
+			bufs.count = 1;
+			bufs.memory = V4L2_MEMORY_DMABUF;
+			fail_on_test(doioctl(node, VIDIOC_REQBUFS, &bufs));
+			fail_on_test(bufs.count == 0);
+			fail_on_test(bufs.memory != V4L2_MEMORY_DMABUF);
 			fail_on_test(bufs.type != i);
 			fail_on_test(doioctl(node, VIDIOC_REQBUFS, &bufs));
 			testQueryBuf(node, i, bufs.count);
@@ -129,8 +154,10 @@ int testReqBufs(struct node *node)
 				ret = read(node->fd, &buf, 1);
 			else
 				ret = write(node->fd, &buf, 1);
-			fail_on_test(ret != -1);
-			fail_on_test(errno != EBUSY);
+			if (ret != -1)
+				return fail("Expected -1, got %d\n", ret);
+			if (errno != EBUSY)
+				return fail("Expected EBUSY, got %d\n", errno);
 		}
 		if (!node->is_m2m) {
 			bufs.count = 1;

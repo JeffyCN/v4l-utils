@@ -28,7 +28,7 @@
 #include <linux/ioctl.h>
 #endif
 
-#ifdef __FreeBSD__
+#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
 #include <sys/time.h>
 #include <sys/types.h>
 #include <sys/ioctl.h>
@@ -42,15 +42,20 @@
 extern "C" {
 #endif /* __cplusplus */
 
-#if __GNUC__ >= 4
+#if HAVE_VISIBILITY
 #define LIBV4L_PUBLIC __attribute__ ((visibility("default")))
 #else
 #define LIBV4L_PUBLIC
 #endif
 
+struct libv4l_dev_ops;
 struct v4lconvert_data;
 
+LIBV4L_PUBLIC const struct libv4l_dev_ops *v4lconvert_get_default_dev_ops();
+
 LIBV4L_PUBLIC struct v4lconvert_data *v4lconvert_create(int fd);
+LIBV4L_PUBLIC struct v4lconvert_data *v4lconvert_create_with_dev_ops(int fd,
+		void *dev_ops_priv, const struct libv4l_dev_ops *dev_ops);
 LIBV4L_PUBLIC void v4lconvert_destroy(struct v4lconvert_data *data);
 
 /* When doing flipping / rotating / video-processing, only supported
@@ -84,8 +89,24 @@ LIBV4L_PUBLIC int v4lconvert_needs_conversion(struct v4lconvert_data *data,
 		const struct v4l2_format *src_fmt,   /* in */
 		const struct v4l2_format *dest_fmt); /* in */
 
-/* return value of -1 on error, otherwise the amount of bytes written to
-   dest */
+/* This function does the following conversions:
+    - format conversion
+    - cropping
+   if enabled:
+    - processing (auto whitebalance, auto gain, gamma correction)
+    - horizontal/vertical flipping
+    - 90 degree (clockwise) rotation
+
+   NOTE: the last 3 steps are enabled/disabled depending on
+    - the internal device list
+    - the state of the (software emulated) image controls
+
+   Therefore this function should
+    - not be used when getting the frames from libv4l
+    - be called only once per frame
+   Otherwise this may result in unintended double conversions !
+
+   Returns the amount of bytes written to dest and -1 on error */
 LIBV4L_PUBLIC int v4lconvert_convert(struct v4lconvert_data *data,
 		const struct v4l2_format *src_fmt,  /* in */
 		const struct v4l2_format *dest_fmt, /* in */

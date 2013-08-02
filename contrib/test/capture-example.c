@@ -415,7 +415,6 @@ static void init_device(void)
 	struct v4l2_cropcap cropcap;
 	struct v4l2_crop crop;
 	struct v4l2_format fmt;
-	unsigned int min;
 
 	if (-1 == xioctl(fd, VIDIOC_QUERYCAP, &cap)) {
 		if (EINVAL == errno) {
@@ -497,14 +496,6 @@ static void init_device(void)
 		if (-1 == xioctl(fd, VIDIOC_G_FMT, &fmt))
 			errno_exit("VIDIOC_G_FMT");
 	}
-
-	/* Buggy driver paranoia. */
-	min = fmt.fmt.pix.width * 2;
-	if (fmt.fmt.pix.bytesperline < min)
-		fmt.fmt.pix.bytesperline = min;
-	min = fmt.fmt.pix.bytesperline * fmt.fmt.pix.height;
-	if (fmt.fmt.pix.sizeimage < min)
-		fmt.fmt.pix.sizeimage = min;
 
 	switch (io) {
 	case IO_METHOD_READ:

@@ -16,10 +16,11 @@
 # Foundation, Inc., 51 Franklin Street, Suite 500, Boston, MA  02110-1335  USA
  */
 
+#include <config.h>
 #include <errno.h>
 #include <stdlib.h>
 #include "libv4lconvert-priv.h"
-#ifndef DISABLE_LIBJPEG
+#ifdef HAVE_JPEG
 #include "jpeg_memsrcdest.h"
 #endif
 
@@ -109,7 +110,7 @@ int v4lconvert_decode_jpeg_tinyjpeg(struct v4lconvert_data *data,
 	return 0;
 }
 
-#ifndef DISABLE_LIBJPEG
+#ifdef HAVE_JPEG
 
 static void jerr_error_exit(j_common_ptr cinfo)
 {
@@ -410,5 +411,4 @@ int v4lconvert_decode_jpeg_libjpeg(struct v4lconvert_data *data,
 	return result;
 }
 
-#endif
-
+#endif // HAVE_JPEG

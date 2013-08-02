@@ -49,7 +49,7 @@
 #endif
 #endif
 
-#ifdef __FreeBSD__
+#if defined(__FreeBSD__) || defined(__FreeBSD_kernel__)
 #include <sys/time.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
@@ -72,8 +72,13 @@ typedef off_t __off_t;
 
 #ifndef CONFIG_SYS_WRAPPER
 
+#ifdef SYS_openat
+#define SYS_OPEN(file, oflag, mode) \
+	syscall(SYS_openat, AT_FDCWD, (const char *)(file), (int)(oflag), (mode_t)(mode))
+#else
 #define SYS_OPEN(file, oflag, mode) \
 	syscall(SYS_open, (const char *)(file), (int)(oflag), (mode_t)(mode))
+#endif
 #define SYS_CLOSE(fd) \
 	syscall(SYS_close, (int)(fd))
 #define SYS_IOCTL(fd, cmd, arg) \
@@ -81,11 +86,15 @@ typedef off_t __off_t;
 #define SYS_READ(fd, buf, len) \
 	syscall(SYS_read, (int)(fd), (void *)(buf), (size_t)(len));
 #define SYS_WRITE(fd, buf, len) \
-	syscall(SYS_write, (int)(fd), (void *)(buf), (size_t)(len));
+	syscall(SYS_write, (int)(fd), (const void *)(buf), (size_t)(len));
 
-#ifdef __FreeBSD__
+#if defined(__FreeBSD__)
 #define SYS_MMAP(addr, len, prot, flags, fd, off) \
 	__syscall(SYS_mmap, (void *)(addr), (size_t)(len), \
+			(int)(prot), (int)(flags), (int)(fd), (__off_t)(off))
+#elif defined(__FreeBSD_kernel__)
+#define SYS_MMAP(addr, len, prot, flags, fd, off) \
+	syscall(SYS_mmap, (void *)(addr), (size_t)(len), \
 			(int)(prot), (int)(flags), (int)(fd), (__off_t)(off))
 #else
 #define SYS_MMAP(addr, len, prot, flags, fd, off) \
@@ -102,7 +111,7 @@ int v4lx_open_wrapper(const char *, int, int);
 int v4lx_close_wrapper(int);
 int v4lx_ioctl_wrapper(int, unsigned long, void *);
 int v4lx_read_wrapper(int, void *, size_t);
-int v4lx_write_wrapper(int, void *, size_t);
+int v4lx_write_wrapper(int, const void *, size_t);
 void *v4lx_mmap_wrapper(void *, size_t, int, int, int, off_t);
 int v4lx_munmap_wrapper(void *, size_t);
 

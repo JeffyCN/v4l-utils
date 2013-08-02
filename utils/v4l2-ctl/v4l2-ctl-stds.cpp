@@ -13,6 +13,7 @@
 #include <sys/time.h>
 #include <dirent.h>
 #include <math.h>
+#include <config.h>
 
 #include <linux/videodev2.h>
 #include <libv4l2.h>
@@ -21,14 +22,13 @@
 #include "v4l2-ctl.h"
 
 static v4l2_std_id standard;		/* get_std/set_std */
-static struct v4l2_dv_preset dv_preset; /* set_dv_preset/get_dv_preset/query_dv_preset */
 static struct v4l2_dv_timings dv_timings; /* set_dv_bt_timings/get_dv_timings/query_dv_timings */
 static bool query_and_set_dv_timings = false;
 static int enum_and_set_dv_timings = -1;
 	
 void stds_usage(void)
 {
-	printf("\nStandards/Presets/Timings options:\n"
+	printf("\nStandards/Timings options:\n"
 	       "  --list-standards   display supported video standards [VIDIOC_ENUMSTD]\n"
 	       "  -S, --get-standard\n"
 	       "                     query the video standard [VIDIOC_G_STD]\n"
@@ -40,15 +40,10 @@ void stds_usage(void)
 	       "                     secam or secam-X (X = B/G/H/D/K/L/Lc) (V4L2_STD_SECAM)\n"
 	       "  --get-detected-standard\n"
 	       "                     display detected input video standard [VIDIOC_QUERYSTD]\n"
-	       "  --list-dv-presets  list supported dv presets [VIDIOC_ENUM_DV_PRESETS]\n"
-	       "  --set-dv-preset=<num>\n"
-	       "                     set the digital video preset to <num> [VIDIOC_S_DV_PRESET]\n"
-	       "  --get-dv-preset    query the digital video preset in use [VIDIOC_G_DV_PRESET]\n"
-	       "  --query-dv-preset  query the detected dv preset [VIDIOC_QUERY_DV_PRESET]\n"
 	       "  --list-dv-timings  list supp. standard dv timings [VIDIOC_ENUM_DV_TIMINGS]\n"
 	       "  --set-dv-bt-timings\n"
-	       "                     query: use the output of VIDIOC_QUERY_DV_PRESET\n"
-	       "                     index=<index>: use the index as provided by --list-dv-presets\n"
+	       "                     query: use the output of VIDIOC_QUERY_DV_TIMINGS\n"
+	       "                     index=<index>: use the index as provided by --list-dv-timings\n"
 	       "                     or give a fully specified timings:\n"
 	       "                     width=<width>,height=<height>,interlaced=<0/1>,\n"
 	       "                     polarities=<polarities mask>,pixelclock=<pixelclock Hz>,\n"
@@ -240,11 +235,25 @@ static const flag_def dv_flags_def[] = {
 static void print_dv_timings(const struct v4l2_dv_timings *t)
 {
 	const struct v4l2_bt_timings *bt;
+	double tot_width, tot_height;
 
 	switch (t->type) {
 	case V4L2_DV_BT_656_1120:
 		bt = &t->bt;
 
+		tot_height = bt->height +
+			bt->vfrontporch + bt->vsync + bt->vbackporch +
+			bt->il_vfrontporch + bt->il_vsync + bt->il_vbackporch;
+		tot_width = bt->width +
+			bt->hfrontporch + bt->hsync + bt->hbackporch;
+		if (options[OptConcise]) {
+			printf("\t%dx%d%c%.2f %s\n", bt->width, bt->height,
+				bt->interlaced ? 'i' : 'p',
+				(double)bt->pixelclock /
+					(tot_width * (tot_height / (bt->interlaced ? 2 : 1))),
+				flags2s(bt->flags, dv_flags_def).c_str());
+			break;
+		}
 		printf("\tActive width: %d\n", bt->width);
 		printf("\tActive height: %d\n", bt->height);
 		printf("\tTotal width: %d\n",bt->width +
@@ -258,11 +267,14 @@ static void print_dv_timings(const struct v4l2_dv_timings *t)
 				(bt->polarities & V4L2_DV_VSYNC_POS_POL) ? '+' : '-',
 				(bt->polarities & V4L2_DV_HSYNC_POS_POL) ? '+' : '-');
 		printf("\tPixelclock: %lld Hz", bt->pixelclock);
-		if (bt->width && bt->height)
-			printf(" (%.2f fps)", (double)bt->pixelclock /
-					((bt->width + bt->hfrontporch + bt->hsync + bt->hbackporch) *
-					 (bt->height + bt->vfrontporch + bt->vsync + bt->vbackporch +
-					  bt->il_vfrontporch + bt->il_vsync + bt->il_vbackporch)));
+		if (bt->width && bt->height) {
+			if (bt->interlaced)
+				printf(" (%.2f fields per second)", (double)bt->pixelclock /
+					(tot_width * (tot_height / 2)));
+			else
+				printf(" (%.2f frames per second)", (double)bt->pixelclock /
+					(tot_width * tot_height));
+		}
 		printf("\n");
 		printf("\tHorizontal frontporch: %d\n", bt->hfrontporch);
 		printf("\tHorizontal sync: %d\n", bt->hsync);
@@ -317,9 +329,6 @@ void stds_cmd(int ch, char *optarg)
 			exit(1);
 		}
 		break;
-	case OptSetDvPreset:
-		dv_preset.preset = strtoul(optarg, 0L, 0);
-		break;
 	case OptSetDvBtTimings:
 		parse_dv_bt_timings(optarg, &dv_timings,
 				query_and_set_dv_timings, enum_and_set_dv_timings);
@@ -340,12 +349,6 @@ void stds_set(int fd)
 		}
 		if (doioctl(fd, VIDIOC_S_STD, &standard) == 0)
 			printf("Standard set to %08llx\n", (unsigned long long)standard);
-	}
-
-        if (options[OptSetDvPreset]) {
-		if (doioctl(fd, VIDIOC_S_DV_PRESET, &dv_preset) >= 0) {
-			printf("Preset set: %d\n", dv_preset.preset);
-		}
 	}
 
 	if (options[OptSetDvBtTimings]) {
@@ -371,12 +374,6 @@ void stds_get(int fd)
 		if (doioctl(fd, VIDIOC_G_STD, &standard) == 0) {
 			printf("Video Standard = 0x%08llx\n", (unsigned long long)standard);
 			print_v4lstd((unsigned long long)standard);
-		}
-	}
-
-	if (options[OptGetDvPreset]) {
-		if (doioctl(fd, VIDIOC_G_DV_PRESET, &dv_preset) >= 0) {
-			printf("DV preset: %d\n", dv_preset.preset);
 		}
 	}
 
@@ -425,15 +422,6 @@ void stds_get(int fd)
 		}
 	}
 
-        if (options[OptQueryDvPreset]) {
-                doioctl(fd, VIDIOC_QUERY_DV_PRESET, &dv_preset);
-                if (dv_preset.preset != V4L2_DV_INVALID) {
-                        printf("Preset: %d\n", dv_preset.preset);
-                } else {
-                        fprintf(stderr, "No active input detected\n");
-                }
-        }
-
         if (options[OptQueryDvTimings]) {
                 doioctl(fd, VIDIOC_QUERY_DV_TIMINGS, &dv_timings);
 		print_dv_timings(&dv_timings);
@@ -448,33 +436,21 @@ void stds_list(int fd)
 		printf("ioctl: VIDIOC_ENUMSTD\n");
 		vs.index = 0;
 		while (test_ioctl(fd, VIDIOC_ENUMSTD, &vs) >= 0) {
-			if (vs.index)
-				printf("\n");
-			printf("\tIndex       : %d\n", vs.index);
-			printf("\tID          : 0x%016llX\n", (unsigned long long)vs.id);
-			printf("\tName        : %s\n", vs.name);
-			printf("\tFrame period: %d/%d\n",
-			       vs.frameperiod.numerator,
-			       vs.frameperiod.denominator);
-			printf("\tFrame lines : %d\n", vs.framelines);
+			if (options[OptConcise]) {
+				printf("\t%2d: 0x%016llX %s\n", vs.index,
+						(unsigned long long)vs.id, vs.name);
+			} else {
+				if (vs.index)
+					printf("\n");
+				printf("\tIndex       : %d\n", vs.index);
+				printf("\tID          : 0x%016llX\n", (unsigned long long)vs.id);
+				printf("\tName        : %s\n", vs.name);
+				printf("\tFrame period: %d/%d\n",
+						vs.frameperiod.numerator,
+						vs.frameperiod.denominator);
+				printf("\tFrame lines : %d\n", vs.framelines);
+			}
 			vs.index++;
-		}
-	}
-
-	if (options[OptListDvPresets]) {
-		struct v4l2_dv_enum_preset dv_enum_preset;
-
-		dv_enum_preset.index = 0;
-		printf("ioctl: VIDIOC_ENUM_DV_PRESETS\n");
-		while (test_ioctl(fd, VIDIOC_ENUM_DV_PRESETS, &dv_enum_preset) >= 0) {
-			if (dv_enum_preset.index)
-				printf("\n");
-			printf("\tIndex   : %d\n", dv_enum_preset.index);
-			printf("\tPreset  : %d\n", dv_enum_preset.preset);
-			printf("\tName    : %s\n", dv_enum_preset.name);
-			printf("\tWidth   : %d\n", dv_enum_preset.width);
-			printf("\tHeight  : %d\n", dv_enum_preset.height);
-			dv_enum_preset.index++;
 		}
 	}
 
@@ -484,9 +460,13 @@ void stds_list(int fd)
 		dv_enum_timings.index = 0;
 		printf("ioctl: VIDIOC_ENUM_DV_TIMINGS\n");
 		while (test_ioctl(fd, VIDIOC_ENUM_DV_TIMINGS, &dv_enum_timings) >= 0) {
-			if (dv_enum_timings.index)
-				printf("\n");
-			printf("\tIndex: %d\n", dv_enum_timings.index);
+			if (options[OptConcise]) {
+				printf("\t%d:", dv_enum_timings.index);
+			} else {
+				if (dv_enum_timings.index)
+					printf("\n");
+				printf("\tIndex: %d\n", dv_enum_timings.index);
+			}
 			print_dv_timings(&dv_enum_timings.timings);
 			dv_enum_timings.index++;
 		}

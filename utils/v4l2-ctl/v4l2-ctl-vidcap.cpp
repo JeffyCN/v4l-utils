@@ -13,6 +13,7 @@
 #include <sys/time.h>
 #include <dirent.h>
 #include <math.h>
+#include <config.h>
 
 #include <linux/videodev2.h>
 #include <libv4l2.h>
@@ -85,7 +86,7 @@ static std::string fract2sec(const struct v4l2_fract &f)
 {
 	char buf[100];
 
-	sprintf(buf, "%.3f s", (1.0 * f.numerator) / f.denominator);
+	sprintf(buf, "%.3f", (1.0 * f.numerator) / f.denominator);
 	return buf;
 }
 
@@ -93,7 +94,7 @@ static std::string fract2fps(const struct v4l2_fract &f)
 {
 	char buf[100];
 
-	sprintf(buf, "%.3f fps", (1.0 * f.denominator) / f.numerator);
+	sprintf(buf, "%.3f", (1.0 * f.denominator) / f.numerator);
 	return buf;
 }
 
@@ -118,18 +119,15 @@ static void print_frmival(const struct v4l2_frmivalenum &frmival, const char *pr
 {
 	printf("%s\tInterval: %s ", prefix, frmtype2s(frmival.type).c_str());
 	if (frmival.type == V4L2_FRMIVAL_TYPE_DISCRETE) {
-		printf("%s (%s)\n", fract2sec(frmival.discrete).c_str(),
+		printf("%ss (%s fps)\n", fract2sec(frmival.discrete).c_str(),
 				fract2fps(frmival.discrete).c_str());
 	} else if (frmival.type == V4L2_FRMIVAL_TYPE_STEPWISE) {
-		printf("%s - %s with step %s\n",
+		printf("%ss - %ss with step %ss (%s-%s fps)\n",
 				fract2sec(frmival.stepwise.min).c_str(),
 				fract2sec(frmival.stepwise.max).c_str(),
-				fract2sec(frmival.stepwise.step).c_str());
-		printf("%s\t            : ", prefix);
-		printf("(%s - %s with step %s)\n",
-				fract2fps(frmival.stepwise.min).c_str(),
+				fract2sec(frmival.stepwise.step).c_str(),
 				fract2fps(frmival.stepwise.max).c_str(),
-				fract2fps(frmival.stepwise.step).c_str());
+				fract2fps(frmival.stepwise.min).c_str());
 	}
 }
 
@@ -258,9 +256,13 @@ void vidcap_set(int fd)
 				if (in_vfmt.fmt.pix.pixelformat < 256) {
 					in_vfmt.fmt.pix.pixelformat =
 						find_pixel_format(fd, in_vfmt.fmt.pix.pixelformat,
-								  false);
+								  false, false);
 				}
 			}
+			/* G_FMT might return a bytesperline value > width,
+			 * reset this to 0 to force the driver to update it
+			 * to the closest value for the new width. */
+			in_vfmt.fmt.pix.bytesperline = 0;
 			if (options[OptSetVideoFormat])
 				ret = doioctl(fd, VIDIOC_S_FMT, &in_vfmt);
 			else
@@ -284,9 +286,14 @@ void vidcap_set(int fd)
 				if (in_vfmt.fmt.pix_mp.pixelformat < 256) {
 					in_vfmt.fmt.pix_mp.pixelformat =
 						find_pixel_format(fd, in_vfmt.fmt.pix_mp.pixelformat,
-								  true);
+								  false, true);
 				}
 			}
+			/* G_FMT might return bytesperline values > width,
+			 * reset them to 0 to force the driver to update them
+			 * to the closest value for the new width. */
+			for (unsigned i = 0; i < in_vfmt.fmt.pix_mp.num_planes; i++)
+				in_vfmt.fmt.pix_mp.plane_fmt[i].bytesperline = 0;
 			if (options[OptSetVideoMplaneFormat])
 				ret = doioctl(fd, VIDIOC_S_FMT, &in_vfmt);
 			else

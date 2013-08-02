@@ -82,6 +82,10 @@ static int testEnumFrameIntervals(struct node *node, __u32 pixfmt, __u32 w, __u3
 		switch (frmival.type) {
 		case V4L2_FRMIVAL_TYPE_DISCRETE:
 			ret = check_fract(&frmival.discrete);
+			if (ret)
+				return fail("invalid frameinterval %d (%d/%d)\n", f,
+						frmival.discrete.numerator,
+						frmival.discrete.denominator);
 			if (found_stepwise)
 				return fail("mixing discrete and stepwise is not allowed\n");
 			break;
@@ -347,6 +351,21 @@ int testFBuf(struct node *node)
 	return 0;
 }
 
+static void createInvalidFmt(struct v4l2_format &fmt, struct v4l2_clip &clip, unsigned type)
+{
+	memset(&fmt, 0xff, sizeof(fmt));
+	fmt.type = type;
+	fmt.fmt.pix.field = V4L2_FIELD_ANY;
+	if (type == V4L2_BUF_TYPE_VIDEO_OVERLAY ||
+	    type == V4L2_BUF_TYPE_VIDEO_OUTPUT_OVERLAY) {
+		memset(&clip, 0xff, sizeof(clip));
+		clip.next = NULL;
+		fmt.fmt.win.clipcount = 1;
+		fmt.fmt.win.clips = &clip;
+		fmt.fmt.win.bitmap = NULL;
+	}
+}
+
 static int testFormatsType(struct node *node, int ret,  unsigned type, struct v4l2_format &fmt)
 {
 	pixfmt_set &set = node->buftype_pixfmts[type];
@@ -476,14 +495,14 @@ static int testFormatsType(struct node *node, int ret,  unsigned type, struct v4
 
 int testGetFormats(struct node *node)
 {
+	struct v4l2_clip clip;
 	struct v4l2_format fmt;
 	bool supported = false;
 	int type;
 	int ret;
 
 	for (type = 0; type <= V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE; type++) {
-		memset(&fmt, 0xff, sizeof(fmt));
-		fmt.type = type;
+		createInvalidFmt(fmt, clip, type);
 		ret = doioctl(node, VIDIOC_G_FMT, &fmt);
 		ret = testFormatsType(node, ret, type, fmt);
 
@@ -522,6 +541,7 @@ int testGetFormats(struct node *node)
 
 int testTryFormats(struct node *node)
 {
+	struct v4l2_clip clip;
 	struct v4l2_format fmt, fmt_try;
 	int type;
 	int ret;
@@ -530,8 +550,7 @@ int testTryFormats(struct node *node)
 		if (!(node->valid_buftypes & (1 << type)))
 			continue;
 
-		memset(&fmt, 0xff, sizeof(fmt));
-		fmt.type = type;
+		createInvalidFmt(fmt, clip, type);
 		doioctl(node, VIDIOC_G_FMT, &fmt);
 		fmt_try = fmt;
 		ret = doioctl(node, VIDIOC_TRY_FMT, &fmt_try);
@@ -550,16 +569,44 @@ int testTryFormats(struct node *node)
 		if (!(node->valid_buftypes & (1 << type)))
 			continue;
 
-		memset(&fmt, 0xff, sizeof(fmt));
-		fmt.type = type;
-		fmt.fmt.pix.field = V4L2_FIELD_ANY;
-		if (type == V4L2_BUF_TYPE_VIDEO_OVERLAY ||
-		    type == V4L2_BUF_TYPE_VIDEO_OUTPUT_OVERLAY) {
-			fmt.fmt.win.clipcount = 0;
-			fmt.fmt.win.clips = NULL;
-			fmt.fmt.win.bitmap = NULL;
-		}
+		createInvalidFmt(fmt, clip, type);
 		ret = doioctl(node, VIDIOC_TRY_FMT, &fmt);
+		if (ret == EINVAL) {
+			__u32 pixelformat;
+			bool is_mplane = false;
+
+			/* In case of failure obtain a valid pixelformat and insert
+			 * that in the next attempt to call TRY_FMT. */
+			doioctl(node, VIDIOC_G_FMT, &fmt);
+
+			switch (type) {
+			case V4L2_BUF_TYPE_VIDEO_CAPTURE:
+			case V4L2_BUF_TYPE_VIDEO_OUTPUT:
+				pixelformat = fmt.fmt.pix.pixelformat;
+				break;
+			case V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE:
+			case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
+				pixelformat = fmt.fmt.pix_mp.pixelformat;
+				is_mplane = true;
+				break;
+			default:
+				/* for other formats returning EINVAL is certainly wrong */
+				return fail("TRY_FMT cannot handle an invalid format\n");
+			}
+			warn("TRY_FMT cannot handle an invalid pixelformat.\n");
+			warn("This may or may not be a problem. For more information see:\n");
+			warn("http://www.mail-archive.com/linux-media@vger.kernel.org/msg56550.html\n");
+
+			/* Now try again, but pass a valid pixelformat. */
+			createInvalidFmt(fmt, clip, type);
+			if (is_mplane)
+				fmt.fmt.pix_mp.pixelformat = pixelformat;
+			else
+				fmt.fmt.pix.pixelformat = pixelformat;
+			ret = doioctl(node, VIDIOC_TRY_FMT, &fmt);
+			if (ret == EINVAL)
+				return fail("TRY_FMT cannot handle an invalid format\n");
+		}
 		ret = testFormatsType(node, ret, type, fmt);
 		if (ret)
 			return fail("%s is valid, but TRY_FMT failed to return a format\n",
@@ -650,7 +697,7 @@ static int testGlobalFormat(struct node *node, int type)
 		return 0;
 	}
 	if (doioctl(node->node2, VIDIOC_S_FMT, &fmt2)) {
-		warn("Could not set fmt1\n");
+		warn("Could not set fmt2\n");
 		return 0;
 	}
 	if (type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE ||
@@ -697,6 +744,7 @@ static int testGlobalFormat(struct node *node, int type)
 
 int testSetFormats(struct node *node)
 {
+	struct v4l2_clip clip, clip_set;
 	struct v4l2_format fmt, fmt_set;
 	int type;
 	int ret;
@@ -705,14 +753,47 @@ int testSetFormats(struct node *node)
 		if (!(node->valid_buftypes & (1 << type)))
 			continue;
 
-		memset(&fmt, 0xff, sizeof(fmt));
-		fmt.type = type;
+		createInvalidFmt(fmt, clip, type);
 		doioctl(node, VIDIOC_G_FMT, &fmt);
 		
-		memset(&fmt_set, 0xff, sizeof(fmt_set));
-		fmt_set.type = type;
-		fmt_set.fmt.pix.field = V4L2_FIELD_ANY;
+		createInvalidFmt(fmt_set, clip_set, type);
 		ret = doioctl(node, VIDIOC_S_FMT, &fmt_set);
+		if (ret == EINVAL) {
+			__u32 pixelformat;
+			bool is_mplane = false;
+
+			/* In case of failure obtain a valid pixelformat and insert
+			 * that in the next attempt to call TRY_FMT. */
+			doioctl(node, VIDIOC_G_FMT, &fmt_set);
+
+			switch (type) {
+			case V4L2_BUF_TYPE_VIDEO_CAPTURE:
+			case V4L2_BUF_TYPE_VIDEO_OUTPUT:
+				pixelformat = fmt_set.fmt.pix.pixelformat;
+				break;
+			case V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE:
+			case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
+				pixelformat = fmt_set.fmt.pix_mp.pixelformat;
+				is_mplane = true;
+				break;
+			default:
+				/* for other formats returning EINVAL is certainly wrong */
+				return fail("TRY_FMT cannot handle an invalid format\n");
+			}
+			warn("S_FMT cannot handle an invalid pixelformat.\n");
+			warn("This may or may not be a problem. For more information see:\n");
+			warn("http://www.mail-archive.com/linux-media@vger.kernel.org/msg56550.html\n");
+
+			/* Now try again, but pass a valid pixelformat. */
+			createInvalidFmt(fmt_set, clip_set, type);
+			if (is_mplane)
+				fmt_set.fmt.pix_mp.pixelformat = pixelformat;
+			else
+				fmt_set.fmt.pix.pixelformat = pixelformat;
+			ret = doioctl(node, VIDIOC_S_FMT, &fmt_set);
+			if (ret == EINVAL)
+				return fail("S_FMT cannot handle an invalid format\n");
+		}
 		ret = testFormatsType(node, ret, type, fmt_set);
 		if (ret)
 			return fail("%s is valid, but no S_FMT was implemented\n",

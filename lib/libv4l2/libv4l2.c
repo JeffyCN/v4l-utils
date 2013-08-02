@@ -45,16 +45,17 @@
 
    This also means that libv4l2 may not use any of the regular functions
    it mimics, as for example open could be a symbol in v4l2convert.so, which
-   in turn will call v4l2_open, so therefor v4l2_open (for example) may not
+   in turn will call v4l2_open, so therefore v4l2_open (for example) may not
    use the regular open()!
 
    Another important note: libv4l2 does conversion for capture usage only, if
    any calls are made which are passed a v4l2_buffer or v4l2_format with a
    v4l2_buf_type which is different from V4L2_BUF_TYPE_VIDEO_CAPTURE, then
    the v4l2_ methods behave exactly the same as their regular counterparts.
-   When modifications are made, one should be carefull that this behavior is
+   When modifications are made, one should be careful that this behavior is
    preserved.
  */
+#include <config.h>
 #include <errno.h>
 #include <stdarg.h>
 #include <stdio.h>
@@ -67,6 +68,7 @@
 #include <sys/stat.h>
 #include "libv4l2.h"
 #include "libv4l2-priv.h"
+#include "libv4l-plugin.h"
 
 /* Note these flags are stored together with the flags passed to v4l2_fd_open()
    in v4l2_dev_info's flags member, so care should be taken that the do not
@@ -99,12 +101,13 @@ static int v4l2_request_read_buffers(int index)
 	struct v4l2_requestbuffers req;
 
 	/* Note we re-request the buffers if they are already requested as the format
-	   and thus the needed buffersize may have changed. */
+	   and thus the needed buffer size may have changed. */
 	req.count = (devices[index].no_frames) ? devices[index].no_frames :
 		devices[index].nreadbuffers;
 	req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	req.memory = V4L2_MEMORY_MMAP;
-	result = SYS_IOCTL(devices[index].fd, VIDIOC_REQBUFS, &req);
+	result = devices[index].dev_ops->ioctl(devices[index].dev_ops_priv,
+			devices[index].fd, VIDIOC_REQBUFS, &req);
 	if (result < 0) {
 		int saved_err = errno;
 
@@ -133,7 +136,8 @@ static void v4l2_unrequest_read_buffers(int index)
 	req.count = 0;
 	req.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	req.memory = V4L2_MEMORY_MMAP;
-	if (SYS_IOCTL(devices[index].fd, VIDIOC_REQBUFS, &req) < 0)
+	if (devices[index].dev_ops->ioctl(devices[index].dev_ops_priv,
+			devices[index].fd, VIDIOC_REQBUFS, &req) < 0)
 		return;
 
 	devices[index].no_frames = MIN(req.count, V4L2_MAX_NO_FRAMES);
@@ -154,11 +158,13 @@ static int v4l2_map_buffers(int index)
 		buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 		buf.memory = V4L2_MEMORY_MMAP;
 		buf.index = i;
-		result = SYS_IOCTL(devices[index].fd, VIDIOC_QUERYBUF, &buf);
+		result = devices[index].dev_ops->ioctl(
+				devices[index].dev_ops_priv,
+				devices[index].fd, VIDIOC_QUERYBUF, &buf);
 		if (result) {
 			int saved_err = errno;
 
-			V4L2_LOG_ERR("querying buffer %u: %s\n", i, strerror(errno));
+			V4L2_PERROR("querying buffer %u", i);
 			errno = saved_err;
 			break;
 		}
@@ -169,7 +175,7 @@ static int v4l2_map_buffers(int index)
 		if (devices[index].frame_pointers[i] == MAP_FAILED) {
 			int saved_err = errno;
 
-			V4L2_LOG_ERR("mmapping buffer %u: %s\n", i, strerror(errno));
+			V4L2_PERROR("mmapping buffer %u", i);
 			errno = saved_err;
 			result = -1;
 			break;
@@ -204,11 +210,13 @@ static int v4l2_streamon(int index)
 	enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 
 	if (!(devices[index].flags & V4L2_STREAMON)) {
-		result = SYS_IOCTL(devices[index].fd, VIDIOC_STREAMON, &type);
+		result = devices[index].dev_ops->ioctl(
+				devices[index].dev_ops_priv,
+				devices[index].fd, VIDIOC_STREAMON, &type);
 		if (result) {
 			int saved_err = errno;
 
-			V4L2_LOG_ERR("turning on stream: %s\n", strerror(errno));
+			V4L2_PERROR("turning on stream");
 			errno = saved_err;
 			return result;
 		}
@@ -225,17 +233,19 @@ static int v4l2_streamoff(int index)
 	enum v4l2_buf_type type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 
 	if (devices[index].flags & V4L2_STREAMON) {
-		result = SYS_IOCTL(devices[index].fd, VIDIOC_STREAMOFF, &type);
+		result = devices[index].dev_ops->ioctl(
+				devices[index].dev_ops_priv,
+				devices[index].fd, VIDIOC_STREAMOFF, &type);
 		if (result) {
 			int saved_err = errno;
 
-			V4L2_LOG_ERR("turning off stream: %s\n", strerror(errno));
+			V4L2_PERROR("turning off stream");
 			errno = saved_err;
 			return result;
 		}
 		devices[index].flags &= ~V4L2_STREAMON;
 
-		/* Stream off also unqueues all our buffers! */
+		/* Stream off also dequeues all our buffers! */
 		devices[index].frame_queued = 0;
 	}
 
@@ -254,11 +264,12 @@ static int v4l2_queue_read_buffer(int index, int buffer_index)
 	buf.type   = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 	buf.memory = V4L2_MEMORY_MMAP;
 	buf.index  = buffer_index;
-	result = SYS_IOCTL(devices[index].fd, VIDIOC_QBUF, &buf);
+	result = devices[index].dev_ops->ioctl(devices[index].dev_ops_priv,
+			devices[index].fd, VIDIOC_QBUF, &buf);
 	if (result) {
 		int saved_err = errno;
 
-		V4L2_LOG_ERR("queuing buf %d: %s\n", buffer_index, strerror(errno));
+		V4L2_PERROR("queuing buf %d", buffer_index);
 		errno = saved_err;
 		return result;
 	}
@@ -279,12 +290,14 @@ static int v4l2_dequeue_and_convert(int index, struct v4l2_buffer *buf,
 		return result;
 
 	do {
-		result = SYS_IOCTL(devices[index].fd, VIDIOC_DQBUF, buf);
+		result = devices[index].dev_ops->ioctl(
+				devices[index].dev_ops_priv,
+				devices[index].fd, VIDIOC_DQBUF, buf);
 		if (result) {
 			if (errno != EAGAIN) {
 				int saved_err = errno;
 
-				V4L2_LOG_ERR("dequeuing buf: %s\n", strerror(errno));
+				V4L2_PERROR("dequeuing buf");
 				errno = saved_err;
 			}
 			return result;
@@ -364,12 +377,15 @@ static int v4l2_read_and_convert(int index, unsigned char *dest, int dest_size)
 	}
 
 	do {
-		result = SYS_READ(devices[index].fd, devices[index].readbuf, buf_size);
+		result = devices[index].dev_ops->read(
+				devices[index].dev_ops_priv,
+				devices[index].fd, devices[index].readbuf,
+				buf_size);
 		if (result <= 0) {
 			if (result && errno != EAGAIN) {
 				int saved_err = errno;
 
-				V4L2_LOG_ERR("reading: %s\n", strerror(errno));
+				V4L2_PERROR("reading");
 				errno = saved_err;
 			}
 			return result;
@@ -472,7 +488,7 @@ static int v4l2_deactivate_read_stream(int index)
 	if (result)
 		return result;
 
-	/* No need to unqueue our buffers, streamoff does that for us */
+	/* No need to dequeue our buffers, streamoff does that for us */
 
 	v4l2_unmap_buffers(index);
 
@@ -485,11 +501,11 @@ static int v4l2_deactivate_read_stream(int index)
 
 static int v4l2_needs_conversion(int index)
 {
-	if (!(devices[index].flags & V4L2_DISABLE_CONVERSION))
-		return v4lconvert_needs_conversion(devices[index].convert,
-				&devices[index].src_fmt, &devices[index].dest_fmt);
+	if (devices[index].convert == NULL)
+		return 0;
 
-	return 0;
+	return v4lconvert_needs_conversion(devices[index].convert,
+			&devices[index].src_fmt, &devices[index].dest_fmt);
 }
 
 static void v4l2_set_conversion_buf_params(int index, struct v4l2_buffer *buf)
@@ -521,10 +537,13 @@ static int v4l2_buffers_mapped(int index)
 			buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 			buf.memory = V4L2_MEMORY_MMAP;
 			buf.index = i;
-			if (SYS_IOCTL(devices[index].fd, VIDIOC_QUERYBUF, &buf)) {
+			if (devices[index].dev_ops->ioctl(
+					devices[index].dev_ops_priv,
+					devices[index].fd, VIDIOC_QUERYBUF,
+					&buf)) {
 				int saved_err = errno;
 
-				V4L2_LOG_ERR("querying buffer %u: %s\n", i, strerror(errno));
+				V4L2_PERROR("querying buffer %u", i);
 				errno = saved_err;
 				break;
 			}
@@ -566,7 +585,7 @@ int v4l2_open(const char *file, int oflag, ...)
 		mode_t mode;
 
 		va_start(ap, oflag);
-		mode = va_arg(ap, mode_t);
+		mode = va_arg(ap, PROMOTED_MODE_T);
 
 		fd = SYS_OPEN(file, oflag, mode);
 
@@ -595,9 +614,14 @@ int v4l2_fd_open(int fd, int v4l2_flags)
 	int i, index;
 	char *lfname;
 	struct v4l2_capability cap;
-	struct v4l2_format fmt;
-	struct v4l2_streamparm parm;
-	struct v4lconvert_data *convert;
+	struct v4l2_format fmt = { 0, };
+	struct v4l2_streamparm parm = { 0, };
+	struct v4lconvert_data *convert = NULL;
+	void *plugin_library;
+	void *dev_ops_priv;
+	const struct libv4l_dev_ops *dev_ops;
+
+	v4l2_plugin_init(fd, &plugin_library, &dev_ops_priv, &dev_ops);
 
 	/* If no log file was set by the app, see if one was specified through the
 	   environment */
@@ -607,52 +631,66 @@ int v4l2_fd_open(int fd, int v4l2_flags)
 			v4l2_log_file = fopen(lfname, "w");
 	}
 
-	/* check that this is an v4l2 device */
-	if (SYS_IOCTL(fd, VIDIOC_QUERYCAP, &cap)) {
+	/* check that this is a v4l2 device */
+	if (dev_ops->ioctl(dev_ops_priv, fd, VIDIOC_QUERYCAP, &cap)) {
 		int saved_err = errno;
-
 		V4L2_LOG_ERR("getting capabilities: %s\n", strerror(errno));
+		v4l2_plugin_cleanup(plugin_library, dev_ops_priv, dev_ops);
 		errno = saved_err;
 		return -1;
 	}
 
-	/* we only add functionality for video capture devices */
+	if (cap.capabilities & V4L2_CAP_DEVICE_CAPS)
+		cap.capabilities = cap.device_caps;
 	if (!(cap.capabilities & V4L2_CAP_VIDEO_CAPTURE) ||
-			!(cap.capabilities & (V4L2_CAP_STREAMING | V4L2_CAP_READWRITE)))
-		return fd;
+	    !(cap.capabilities & (V4L2_CAP_STREAMING | V4L2_CAP_READWRITE)))
+		goto no_capture;
 
 	/* Get current cam format */
 	fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	if (SYS_IOCTL(fd, VIDIOC_G_FMT, &fmt)) {
+	if (dev_ops->ioctl(dev_ops_priv, fd, VIDIOC_G_FMT, &fmt)) {
 		int saved_err = errno;
-
 		V4L2_LOG_ERR("getting pixformat: %s\n", strerror(errno));
+		v4l2_plugin_cleanup(plugin_library, dev_ops_priv, dev_ops);
 		errno = saved_err;
 		return -1;
 	}
 
-	/* Check for framerate setting support */
+	/* Check for frame rate setting support */
 	parm.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-	if (SYS_IOCTL(fd, VIDIOC_G_PARM, &parm))
+	if (dev_ops->ioctl(dev_ops_priv, fd, VIDIOC_G_PARM, &parm))
 		parm.type = 0;
 
 	/* init libv4lconvert */
-	convert = v4lconvert_create(fd);
-	if (!convert)
-		return -1;
+	if (!(v4l2_flags & V4L2_DISABLE_CONVERSION)) {
+		convert = v4lconvert_create_with_dev_ops(fd, dev_ops_priv, dev_ops);
+		if (!convert) {
+			int saved_err = errno;
+			v4l2_plugin_cleanup(plugin_library, dev_ops_priv,
+					    dev_ops);
+			errno = saved_err;
+			return -1;
+		}
+	}
 
+no_capture:
 	/* So we have a v4l2 capture device, register it in our devices array */
 	pthread_mutex_lock(&v4l2_open_mutex);
-	for (index = 0; index < V4L2_MAX_DEVICES; index++)
+	for (index = 0; index < V4L2_MAX_DEVICES; index++) {
 		if (devices[index].fd == -1) {
 			devices[index].fd = fd;
+			devices[index].plugin_library = plugin_library;
+			devices[index].dev_ops_priv = dev_ops_priv;
+			devices[index].dev_ops = dev_ops;
 			break;
 		}
+	}
 	pthread_mutex_unlock(&v4l2_open_mutex);
 
 	if (index == V4L2_MAX_DEVICES) {
 		V4L2_LOG_ERR("attempting to open more then %d video devices\n",
 				V4L2_MAX_DEVICES);
+		v4l2_plugin_cleanup(plugin_library, dev_ops_priv, dev_ops);
 		errno = EBUSY;
 		return -1;
 	}
@@ -701,9 +739,10 @@ int v4l2_fd_open(int fd, int v4l2_flags)
 		devices_used = index + 1;
 
 	/* Note we always tell v4lconvert to optimize src fmt selection for
-	   our default fps, the only exception is the app explictly selecting
-	   a framerate using the S_PARM ioctl after a S_FMT */
-	v4lconvert_set_fps(devices[index].convert, V4L2_DEFAULT_FPS);
+	   our default fps, the only exception is the app explicitly selecting
+	   a fram erate using the S_PARM ioctl after a S_FMT */
+	if (devices[index].convert)
+		v4lconvert_set_fps(devices[index].convert, V4L2_DEFAULT_FPS);
 	v4l2_update_fps(index, &parm);
 
 	V4L2_LOG("open: %d\n", fd);
@@ -739,8 +778,8 @@ int v4l2_close(int fd)
 	if (index == -1)
 		return SYS_CLOSE(fd);
 
-	/* Abuse stream_lock to stop 2 closes from racing and trying to free the
-	   resources twice */
+	/* Abuse stream_lock to stop 2 closes from racing and trying to free
+	   the resources twice */
 	pthread_mutex_lock(&devices[index].stream_lock);
 	devices[index].open_count--;
 	result = devices[index].open_count != 0;
@@ -749,14 +788,20 @@ int v4l2_close(int fd)
 	if (result)
 		return 0;
 
+	v4l2_plugin_cleanup(devices[index].plugin_library,
+			devices[index].dev_ops_priv,
+			devices[index].dev_ops);
+
 	/* Free resources */
 	v4l2_unmap_buffers(index);
 	if (devices[index].convert_mmap_buf != MAP_FAILED) {
-		if (v4l2_buffers_mapped(index))
-			V4L2_LOG_WARN("v4l2 mmap buffers still mapped on close()\n");
-		else
+		if (v4l2_buffers_mapped(index)) {
+			if (!devices[index].gone)
+				V4L2_LOG_WARN("v4l2 mmap buffers still mapped on close()\n");
+		} else {
 			SYS_MUNMAP(devices[index].convert_mmap_buf,
 					devices[index].no_frames * V4L2_FRAME_BUF_SIZE);
+		}
 		devices[index].convert_mmap_buf = MAP_FAILED;
 	}
 	v4lconvert_destroy(devices[index].convert);
@@ -765,7 +810,7 @@ int v4l2_close(int fd)
 	devices[index].readbuf_size = 0;
 
 	/* Remove the fd from our list of managed fds before closing it, because as
-	   soon as we've done the actual close the fd maybe returned by an open in
+	   soon as we've done the actual close, the fd maybe returned by an open() in
 	   another thread and we don't want to intercept calls to this new fd. */
 	devices[index].fd = -1;
 
@@ -877,15 +922,8 @@ static int v4l2_s_fmt(int index, struct v4l2_format *dest_fmt)
 				pixfmt >> 24);
 	}
 
-	if (devices[index].flags & V4L2_DISABLE_CONVERSION) {
-		result = SYS_IOCTL(devices[index].fd, VIDIOC_TRY_FMT,
-				dest_fmt);
-		src_fmt = *dest_fmt;
-	} else {
-		result = v4lconvert_try_format(devices[index].convert, dest_fmt,
-				&src_fmt);
-	}
-
+	result = v4lconvert_try_format(devices[index].convert,
+				       dest_fmt, &src_fmt);
 	if (result) {
 		int saved_err = errno;
 		V4L2_LOG("S_FMT error trying format: %s\n", strerror(errno));
@@ -897,11 +935,10 @@ static int v4l2_s_fmt(int index, struct v4l2_format *dest_fmt)
 			v4l2_log_file) {
 		int pixfmt = src_fmt.fmt.pix.pixelformat;
 
-		fprintf(v4l2_log_file, "VIDIOC_S_FMT converting from: %c%c%c%c\n",
-				pixfmt & 0xff,
-				(pixfmt >> 8) & 0xff,
-				(pixfmt >> 16) & 0xff,
-				pixfmt >> 24);
+		fprintf(v4l2_log_file,
+			"VIDIOC_S_FMT converting from: %c%c%c%c\n",
+			pixfmt & 0xff, (pixfmt >> 8) & 0xff,
+			(pixfmt >> 16) & 0xff, pixfmt >> 24);
 	}
 
 	result = v4l2_check_buffer_change_ok(index);
@@ -909,20 +946,23 @@ static int v4l2_s_fmt(int index, struct v4l2_format *dest_fmt)
 		return result;
 
 	req_pix_fmt = src_fmt.fmt.pix;
-	result = SYS_IOCTL(devices[index].fd, VIDIOC_S_FMT, &src_fmt);
+	result = devices[index].dev_ops->ioctl(devices[index].dev_ops_priv,
+					       devices[index].fd,
+					       VIDIOC_S_FMT, &src_fmt);
 	if (result) {
 		int saved_err = errno;
-		V4L2_LOG_ERR("setting pixformat: %s\n", strerror(errno));
+		V4L2_PERROR("setting pixformat");
 		/* Report to the app dest_fmt has not changed */
 		*dest_fmt = devices[index].dest_fmt;
 		errno = saved_err;
 		return result;
 	}
+
 	/* See if we've gotten what try_fmt promised us
 	   (this check should never fail) */
 	if (src_fmt.fmt.pix.width != req_pix_fmt.width ||
-			src_fmt.fmt.pix.height != req_pix_fmt.height ||
-			src_fmt.fmt.pix.pixelformat != req_pix_fmt.pixelformat) {
+	    src_fmt.fmt.pix.height != req_pix_fmt.height ||
+	    src_fmt.fmt.pix.pixelformat != req_pix_fmt.pixelformat) {
 		V4L2_LOG_ERR("set_fmt gave us a different result then try_fmt!\n");
 		/* Not what we expected / wanted, disable conversion */
 		*dest_fmt = src_fmt;
@@ -934,8 +974,11 @@ static int v4l2_s_fmt(int index, struct v4l2_format *dest_fmt)
 		struct v4l2_streamparm parm = {
 			.type = V4L2_BUF_TYPE_VIDEO_CAPTURE,
 		};
-		if (SYS_IOCTL(devices[index].fd, VIDIOC_G_PARM, &parm) == 0)
-			v4l2_update_fps(index, &parm);
+		if (devices[index].dev_ops->ioctl(devices[index].dev_ops_priv,
+						  devices[index].fd,
+						  VIDIOC_G_PARM, &parm))
+			return 0;
+		v4l2_update_fps(index, &parm);
 	}
 
 	return 0;
@@ -956,40 +999,38 @@ int v4l2_ioctl(int fd, unsigned long int request, ...)
 	if (index == -1)
 		return SYS_IOCTL(fd, request, arg);
 
-	/* Appearantly the kernel and / or glibc ignore the 32 most significant bits
+	/* Apparently the kernel and / or glibc ignore the 32 most significant bits
 	   when long = 64 bits, and some applications pass an int holding the req to
 	   ioctl, causing it to get sign extended, depending upon this behavior */
 	request = (unsigned int)request;
 
+	if (devices[index].convert == NULL)
+		goto no_capture_request;
+
 	/* Is this a capture request and do we need to take the stream lock? */
 	switch (request) {
+	case VIDIOC_QUERYCAP:
 	case VIDIOC_QUERYCTRL:
 	case VIDIOC_G_CTRL:
 	case VIDIOC_S_CTRL:
-		if (!(devices[index].flags & V4L2_DISABLE_CONVERSION))
-			is_capture_request = 1;
-		break;
-	case VIDIOC_QUERYCAP:
+	case VIDIOC_ENUM_FRAMESIZES:
+	case VIDIOC_ENUM_FRAMEINTERVALS:
 		is_capture_request = 1;
 		break;
 	case VIDIOC_ENUM_FMT:
-		if (((struct v4l2_fmtdesc *)arg)->type == V4L2_BUF_TYPE_VIDEO_CAPTURE &&
-				!(devices[index].flags & V4L2_DISABLE_CONVERSION))
-			is_capture_request = 1;
-		break;
-	case VIDIOC_ENUM_FRAMESIZES:
-	case VIDIOC_ENUM_FRAMEINTERVALS:
-		if (!(devices[index].flags & V4L2_DISABLE_CONVERSION))
+		if (((struct v4l2_fmtdesc *)arg)->type ==
+				V4L2_BUF_TYPE_VIDEO_CAPTURE)
 			is_capture_request = 1;
 		break;
 	case VIDIOC_TRY_FMT:
-		if (((struct v4l2_format *)arg)->type == V4L2_BUF_TYPE_VIDEO_CAPTURE &&
-				!(devices[index].flags & V4L2_DISABLE_CONVERSION))
+		if (((struct v4l2_format *)arg)->type ==
+				V4L2_BUF_TYPE_VIDEO_CAPTURE)
 			is_capture_request = 1;
 		break;
 	case VIDIOC_S_FMT:
 	case VIDIOC_G_FMT:
-		if (((struct v4l2_format *)arg)->type == V4L2_BUF_TYPE_VIDEO_CAPTURE) {
+		if (((struct v4l2_format *)arg)->type ==
+				V4L2_BUF_TYPE_VIDEO_CAPTURE) {
 			is_capture_request = 1;
 			stream_needs_locking = 1;
 		}
@@ -1004,20 +1045,23 @@ int v4l2_ioctl(int fd, unsigned long int request, ...)
 	case VIDIOC_QUERYBUF:
 	case VIDIOC_QBUF:
 	case VIDIOC_DQBUF:
-		if (((struct v4l2_buffer *)arg)->type == V4L2_BUF_TYPE_VIDEO_CAPTURE) {
+		if (((struct v4l2_buffer *)arg)->type ==
+				V4L2_BUF_TYPE_VIDEO_CAPTURE) {
 			is_capture_request = 1;
 			stream_needs_locking = 1;
 		}
 		break;
 	case VIDIOC_STREAMON:
 	case VIDIOC_STREAMOFF:
-		if (*((enum v4l2_buf_type *)arg) == V4L2_BUF_TYPE_VIDEO_CAPTURE) {
+		if (*((enum v4l2_buf_type *)arg) ==
+				V4L2_BUF_TYPE_VIDEO_CAPTURE) {
 			is_capture_request = 1;
 			stream_needs_locking = 1;
 		}
 		break;
 	case VIDIOC_S_PARM:
-		if (((struct v4l2_streamparm *)arg)->type == V4L2_BUF_TYPE_VIDEO_CAPTURE) {
+		if (((struct v4l2_streamparm *)arg)->type ==
+				V4L2_BUF_TYPE_VIDEO_CAPTURE) {
 			is_capture_request = 1;
 			if (devices[index].flags & V4L2_SUPPORTS_TIMEPERFRAME)
 				stream_needs_locking = 1;
@@ -1025,7 +1069,6 @@ int v4l2_ioctl(int fd, unsigned long int request, ...)
 		break;
 	case VIDIOC_S_STD:
 	case VIDIOC_S_INPUT:
-	case VIDIOC_S_DV_PRESET:
 	case VIDIOC_S_DV_TIMINGS:
 		is_capture_request = 1;
 		stream_needs_locking = 1;
@@ -1033,7 +1076,10 @@ int v4l2_ioctl(int fd, unsigned long int request, ...)
 	}
 
 	if (!is_capture_request) {
-		result = SYS_IOCTL(fd, request, arg);
+no_capture_request:
+		result = devices[index].dev_ops->ioctl(
+				devices[index].dev_ops_priv,
+				fd, request, arg);
 		saved_err = errno;
 		v4l2_log_ioctl(request, arg, result);
 		errno = saved_err;
@@ -1043,12 +1089,11 @@ int v4l2_ioctl(int fd, unsigned long int request, ...)
 
 	if (stream_needs_locking) {
 		pthread_mutex_lock(&devices[index].stream_lock);
-		/* If this is the first stream related ioctl, and we should only allow
+		/* If this is the first stream-related ioctl, and we should only allow
 		   libv4lconvert supported destination formats (so that it can do flipping,
 		   processing, etc.) and the current destination format is not supported,
 		   try setting the format to RGB24 (which is a supported dest. format). */
 		if (!(devices[index].flags & V4L2_STREAM_TOUCHED) &&
-				!(devices[index].flags & V4L2_DISABLE_CONVERSION) &&
 				v4lconvert_supported_dst_fmt_only(devices[index].convert) &&
 				!v4lconvert_supported_dst_format(
 					devices[index].dest_fmt.fmt.pix.pixelformat)) {
@@ -1078,10 +1123,14 @@ int v4l2_ioctl(int fd, unsigned long int request, ...)
 	case VIDIOC_QUERYCAP: {
 		struct v4l2_capability *cap = arg;
 
-		result = SYS_IOCTL(devices[index].fd, VIDIOC_QUERYCAP, cap);
-		if (result == 0)
+		result = devices[index].dev_ops->ioctl(
+				devices[index].dev_ops_priv,
+				fd, VIDIOC_QUERYCAP, cap);
+		if (result == 0) {
 			/* We always support read() as we fake it using mmap mode */
 			cap->capabilities |= V4L2_CAP_READWRITE;
+			cap->device_caps |= V4L2_CAP_READWRITE;
+		}
 		break;
 	}
 
@@ -1101,13 +1150,8 @@ int v4l2_ioctl(int fd, unsigned long int request, ...)
 		break;
 
 	case VIDIOC_TRY_FMT:
-		if (devices[index].flags & V4L2_DISABLE_CONVERSION) {
-			result = SYS_IOCTL(devices[index].fd, VIDIOC_TRY_FMT,
-					   arg);
-		} else {
-			result = v4lconvert_try_format(devices[index].convert,
-						       arg, NULL);
-		}
+		result = v4lconvert_try_format(devices[index].convert,
+					       arg, NULL);
 		break;
 
 	case VIDIOC_S_FMT:
@@ -1124,21 +1168,23 @@ int v4l2_ioctl(int fd, unsigned long int request, ...)
 
 	case VIDIOC_S_STD:
 	case VIDIOC_S_INPUT:
-	case VIDIOC_S_DV_PRESET:
 	case VIDIOC_S_DV_TIMINGS: {
 		struct v4l2_format src_fmt;
 
-		result = SYS_IOCTL(devices[index].fd, request, arg);
+		result = devices[index].dev_ops->ioctl(
+				devices[index].dev_ops_priv,
+				fd, request, arg);
 		if (result)
 			break;
 
 		/* These ioctls may have changed the device's fmt */
 		src_fmt.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
-		result = SYS_IOCTL(devices[index].fd, VIDIOC_G_FMT, &src_fmt);
+		result = devices[index].dev_ops->ioctl(
+				devices[index].dev_ops_priv,
+				fd, VIDIOC_G_FMT, &src_fmt);
 		if (result) {
-			V4L2_LOG_ERR("getting pixformat after %s: %s\n",
-				     v4l2_ioctls[_IOC_NR(request)],
-				     strerror(errno));
+			V4L2_PERROR("getting pixformat after %s",
+				     v4l2_ioctls[_IOC_NR(request)]);
 			result = 0; /* The original command did succeed */
 			break;
 		}
@@ -1183,7 +1229,9 @@ int v4l2_ioctl(int fd, unsigned long int request, ...)
 		if (req->count > V4L2_MAX_NO_FRAMES)
 			req->count = V4L2_MAX_NO_FRAMES;
 
-		result = SYS_IOCTL(devices[index].fd, VIDIOC_REQBUFS, req);
+		result = devices[index].dev_ops->ioctl(
+				devices[index].dev_ops_priv,
+				fd, VIDIOC_REQBUFS, req);
 		if (result < 0)
 			break;
 		result = 0; /* some drivers return the number of buffers on success */
@@ -1204,7 +1252,9 @@ int v4l2_ioctl(int fd, unsigned long int request, ...)
 
 		/* Do a real query even when converting to let the driver fill in
 		   things like buf->field */
-		result = SYS_IOCTL(devices[index].fd, VIDIOC_QUERYBUF, buf);
+		result = devices[index].dev_ops->ioctl(
+				devices[index].dev_ops_priv,
+				fd, VIDIOC_QUERYBUF, buf);
 
 		v4l2_set_conversion_buf_params(index, buf);
 		break;
@@ -1226,7 +1276,9 @@ int v4l2_ioctl(int fd, unsigned long int request, ...)
 				break;
 		}
 
-		result = SYS_IOCTL(devices[index].fd, VIDIOC_QBUF, arg);
+		result = devices[index].dev_ops->ioctl(
+				devices[index].dev_ops_priv,
+				fd, VIDIOC_QBUF, arg);
 
 		v4l2_set_conversion_buf_params(index, buf);
 		break;
@@ -1242,10 +1294,12 @@ int v4l2_ioctl(int fd, unsigned long int request, ...)
 		}
 
 		if (!v4l2_needs_conversion(index)) {
-			result = SYS_IOCTL(devices[index].fd, VIDIOC_DQBUF, buf);
+			result = devices[index].dev_ops->ioctl(
+					devices[index].dev_ops_priv,
+					fd, VIDIOC_DQBUF, buf);
 			if (result) {
 				saved_err = errno;
-				V4L2_LOG_ERR("dequeuing buf: %s\n", strerror(errno));
+				V4L2_PERROR("dequeuing buf");
 				errno = saved_err;
 			}
 			break;
@@ -1298,7 +1352,7 @@ int v4l2_ioctl(int fd, unsigned long int request, ...)
 		struct v4l2_streamparm *parm = arg;
 
 		/* See if libv4lconvert wishes to use a different src_fmt
-		   for the new framerate and set that first */
+		   for the new frame rate and set that first */
 		if ((devices[index].flags & V4L2_SUPPORTS_TIMEPERFRAME) &&
 		    parm->parm.capture.timeperframe.numerator != 0) {
 			int fps = parm->parm.capture.timeperframe.denominator;
@@ -1307,7 +1361,9 @@ int v4l2_ioctl(int fd, unsigned long int request, ...)
 			v4l2_adjust_src_fmt_to_fps(index, fps);
 		}
 
-		result = SYS_IOCTL(devices[index].fd, VIDIOC_S_PARM, parm);
+		result = devices[index].dev_ops->ioctl(
+						devices[index].dev_ops_priv,
+						fd, VIDIOC_S_PARM, parm);
 		if (result)
 			break;
 
@@ -1316,7 +1372,9 @@ int v4l2_ioctl(int fd, unsigned long int request, ...)
 	}
 
 	default:
-		result = SYS_IOCTL(fd, request, arg);
+		result = devices[index].dev_ops->ioctl(
+				devices[index].dev_ops_priv,
+				fd, request, arg);
 		break;
 	}
 
@@ -1356,7 +1414,8 @@ static void v4l2_adjust_src_fmt_to_fps(int index, int fps)
 		return;
 
 	req_pix_fmt = src_fmt.fmt.pix;
-	if (SYS_IOCTL(devices[index].fd, VIDIOC_S_FMT, &src_fmt))
+	if (devices[index].dev_ops->ioctl(devices[index].dev_ops_priv,
+			devices[index].fd, VIDIOC_S_FMT, &src_fmt))
 		return;
 
 	v4l2_set_src_and_dest_format(index, &src_fmt, &dest_fmt);
@@ -1383,8 +1442,9 @@ static void v4l2_adjust_src_fmt_to_fps(int index, int fps)
 	src_fmt = orig_src_fmt;
 	dest_fmt = orig_dest_fmt;
 	req_pix_fmt = src_fmt.fmt.pix;
-	if (SYS_IOCTL(devices[index].fd, VIDIOC_S_FMT, &src_fmt)) {
-		V4L2_LOG_ERR("restoring src fmt: %s\n", strerror(errno));
+	if (devices[index].dev_ops->ioctl(devices[index].dev_ops_priv,
+			devices[index].fd, VIDIOC_S_FMT, &src_fmt)) {
+		V4L2_PERROR("restoring src fmt");
 		return;
 	}
 	v4l2_set_src_and_dest_format(index, &src_fmt, &dest_fmt);
@@ -1404,20 +1464,28 @@ ssize_t v4l2_read(int fd, void *dest, size_t n)
 	if (index == -1)
 		return SYS_READ(fd, dest, n);
 
+	if (!devices[index].dev_ops->read) {
+		errno = EINVAL;
+		return -1;
+	}
+
 	pthread_mutex_lock(&devices[index].stream_lock);
 
-	/* When not converting and the device supports read let the kernel handle
+	/* When not converting and the device supports read(), let the kernel handle
 	   it */
-	if ((devices[index].flags & V4L2_SUPPORTS_READ) &&
-			!v4l2_needs_conversion(index)) {
-		result = SYS_READ(fd, dest, n);
+	if (devices[index].convert == NULL ||
+	    ((devices[index].flags & V4L2_SUPPORTS_READ) &&
+			!v4l2_needs_conversion(index))) {
+		result = devices[index].dev_ops->read(
+				devices[index].dev_ops_priv,
+				fd, dest, n);
 		goto leave;
 	}
 
 	/* Since we need to do conversion try to use mmap (streaming) mode under
 	   the hood as that safes a memcpy for each frame read.
 
-	   Note sometimes this will fail as some drivers (atleast gspca) do not allow
+	   Note sometimes this will fail as some drivers (at least gspca) do not allow
 	   switching from read mode to mmap mode and they assume read() mode if a
 	   select or poll() is done before any buffers are requested. So using mmap
 	   mode under the hood will fail if a select() or poll() is done before the
@@ -1454,6 +1522,22 @@ leave:
 	return result;
 }
 
+ssize_t v4l2_write(int fd, const void *buffer, size_t n)
+{
+	int index = v4l2_get_index(fd);
+
+	if (index == -1)
+		return SYS_WRITE(fd, buffer, n);
+
+	if (!devices[index].dev_ops->write) {
+		errno = EINVAL;
+		return -1;
+	}
+
+	return devices[index].dev_ops->write(
+			devices[index].dev_ops_priv, fd, buffer, n);
+}
+
 void *v4l2_mmap(void *start, size_t length, int prot, int flags, int fd,
 		int64_t offset)
 {
@@ -1463,8 +1547,8 @@ void *v4l2_mmap(void *start, size_t length, int prot, int flags, int fd,
 
 	index = v4l2_get_index(fd);
 	if (index == -1 ||
-			/* Check if the mmap data matches our answer to QUERY_BUF, if it doesn't
-			   let the kernel handle it (to allow for mmap based non capture use) */
+			/* Check if the mmap data matches our answer to QUERY_BUF. If it doesn't,
+			   let the kernel handle it (to allow for mmap-based non capture use) */
 			start || length != V4L2_FRAME_BUF_SIZE ||
 			((unsigned int)offset & ~0xFFu) != V4L2_MMAP_OFFSET_MAGIC) {
 		if (index != -1)
@@ -1542,7 +1626,7 @@ int v4l2_munmap(void *_start, size_t length)
 
 			buffer_index = (start - devices[index].convert_mmap_buf) / length;
 
-			/* Redo our checks now that we have the lock, things may have changed */
+			/* Re-do our checks now that we have the lock, things may have changed */
 			if (devices[index].convert_mmap_buf != MAP_FAILED &&
 					start >= devices[index].convert_mmap_buf &&
 					(start - devices[index].convert_mmap_buf) % length == 0 &&
@@ -1574,7 +1658,7 @@ int v4l2_set_control(int fd, int cid, int value)
 	int index, result;
 
 	index = v4l2_get_index(fd);
-	if (index == -1) {
+	if (index == -1 || devices[index].convert == NULL) {
 		V4L2_LOG_ERR("v4l2_set_control called with invalid fd: %d\n", fd);
 		errno = EBADF;
 		return -1;
@@ -1604,7 +1688,7 @@ int v4l2_get_control(int fd, int cid)
 	struct v4l2_control ctrl = { .id = cid };
 	int index = v4l2_get_index(fd);
 
-	if (index == -1) {
+	if (index == -1 || devices[index].convert == NULL) {
 		V4L2_LOG_ERR("v4l2_set_control called with invalid fd: %d\n", fd);
 		errno = EBADF;
 		return -1;

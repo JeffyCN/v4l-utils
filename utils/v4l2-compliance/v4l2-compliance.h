@@ -21,14 +21,20 @@
 #ifndef _V4L2_COMPLIANCE_H_
 #define _V4L2_COMPLIANCE_H_
 
+#include <cerrno>
 #include <string>
 #include <list>
 #include <set>
 #include <linux/videodev2.h>
 #include <libv4l2.h>
 
-extern int verbose;
-extern int wrapper;
+#if !defined(ENODATA) && (defined(__FreeBSD__) || defined(__FreeBSD_kernel__))
+#define ENODATA ENOTSUP
+#endif
+
+extern bool show_info;
+extern bool show_warnings;
+extern bool wrapper;
 extern int kernel_version;
 extern unsigned warnings;
 
@@ -71,14 +77,14 @@ struct node {
 
 #define info(fmt, args...) 					\
 	do {							\
-		if (verbose > 1)				\
+		if (show_info)					\
  			printf("\t\tinfo: " fmt, ##args);	\
 	} while (0)
 
 #define warn(fmt, args...) 					\
 	do {							\
 		warnings++;					\
-		if (verbose)					\
+		if (show_warnings)				\
  			printf("\t\twarn: %s(%d): " fmt, __FILE__, __LINE__, ##args);	\
 	} while (0)
 
@@ -147,7 +153,6 @@ int check_ustring(const __u8 *s, int len);
 int check_0(const void *p, int len);
 
 // Debug ioctl tests
-int testChipIdent(struct node *node);
 int testRegister(struct node *node);
 int testLogStatus(struct node *node);
 
@@ -175,7 +180,6 @@ int testJpegComp(struct node *node);
 
 // I/O configuration ioctl tests
 int testStd(struct node *node);
-int testPresets(struct node *node);
 int testTimings(struct node *node);
 int testTimingsCap(struct node *node);
 

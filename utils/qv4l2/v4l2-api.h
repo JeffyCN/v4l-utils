@@ -40,6 +40,7 @@ public:
 	int read(unsigned char *p, int size);
 	int ioctl(unsigned cmd, void *arg);
 	bool ioctl(const QString &descr, unsigned cmd, void *arg);
+	bool ioctl_exists(unsigned cmd, void *arg);
 	void *mmap(size_t length, int64_t offset);
 	int munmap(void *_start, size_t length);
 
@@ -73,9 +74,6 @@ public:
 	bool s_std(v4l2_std_id std);
 	bool g_std(v4l2_std_id &std);
 	bool query_std(v4l2_std_id &std);
-	bool s_dv_preset(__u32 preset);
-	bool g_dv_preset(__u32 &preset);
-	bool query_dv_preset(v4l2_dv_preset &preset);
 	bool s_dv_timings(v4l2_dv_timings &timings);
 	bool g_dv_timings(v4l2_dv_timings &timings);
 	bool query_dv_timings(v4l2_dv_timings &timings);
@@ -93,7 +91,6 @@ public:
 	bool enum_audio(v4l2_audio &audio, bool init = false);
 	bool enum_audout(v4l2_audioout &audout, bool init = false);
 	bool enum_std(v4l2_standard &std, bool init = false, int index = 0);
-	bool enum_dv_preset(v4l2_dv_enum_preset &preset, bool init = false, int index = 0);
 	bool enum_dv_timings(v4l2_enum_dv_timings &timings, bool init = false, int index = 0);
 	bool enum_fmt_cap(v4l2_fmtdesc &std, bool init = false, int index = 0);
 	bool enum_fmt_out(v4l2_fmtdesc &std, bool init = false, int index = 0);
@@ -160,6 +157,8 @@ public:
 	bool qbuf_user_out(void *ptr, int length);
 	bool streamon_out();
 	bool streamoff_out();
+	bool subscribe_event(v4l2_event_subscription &sub);
+	bool dqevent(v4l2_event &ev);
 
 	bool set_interval(v4l2_fract interval);
 	bool get_interval(v4l2_fract &interval);
