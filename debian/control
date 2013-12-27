@@ -63,7 +63,7 @@ Depends: ${shlibs:Depends},
 Pre-Depends: ${misc:Pre-Depends}
 Multi-Arch: same
 Description: Video4Linux Radio Data System (RDS) decoding library
- This library decodes a RDS straem obtained from a Video4Linux (V4L)
+ This library decodes a RDS stream obtained from a Video4Linux (V4L)
  version 2 device. It supports both: the US based RBDS and European RDS
  protocol.
  .
