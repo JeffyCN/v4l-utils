@@ -1,3 +1,4 @@
 version=3
+opts=pgpsigurlmangle=s/$/.asc/ http://linuxtv.org/downloads/v4l-utils/v4l-utils-([\d\.]*)\.tar\.bz2
 
 http://linuxtv.org/downloads/v4l-utils/v4l-utils-([\d\.]*)\.tar\.bz2
