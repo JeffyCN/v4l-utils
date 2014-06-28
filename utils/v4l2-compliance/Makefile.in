@@ -188,6 +188,8 @@ ETAGS = etags
 CTAGS = ctags
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 ACLOCAL = @ACLOCAL@
+ALSA_CFLAGS = @ALSA_CFLAGS@
+ALSA_LIBS = @ALSA_LIBS@
 AMTAR = @AMTAR@
 AM_DEFAULT_VERBOSITY = @AM_DEFAULT_VERBOSITY@
 AR = @AR@
@@ -241,6 +243,8 @@ LIBICONV = @LIBICONV@
 LIBOBJS = @LIBOBJS@
 LIBS = @LIBS@
 LIBTOOL = @LIBTOOL@
+LIBUDEV_CFLAGS = @LIBUDEV_CFLAGS@
+LIBUDEV_LIBS = @LIBUDEV_LIBS@
 LIBV4L1_PRIV_DIR = @LIBV4L1_PRIV_DIR@
 LIBV4L2_PLUGIN_DIR = @LIBV4L2_PLUGIN_DIR@
 LIBV4L2_PRIV_DIR = @LIBV4L2_PRIV_DIR@
@@ -271,6 +275,8 @@ PATH_SEPARATOR = @PATH_SEPARATOR@
 PKG_CONFIG = @PKG_CONFIG@
 PKG_CONFIG_LIBDIR = @PKG_CONFIG_LIBDIR@
 PKG_CONFIG_PATH = @PKG_CONFIG_PATH@
+QTGL_CFLAGS = @QTGL_CFLAGS@
+QTGL_LIBS = @QTGL_LIBS@
 QT_CFLAGS = @QT_CFLAGS@
 QT_LIBS = @QT_LIBS@
 RANLIB = @RANLIB@
@@ -321,6 +327,8 @@ keytablesystemdir = @keytablesystemdir@
 keytableuserdir = @keytableuserdir@
 libdir = @libdir@
 libexecdir = @libexecdir@
+libudev_CFLAGS = @libudev_CFLAGS@
+libudev_LIBS = @libudev_LIBS@
 libv4l1privdir = @libv4l1privdir@
 libv4l1subdir = @libv4l1subdir@
 libv4l2plugindir = @libv4l2plugindir@
@@ -348,10 +356,10 @@ top_srcdir = @top_srcdir@
 udevrulesdir = @udevrulesdir@
 v4l2_compliance_SOURCES = v4l2-compliance.cpp v4l2-test-debug.cpp v4l2-test-input-output.cpp \
 	v4l2-test-controls.cpp v4l2-test-io-config.cpp v4l2-test-formats.cpp v4l2-test-buffers.cpp \
-	v4l2-test-codecs.cpp v4l2-compliance.h
+	v4l2-test-codecs.cpp v4l2-compliance.h cv4l-helpers.h v4l-helpers.h
 
 v4l2_compliance_LDADD = ../../lib/libv4l2/libv4l2.la ../../lib/libv4lconvert/libv4lconvert.la
-EXTRA_DIST = fixme.txt
+EXTRA_DIST = Android.mk fixme.txt
 all: all-am
 
 .SUFFIXES:

@@ -44,9 +44,11 @@ static const __u32 buftype2cap[] = {
 	V4L2_CAP_VIDEO_OUTPUT_OVERLAY,
 	V4L2_CAP_VIDEO_CAPTURE_MPLANE | V4L2_CAP_VIDEO_M2M_MPLANE,
 	V4L2_CAP_VIDEO_OUTPUT_MPLANE | V4L2_CAP_VIDEO_M2M_MPLANE,
+	V4L2_CAP_SDR_CAPTURE,
 };
 
-static int testEnumFrameIntervals(struct node *node, __u32 pixfmt, __u32 w, __u32 h, bool valid)
+static int testEnumFrameIntervals(struct node *node, __u32 pixfmt,
+				  __u32 w, __u32 h, __u32 type)
 {
 	struct v4l2_frmivalenum frmival;
 	struct v4l2_frmival_stepwise *sw = &frmival.stepwise;
@@ -65,7 +67,7 @@ static int testEnumFrameIntervals(struct node *node, __u32 pixfmt, __u32 w, __u3
 		if (ret == ENOTTY)
 			return ret;
 		if (f == 0 && ret == EINVAL) {
-			if (valid)
+			if (type == V4L2_FRMSIZE_TYPE_DISCRETE)
 				warn("found framesize %dx%d, but no frame intervals\n", w, h);
 			return ENOTTY;
 		}
@@ -106,7 +108,8 @@ static int testEnumFrameIntervals(struct node *node, __u32 pixfmt, __u32 w, __u3
 				return fail("invalid min, max or step for frameinterval %d\n", f);
 			if (fract2f(&sw->min) > fract2f(&sw->max))
 				return fail("min > max\n");
-			if (fract2f(&sw->step) > fract2f(&sw->max) - fract2f(&sw->min))
+			if (frmival.type == V4L2_FRMIVAL_TYPE_STEPWISE &&
+			    fract2f(&sw->step) > fract2f(&sw->max) - fract2f(&sw->min))
 				return fail("step > (max - min)\n");
 			break;
 		default:
@@ -115,7 +118,7 @@ static int testEnumFrameIntervals(struct node *node, __u32 pixfmt, __u32 w, __u3
 
 		f++;
 	}
-	if (!valid)
+	if (type == 0)
 		return fail("found frame intervals for invalid size %dx%d\n", w, h);
 	info("found %d frameintervals for pixel format %08x and size %dx%d\n", f, pixfmt, w, h);
 	return 0;
@@ -155,11 +158,11 @@ static int testEnumFrameSizes(struct node *node, __u32 pixfmt)
 			if (found_stepwise)
 				return fail("mixing discrete and stepwise is not allowed\n");
 			ret = testEnumFrameIntervals(node, pixfmt,
-					frmsize.discrete.width, frmsize.discrete.height, true);
+					frmsize.discrete.width, frmsize.discrete.height, frmsize.type);
 			if (ret && ret != ENOTTY)
 				return ret;
 			ret = testEnumFrameIntervals(node, pixfmt,
-					frmsize.discrete.width + 1, frmsize.discrete.height, false);
+					frmsize.discrete.width + 1, frmsize.discrete.height, 0);
 			if (ret && ret != ENOTTY)
 				return ret;
 			break;
@@ -179,19 +182,19 @@ static int testEnumFrameSizes(struct node *node, __u32 pixfmt)
 			    sw->step_height > sw->max_height - sw->min_height)
 				return fail("step > max - min for width or height\n");
 			ret = testEnumFrameIntervals(node, pixfmt,
-					sw->min_width, sw->min_height, true);
+					sw->min_width, sw->min_height, frmsize.type);
 			if (ret && ret != ENOTTY)
 				return ret;
 			ret = testEnumFrameIntervals(node, pixfmt,
-					sw->max_width, sw->max_height, true);
+					sw->max_width, sw->max_height, frmsize.type);
 			if (ret && ret != ENOTTY)
 				return ret;
 			ret = testEnumFrameIntervals(node, pixfmt,
-					sw->min_width - 1, sw->min_height, false);
+					sw->min_width - 1, sw->min_height, 0);
 			if (ret && ret != ENOTTY)
 				return ret;
 			ret = testEnumFrameIntervals(node, pixfmt,
-					sw->max_width, sw->max_height + 1, false);
+					sw->max_width, sw->max_height + 1, 0);
 			if (ret && ret != ENOTTY)
 				return ret;
 			break;
@@ -245,13 +248,13 @@ static int testEnumFormatsType(struct node *node, unsigned type)
 		ret = testEnumFrameSizes(node, fmtdesc.pixelformat);
 		if (ret && ret != ENOTTY)
 			return ret;
-		if (ret == 0 && !(node->caps & (V4L2_CAP_VIDEO_CAPTURE | V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE)))
+		if (ret == 0 && !(node->caps & (V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_VIDEO_CAPTURE_MPLANE)))
 			return fail("found framesizes when no video capture is supported\n");
 		f++;
 		if (type == V4L2_BUF_TYPE_PRIVATE)
 			continue;
 		// Update array in v4l2-compliance.h if new buffer types are added
-		assert(type <= V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE);
+		assert(type <= V4L2_BUF_TYPE_SDR_CAPTURE);
 		if (set.find(fmtdesc.pixelformat) != set.end())
 			return fail("duplicate format %08x\n", fmtdesc.pixelformat);
 		set.insert(fmtdesc.pixelformat);
@@ -266,7 +269,7 @@ int testEnumFormats(struct node *node)
 	unsigned type;
 	int ret;
 
-	for (type = 0; type <= V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE; type++) {
+	for (type = 0; type <= V4L2_BUF_TYPE_SDR_CAPTURE; type++) {
 		ret = testEnumFormatsType(node, type);
 		if (ret && ret != ENOTTY)
 			return ret;
@@ -278,6 +281,7 @@ int testEnumFormats(struct node *node)
 		case V4L2_BUF_TYPE_VIDEO_OVERLAY:
 		case V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE:
 		case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
+		case V4L2_BUF_TYPE_SDR_CAPTURE:
 			if (ret && (node->caps & buftype2cap[type]))
 				return fail("%s cap set, but no %s formats defined\n",
 						buftype2s(type).c_str(), buftype2s(type).c_str());
@@ -299,7 +303,7 @@ int testEnumFormats(struct node *node)
 	ret = testEnumFrameSizes(node, 0x20202020);
 	if (ret != ENOTTY)
 		return fail("Accepted framesize for invalid format\n");
-	ret = testEnumFrameIntervals(node, 0x20202020, 640, 480, false);
+	ret = testEnumFrameIntervals(node, 0x20202020, 640, 480, 0);
 	if (ret != ENOTTY)
 		return fail("Accepted frameinterval for invalid format\n");
 	return supported ? 0 : ENOTTY;
@@ -359,14 +363,14 @@ static void createInvalidFmt(struct v4l2_format &fmt, struct v4l2_clip &clip, un
 	if (type == V4L2_BUF_TYPE_VIDEO_OVERLAY ||
 	    type == V4L2_BUF_TYPE_VIDEO_OUTPUT_OVERLAY) {
 		memset(&clip, 0xff, sizeof(clip));
-		clip.next = NULL;
+		clip.next = (struct  v4l2_clip *)0xdeadbeef;
 		fmt.fmt.win.clipcount = 1;
 		fmt.fmt.win.clips = &clip;
 		fmt.fmt.win.bitmap = NULL;
 	}
 }
 
-static int testFormatsType(struct node *node, int ret,  unsigned type, struct v4l2_format &fmt)
+static int testFormatsType(struct node *node, int ret,  unsigned type, struct v4l2_format &fmt, bool have_clip = false)
 {
 	pixfmt_set &set = node->buftype_pixfmts[type];
 	pixfmt_set *set_splane;
@@ -375,10 +379,12 @@ static int testFormatsType(struct node *node, int ret,  unsigned type, struct v4
 	struct v4l2_window &win = fmt.fmt.win;
 	struct v4l2_vbi_format &vbi = fmt.fmt.vbi;
 	struct v4l2_sliced_vbi_format &sliced = fmt.fmt.sliced;
+	struct v4l2_sdr_format &sdr = fmt.fmt.sdr;
 	unsigned min_data_samples;
 	unsigned min_sampling_rate;
 	v4l2_std_id std;
 	__u32 service_set = 0;
+	unsigned tot_bytesperline = 0;
 	unsigned cnt = 0;
 
 	if (ret == ENOTTY)
@@ -424,8 +430,9 @@ static int testFormatsType(struct node *node, int ret,  unsigned type, struct v4
 			if (ret)
 				return fail("pix_mp.plane_fmt[%d].reserved not zeroed\n", i);
 			fail_on_test(!pfmt.sizeimage);
-			fail_on_test(pfmt.bytesperline && pfmt.bytesperline < pix_mp.width);
+			tot_bytesperline += pfmt.bytesperline;
 		}
+		fail_on_test(tot_bytesperline && tot_bytesperline < pix_mp.width);
 		break;
 	case V4L2_BUF_TYPE_VBI_CAPTURE:
 	case V4L2_BUF_TYPE_VBI_OUTPUT:
@@ -477,15 +484,31 @@ static int testFormatsType(struct node *node, int ret,  unsigned type, struct v4
 	case V4L2_BUF_TYPE_VIDEO_OUTPUT_OVERLAY:
 		fail_on_test(win.field == V4L2_FIELD_ANY);
 		fail_on_test(win.clipcount && !(node->fbuf_caps & V4L2_FBUF_CAP_LIST_CLIPPING));
-		for (struct v4l2_clip *clip = win.clips; clip; win.clipcount--) {
-			fail_on_test(clip == NULL);
-			clip = clip->next;
+		if (have_clip)
+			fail_on_test(!win.clipcount && (node->fbuf_caps & V4L2_FBUF_CAP_LIST_CLIPPING));
+		if (win.clipcount) {
+			struct v4l2_rect *r = &win.clips->c;
+			struct v4l2_framebuffer fb;
+
+			fail_on_test(doioctl(node, VIDIOC_G_FBUF, &fb));
+			fail_on_test(!win.clips);
+			fail_on_test(win.clips->next != (void *)0xdeadbeef);
+			fail_on_test(win.clipcount != 1);
+			fail_on_test(r->left < 0 || r->top < 0);
+			fail_on_test((unsigned)r->left >= fb.fmt.width || (unsigned)r->top >= fb.fmt.height);
+			fail_on_test(r->width == 0 || r->height == 0);
+			fail_on_test(r->left + r->width > fb.fmt.width || r->top + r->height > fb.fmt.height);
 		}
-		fail_on_test(win.clipcount);
 		fail_on_test(win.chromakey && !(node->fbuf_caps & (V4L2_FBUF_CAP_CHROMAKEY | V4L2_FBUF_CAP_SRC_CHROMAKEY)));
 		if (!(node->fbuf_caps & V4L2_FBUF_CAP_BITMAP_CLIPPING))
 			fail_on_test(win.bitmap);
 		fail_on_test(win.global_alpha && !(node->fbuf_caps & V4L2_FBUF_CAP_GLOBAL_ALPHA));
+		break;
+	case V4L2_BUF_TYPE_SDR_CAPTURE:
+		if (set.find(sdr.pixelformat) == set.end())
+			return fail("unknown pixelformat %08x for buftype %d\n",
+					pix.pixelformat, type);
+		fail_on_test(check_0(sdr.reserved, sizeof(sdr.reserved)));
 		break;
 	case V4L2_BUF_TYPE_PRIVATE:
 		break;
@@ -501,7 +524,7 @@ int testGetFormats(struct node *node)
 	int type;
 	int ret;
 
-	for (type = 0; type <= V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE; type++) {
+	for (type = 0; type <= V4L2_BUF_TYPE_SDR_CAPTURE; type++) {
 		createInvalidFmt(fmt, clip, type);
 		ret = doioctl(node, VIDIOC_G_FMT, &fmt);
 		ret = testFormatsType(node, ret, type, fmt);
@@ -522,6 +545,7 @@ int testGetFormats(struct node *node)
 			case V4L2_BUF_TYPE_VIDEO_OVERLAY:
 			case V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE:
 			case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
+			case V4L2_BUF_TYPE_SDR_CAPTURE:
 				return fail("%s cap not set, but %s formats defined\n",
 					buftype2s(type).c_str(), buftype2s(type).c_str());
 			default:
@@ -539,6 +563,44 @@ int testGetFormats(struct node *node)
 	return supported ? 0 : ENOTTY;
 }
 
+static bool matchFormats(const struct v4l2_format &f1, const struct v4l2_format &f2)
+{
+	const struct v4l2_pix_format &pix1 = f1.fmt.pix;
+	const struct v4l2_pix_format &pix2 = f2.fmt.pix;
+
+	if (f1.type != f2.type)
+		return false;
+	switch (f1.type) {
+	case V4L2_BUF_TYPE_VIDEO_CAPTURE:
+	case V4L2_BUF_TYPE_VIDEO_OUTPUT:
+		if (!memcmp(&f1.fmt.pix, &f2.fmt.pix, sizeof(f1.fmt.pix)))
+			return true;
+		printf("\t\tG_FMT:     %dx%d, %x, %d, %d, %d, %d, %d\n",
+			pix1.width, pix1.height, pix1.pixelformat, pix1.field, pix1.bytesperline,
+			pix1.sizeimage, pix1.colorspace, pix1.priv);
+		printf("\t\tTRY/S_FMT: %dx%d, %x, %d, %d, %d, %d, %d\n",
+			pix2.width, pix2.height, pix2.pixelformat, pix2.field, pix2.bytesperline,
+			pix2.sizeimage, pix2.colorspace, pix2.priv);
+		return false;
+	case V4L2_BUF_TYPE_VIDEO_OVERLAY:
+	case V4L2_BUF_TYPE_VIDEO_OUTPUT_OVERLAY:
+		return !memcmp(&f1.fmt.win, &f2.fmt.win, sizeof(f1.fmt.win));
+	case V4L2_BUF_TYPE_VBI_CAPTURE:
+	case V4L2_BUF_TYPE_VBI_OUTPUT:
+		return !memcmp(&f1.fmt.vbi, &f2.fmt.vbi, sizeof(f1.fmt.vbi));
+	case V4L2_BUF_TYPE_SLICED_VBI_CAPTURE:
+	case V4L2_BUF_TYPE_SLICED_VBI_OUTPUT:
+		return !memcmp(&f1.fmt.sliced, &f2.fmt.sliced, sizeof(f1.fmt.sliced));
+	case V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE:
+	case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
+		return !memcmp(&f1.fmt.pix_mp, &f2.fmt.pix_mp, sizeof(f1.fmt.pix_mp));
+	case V4L2_BUF_TYPE_SDR_CAPTURE:
+		return !memcmp(&f1.fmt.sdr, &f2.fmt.sdr, sizeof(f1.fmt.sdr));
+
+	}
+	return false;
+}
+
 int testTryFormats(struct node *node)
 {
 	struct v4l2_clip clip;
@@ -546,7 +608,7 @@ int testTryFormats(struct node *node)
 	int type;
 	int ret;
 	
-	for (type = 0; type <= V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE; type++) {
+	for (type = 0; type <= V4L2_BUF_TYPE_SDR_CAPTURE; type++) {
 		if (!(node->valid_buftypes & (1 << type)))
 			continue;
 
@@ -560,12 +622,12 @@ int testTryFormats(struct node *node)
 		ret = testFormatsType(node, ret, type, fmt_try);
 		if (ret)
 			return ret;
-		if (memcmp(&fmt, &fmt_try, sizeof(fmt)))
+		if (!matchFormats(fmt, fmt_try))
 			return fail("%s: TRY_FMT(G_FMT) != G_FMT\n",
 					buftype2s(type).c_str());
 	}
 
-	for (type = 0; type <= V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE; type++) {
+	for (type = 0; type <= V4L2_BUF_TYPE_SDR_CAPTURE; type++) {
 		if (!(node->valid_buftypes & (1 << type)))
 			continue;
 
@@ -584,6 +646,9 @@ int testTryFormats(struct node *node)
 			case V4L2_BUF_TYPE_VIDEO_OUTPUT:
 				pixelformat = fmt.fmt.pix.pixelformat;
 				break;
+			case V4L2_BUF_TYPE_SDR_CAPTURE:
+				pixelformat = fmt.fmt.sdr.pixelformat;
+				break;
 			case V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE:
 			case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
 				pixelformat = fmt.fmt.pix_mp.pixelformat;
@@ -599,7 +664,9 @@ int testTryFormats(struct node *node)
 
 			/* Now try again, but pass a valid pixelformat. */
 			createInvalidFmt(fmt, clip, type);
-			if (is_mplane)
+			if (node->is_sdr)
+				fmt.fmt.sdr.pixelformat = pixelformat;
+			else if (is_mplane)
 				fmt.fmt.pix_mp.pixelformat = pixelformat;
 			else
 				fmt.fmt.pix.pixelformat = pixelformat;
@@ -607,7 +674,7 @@ int testTryFormats(struct node *node)
 			if (ret == EINVAL)
 				return fail("TRY_FMT cannot handle an invalid format\n");
 		}
-		ret = testFormatsType(node, ret, type, fmt);
+		ret = testFormatsType(node, ret, type, fmt, true);
 		if (ret)
 			return fail("%s is valid, but TRY_FMT failed to return a format\n",
 					buftype2s(type).c_str());
@@ -630,6 +697,8 @@ static int testGlobalFormat(struct node *node, int type)
 	struct v4l2_pix_format *p2 = &fmt2.fmt.pix;
 	struct v4l2_pix_format_mplane *mp1 = &fmt1.fmt.pix_mp;
 	struct v4l2_pix_format_mplane *mp2 = &fmt2.fmt.pix_mp;
+	struct v4l2_sdr_format *sdr1 = &fmt1.fmt.sdr;
+	struct v4l2_sdr_format *sdr2 = &fmt2.fmt.sdr;
 	__u32 pixfmt1, pixfmt2;
 	__u32 w1 = 0, w2 = 0, h1 = 0, h2 = 0;
 
@@ -673,11 +742,16 @@ static int testGlobalFormat(struct node *node, int type)
 	}
 	// Check if we have found different formats, otherwise this
 	// test is pointless.
-	if (pixfmt1 == pixfmt2 && w1 == w2 && h1 == h2)
+	// This test will also never succeed if we are using the libv4l2
+	// wrapper.
+	if (wrapper || (pixfmt1 == pixfmt2 && w1 == w2 && h1 == h2))
 		return 0;
 
-	if (type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE ||
-	    type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) {
+	if (type == V4L2_BUF_TYPE_SDR_CAPTURE) {
+		sdr1->pixelformat = pixfmt1;
+		sdr2->pixelformat = pixfmt2;
+	} else if (type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE ||
+		   type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) {
 		mp1->pixelformat = pixfmt1;
 		mp1->width = w1;
 		mp1->height = h1;
@@ -700,13 +774,20 @@ static int testGlobalFormat(struct node *node, int type)
 		warn("Could not set fmt2\n");
 		return 0;
 	}
-	if (type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE ||
-	    type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) {
+	if (type == V4L2_BUF_TYPE_SDR_CAPTURE) {
+		if (sdr1->pixelformat == sdr2->pixelformat) {
+			// This compliance test only succeeds if the two formats
+			// are really different after S_FMT
+			info("Could not perform global format test\n");
+			return 0;
+		}
+	} else if (type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE ||
+		   type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) {
 		if (mp1->pixelformat == mp2->pixelformat &&
 		    mp1->width == mp2->width && mp1->height == mp2->height) {
 			// This compliance test only succeeds if the two formats
 			// are really different after S_FMT
-			warn("Could not perform global format test\n");
+			info("Could not perform global format test\n");
 			return 0;
 		}
 	} else {
@@ -714,13 +795,16 @@ static int testGlobalFormat(struct node *node, int type)
 		    p1->width == p2->width && p1->height == p2->height) {
 			// This compliance test only succeeds if the two formats
 			// are really different after S_FMT
-			warn("Could not perform global format test\n");
+			info("Could not perform global format test\n");
 			return 0;
 		}
 	}
 	doioctl(node, VIDIOC_G_FMT, &fmt1);
-	if (type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE ||
-	    type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) {
+	if (type == V4L2_BUF_TYPE_SDR_CAPTURE) {
+		pixfmt1 = sdr1->pixelformat;
+		pixfmt2 = sdr2->pixelformat;
+	} else if (type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE ||
+		   type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) {
 		pixfmt1 = mp1->pixelformat;
 		w1 = mp1->width;
 		h1 = mp1->height;
@@ -746,16 +830,18 @@ int testSetFormats(struct node *node)
 {
 	struct v4l2_clip clip, clip_set;
 	struct v4l2_format fmt, fmt_set;
+	struct v4l2_format initial_fmts[V4L2_BUF_TYPE_SDR_CAPTURE + 1];
 	int type;
 	int ret;
 	
-	for (type = 0; type <= V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE; type++) {
+	for (type = 0; type <= V4L2_BUF_TYPE_SDR_CAPTURE; type++) {
 		if (!(node->valid_buftypes & (1 << type)))
 			continue;
 
 		createInvalidFmt(fmt, clip, type);
 		doioctl(node, VIDIOC_G_FMT, &fmt);
 		
+		initial_fmts[type] = fmt;
 		createInvalidFmt(fmt_set, clip_set, type);
 		ret = doioctl(node, VIDIOC_S_FMT, &fmt_set);
 		if (ret == EINVAL) {
@@ -767,6 +853,9 @@ int testSetFormats(struct node *node)
 			doioctl(node, VIDIOC_G_FMT, &fmt_set);
 
 			switch (type) {
+			case V4L2_BUF_TYPE_SDR_CAPTURE:
+				pixelformat = fmt_set.fmt.sdr.pixelformat;
+				break;
 			case V4L2_BUF_TYPE_VIDEO_CAPTURE:
 			case V4L2_BUF_TYPE_VIDEO_OUTPUT:
 				pixelformat = fmt_set.fmt.pix.pixelformat;
@@ -786,7 +875,9 @@ int testSetFormats(struct node *node)
 
 			/* Now try again, but pass a valid pixelformat. */
 			createInvalidFmt(fmt_set, clip_set, type);
-			if (is_mplane)
+			if (node->is_sdr)
+				fmt_set.fmt.sdr.pixelformat = pixelformat;
+			else if (is_mplane)
 				fmt_set.fmt.pix_mp.pixelformat = pixelformat;
 			else
 				fmt_set.fmt.pix.pixelformat = pixelformat;
@@ -794,7 +885,7 @@ int testSetFormats(struct node *node)
 			if (ret == EINVAL)
 				return fail("S_FMT cannot handle an invalid format\n");
 		}
-		ret = testFormatsType(node, ret, type, fmt_set);
+		ret = testFormatsType(node, ret, type, fmt_set, true);
 		if (ret)
 			return fail("%s is valid, but no S_FMT was implemented\n",
 					buftype2s(type).c_str());
@@ -804,7 +895,7 @@ int testSetFormats(struct node *node)
 		ret = testFormatsType(node, ret, type, fmt_set);
 		if (ret)
 			return ret;
-		if (memcmp(&fmt, &fmt_set, sizeof(fmt)))
+		if (!matchFormats(fmt, fmt_set))
 			return fail("%s: S_FMT(G_FMT) != G_FMT\n",
 					buftype2s(type).c_str());
 	}
@@ -824,8 +915,9 @@ int testSetFormats(struct node *node)
 	if (node->is_m2m)
 		return 0;
 
-	for (type = 0; type <= V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE; type++) {
+	for (type = 0; type <= V4L2_BUF_TYPE_SDR_CAPTURE; type++) {
 		switch (type) {
+		case V4L2_BUF_TYPE_SDR_CAPTURE:
 		case V4L2_BUF_TYPE_VIDEO_CAPTURE:
 		case V4L2_BUF_TYPE_VIDEO_OUTPUT:
 		case V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE:
@@ -843,6 +935,13 @@ int testSetFormats(struct node *node)
 		}
 	}
 
+	/* Restore initial format */
+	for (type = 0; type <= V4L2_BUF_TYPE_SDR_CAPTURE; type++) {
+		if (!(node->valid_buftypes & (1 << type)))
+			continue;
+
+		doioctl(node, VIDIOC_S_FMT, &initial_fmts[type]);
+	}
 	return 0;
 }
 
@@ -971,7 +1070,7 @@ int testParm(struct node *node)
 	int type;
 	int ret;
 
-	for (type = 0; type <= V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE; type++) {
+	for (type = 0; type <= V4L2_BUF_TYPE_SDR_CAPTURE; type++) {
 		ret = testParmType(node, type);
 
 		if (ret && ret != ENOTTY)

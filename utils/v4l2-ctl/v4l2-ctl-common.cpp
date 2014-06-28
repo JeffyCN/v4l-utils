@@ -13,22 +13,17 @@
 #include <sys/time.h>
 #include <dirent.h>
 #include <math.h>
-#include <config.h>
+
+#include "v4l2-ctl.h"
 
 #ifdef HAVE_SYS_KLOG_H
 #include <sys/klog.h>
 #endif
 
-#include <linux/videodev2.h>
-#include <libv4l2.h>
-
 #include <list>
 #include <vector>
 #include <map>
-#include <string>
 #include <algorithm>
-
-#include "v4l2-ctl.h"
 
 typedef std::map<unsigned, std::vector<struct v4l2_ext_control> > class2ctrls_map;
 
@@ -59,11 +54,15 @@ void common_usage(void)
 	       "  -D, --info         show driver info [VIDIOC_QUERYCAP]\n"
 	       "  -d, --device=<dev> use device <dev> instead of /dev/video0\n"
 	       "                     if <dev> starts with a digit, then /dev/video<dev> is used\n"
+	       "  -e, --out-device=<dev> use device <dev> for output streams instead of the\n"
+	       "                     default device as set with --device\n"
+	       "                     if <dev> starts with a digit, then /dev/video<dev> is used\n"
 	       "  -h, --help         display this help message\n"
 	       "  --help-all         all options\n"
 	       "  --help-io          input/output options\n"
 	       "  --help-misc        miscellaneous options\n"
 	       "  --help-overlay     overlay format options\n"
+	       "  --help-sdr         SDR format options\n"
 	       "  --help-selection   crop/selection options\n"
 	       "  --help-stds        standards and other video timings options\n"
 	       "  --help-streaming   streaming options\n"
@@ -71,11 +70,14 @@ void common_usage(void)
 	       "  --help-vbi         VBI format options\n"
 	       "  --help-vidcap      video capture format options\n"
 	       "  --help-vidout      vidout output format options\n"
+	       "  --help-edid        edid handling options\n"
 	       "  -k, --concise      be more concise if possible.\n"
 	       "  -l, --list-ctrls   display all controls and their values [VIDIOC_QUERYCTRL]\n"
 	       "  -L, --list-ctrls-menus\n"
 	       "		     display all controls and their menus [VIDIOC_QUERYMENU]\n"
+#ifndef NO_LIBV4L2
 	       "  -w, --wrapper      use the libv4l2 wrapper library.\n"
+#endif
 	       "  --list-devices     list all v4l devices\n"
 	       "  --log-status       log the board status in the kernel log [VIDIOC_LOG_STATUS]\n"
 	       "  --get-priority     query the current access priority [VIDIOC_G_PRIORITY]\n"

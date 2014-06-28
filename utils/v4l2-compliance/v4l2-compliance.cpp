@@ -45,10 +45,15 @@
    case is used to retrieve a setting. */
 enum Option {
 	OptSetDevice = 'd',
+	OptSetExpBufDevice = 'e',
+	OptSetFreq = 'f',
 	OptHelp = 'h',
+	OptSetInput = 'i',
 	OptNoWarnings = 'n',
+	OptSetOutput = 'o',
 	OptSetRadioDevice = 'r',
-	OptTest = 't',
+	OptStreaming = 's',
+	OptSetSWRadioDevice = 'S',
 	OptTrace = 'T',
 	OptVerbose = 'v',
 	OptSetVbiDevice = 'V',
@@ -68,15 +73,27 @@ bool wrapper;
 int kernel_version;
 unsigned warnings;
 
+static unsigned select_input;
+static unsigned select_output;
+static double select_freq;
+
 static struct option long_options[] = {
 	{"device", required_argument, 0, OptSetDevice},
 	{"radio-device", required_argument, 0, OptSetRadioDevice},
 	{"vbi-device", required_argument, 0, OptSetVbiDevice},
+	{"sdr-device", required_argument, 0, OptSetSWRadioDevice},
+	{"expbuf-device", required_argument, 0, OptSetExpBufDevice},
 	{"help", no_argument, 0, OptHelp},
 	{"verbose", no_argument, 0, OptVerbose},
 	{"no-warnings", no_argument, 0, OptNoWarnings},
 	{"trace", no_argument, 0, OptTrace},
+#ifndef NO_LIBV4L2
 	{"wrapper", no_argument, 0, OptUseWrapper},
+#endif
+	{"set-input", required_argument, 0, OptSetInput},
+	{"set-output", required_argument, 0, OptSetOutput},
+	{"set-freq", required_argument, 0, OptSetFreq},
+	{"streaming", optional_argument, 0, OptStreaming},
 	{0, 0, 0, 0}
 };
 
@@ -84,27 +101,53 @@ static void usage(void)
 {
 	printf("Usage:\n");
 	printf("Common options:\n");
-	printf("  -d, --device=<dev> use device <dev> as the video device\n");
-	printf("                     if <dev> starts with a digit, then /dev/video<dev> is used\n");
-	printf("  -r, --radio-device=<dev> use device <dev> as the radio device\n");
-	printf("                     if <dev> starts with a digit, then /dev/radio<dev> is used\n");
-	printf("  -V, --vbi-device=<dev> use device <dev> as the vbi device\n");
-	printf("                     if <dev> starts with a digit, then /dev/vbi<dev> is used\n");
-	printf("  -h, --help         display this help message\n");
+	printf("  -d, --device=<dev> use device <dev> as the video device.\n");
+	printf("                     if <dev> starts with a digit, then /dev/video<dev> is used.\n");
+	printf("  -V, --vbi-device=<dev> use device <dev> as the vbi device.\n");
+	printf("                     if <dev> starts with a digit, then /dev/vbi<dev> is used.\n");
+	printf("  -r, --radio-device=<dev> use device <dev> as the radio device.\n");
+	printf("                     if <dev> starts with a digit, then /dev/radio<dev> is used.\n");
+	printf("  -S, --sdr-device=<dev> use device <dev> as the SDR device.\n");
+	printf("                     if <dev> starts with a digit, then /dev/swradio<dev> is used.\n");
+	printf("  -e, --expbuf-device=<dev> use device <dev> to obtain DMABUF handles.\n");
+	printf("                     if <dev> starts with a digit, then /dev/video<dev> is used.\n");
+	printf("                     only /dev/videoX devices are supported.\n");
+	printf("  -i, --set-input    select input for streaming tests (default is 0).\n");
+	printf("  -o, --set-output   select output for streaming tests (default is 0).\n");
+	printf("  -f, --set-freq     select frequency in MHz (kHz for radio) for streaming tests.\n");
+	printf("  -s, --streaming=<count> enable the streaming tests. Set <count> to the number of\n");
+	printf("                     frames to stream (default 60). Requires a valid input/output\n");
+	printf("                     and frequency (when dealing with a tuner). For DMABUF testing\n");
+	printf("                     --expbuf-device needs to be set as well.\n");
+	printf("  -h, --help         display this help message.\n");
 	printf("  -n, --no-warnings  turn off warning messages.\n");
 	printf("  -T, --trace        trace all called ioctls.\n");
 	printf("  -v, --verbose      turn on verbose reporting.\n");
+#ifndef NO_LIBV4L2
 	printf("  -w, --wrapper      use the libv4l2 wrapper library.\n");
+#endif
 	exit(0);
 }
 
-int doioctl_name(struct node *node, unsigned long int request, void *parm, const char *name)
+static void v4l_fd_test_init(struct v4l_fd *f, int fd)
+{
+	f->fd = fd;
+	f->ioctl = test_ioctl;
+	f->mmap = test_mmap;
+	f->munmap = test_munmap;
+}
+
+int doioctl_name(struct node *node, unsigned long int request, void *parm,
+		 const char *name, bool no_wrapper)
 {
 	int retval;
 	int e;
 
 	errno = 0;
-	retval = test_ioctl(node->fd, request, parm);
+	if (no_wrapper)
+		retval = ioctl(node->vfd.fd, request, parm);
+	else
+		retval = test_ioctl(node->vfd.fd, request, parm);
 	e = errno;
 	if (options[OptTrace])
 		printf("\t\t%s returned %d (%s)\n", name, retval, strerror(e));
@@ -149,6 +192,8 @@ std::string cap2s(unsigned cap)
 		s += "\t\tRDS Capture\n";
 	if (cap & V4L2_CAP_RDS_OUTPUT)
 		s += "\t\tRDS Output\n";
+	if (cap & V4L2_CAP_SDR_CAPTURE)
+		s += "\t\tSDR Capture\n";
 	if (cap & V4L2_CAP_TUNER)
 		s += "\t\tTuner\n";
 	if (cap & V4L2_CAP_MODULATOR)
@@ -191,6 +236,8 @@ std::string buftype2s(int type)
 		return "Sliced VBI Output";
 	case V4L2_BUF_TYPE_VIDEO_OUTPUT_OVERLAY:
 		return "Video Output Overlay";
+	case V4L2_BUF_TYPE_SDR_CAPTURE:
+		return "SDR Capture";
 	case V4L2_BUF_TYPE_PRIVATE:
 		return "Private";
 	default:
@@ -254,14 +301,16 @@ static int testCap(struct node *node)
 			V4L2_CAP_VIDEO_OVERLAY | V4L2_CAP_VIDEO_OUTPUT_OVERLAY;
 	const __u32 vbi_caps = V4L2_CAP_VBI_CAPTURE | V4L2_CAP_SLICED_VBI_CAPTURE |
 			V4L2_CAP_VBI_OUTPUT | V4L2_CAP_SLICED_VBI_OUTPUT;
+	const __u32 sdr_caps = V4L2_CAP_SDR_CAPTURE;
 	const __u32 radio_caps = V4L2_CAP_RADIO | V4L2_CAP_MODULATOR;
 	const __u32 input_caps = V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_VIDEO_OVERLAY |
 			V4L2_CAP_VBI_CAPTURE | V4L2_CAP_SLICED_VBI_CAPTURE |
 			V4L2_CAP_VIDEO_CAPTURE_MPLANE | V4L2_CAP_HW_FREQ_SEEK |
-			V4L2_CAP_TUNER;
+			V4L2_CAP_TUNER | V4L2_CAP_SDR_CAPTURE;
 	const __u32 output_caps = V4L2_CAP_VIDEO_OUTPUT | V4L2_CAP_VIDEO_OUTPUT_MPLANE |
 			V4L2_CAP_VIDEO_OUTPUT_OVERLAY | V4L2_CAP_VBI_OUTPUT |
 			V4L2_CAP_SLICED_VBI_OUTPUT | V4L2_CAP_MODULATOR;
+	const __u32 overlay_caps = V4L2_CAP_VIDEO_OVERLAY | V4L2_CAP_VIDEO_OUTPUT_OVERLAY;
 	const __u32 m2m_caps = V4L2_CAP_VIDEO_M2M | V4L2_CAP_VIDEO_M2M_MPLANE;
 	const __u32 io_caps = V4L2_CAP_STREAMING | V4L2_CAP_READWRITE;
 	const __u32 mplane_caps = V4L2_CAP_VIDEO_CAPTURE_MPLANE | V4L2_CAP_VIDEO_OUTPUT_MPLANE |
@@ -297,20 +346,21 @@ static int testCap(struct node *node)
 	fail_on_test(!(dcaps & caps));
 	fail_on_test(node->is_video && !(dcaps & video_caps));
 	fail_on_test(node->is_radio && !(dcaps & radio_caps));
-	// V4L2_CAP_AUDIO is invalid for radio
+	// V4L2_CAP_AUDIO is invalid for radio and sdr
 	fail_on_test(node->is_radio && (dcaps & V4L2_CAP_AUDIO));
+	fail_on_test(node->is_sdr && (dcaps & V4L2_CAP_AUDIO));
 	fail_on_test(node->is_vbi && !(dcaps & vbi_caps));
+	fail_on_test(node->is_sdr && !(dcaps & sdr_caps));
 	// You can't have both set due to missing buffer type in VIDIOC_G/S_FBUF
-	fail_on_test((dcaps & (V4L2_CAP_VIDEO_OVERLAY | V4L2_CAP_VIDEO_OUTPUT_OVERLAY)) ==
-			(V4L2_CAP_VIDEO_OVERLAY | V4L2_CAP_VIDEO_OUTPUT_OVERLAY));
-	fail_on_test(node->is_video && (dcaps & (vbi_caps | radio_caps)));
-	fail_on_test(node->is_radio && (dcaps & (vbi_caps | video_caps)));
-	fail_on_test(node->is_vbi && (dcaps & (video_caps | radio_caps)));
+	fail_on_test((dcaps & overlay_caps) == overlay_caps);
+	// Overlay support makes no sense for m2m devices
+	fail_on_test((dcaps & m2m_caps) && (dcaps & overlay_caps));
+	fail_on_test(node->is_video && (dcaps & (vbi_caps | radio_caps | sdr_caps)));
+	fail_on_test(node->is_radio && (dcaps & (vbi_caps | video_caps | sdr_caps)));
+	fail_on_test(node->is_vbi && (dcaps & (video_caps | radio_caps | sdr_caps)));
+	fail_on_test(node->is_sdr && (dcaps & (video_caps | radio_caps | vbi_caps)));
 	if (node->is_m2m) {
-		// This will become an error as this combination of caps
-		// is on the feature removal list.
-		if ((dcaps & input_caps) && (dcaps & output_caps))
-			warn("VIDIOC_QUERYCAP: m2m with video input and output caps\n");
+		fail_on_test((dcaps & input_caps) && (dcaps & output_caps));
 	} else {
 		if (dcaps & input_caps)
 			fail_on_test(dcaps & output_caps);
@@ -374,33 +424,97 @@ static int testPrio(struct node *node, struct node *node2)
 	return 0;
 }
 
+static void streamingSetup(struct node *node)
+{
+	struct v4l2_input input;
+
+	if (options[OptSetInput])
+		doioctl(node, VIDIOC_S_INPUT, &select_input);
+	if (options[OptSetOutput])
+		doioctl(node, VIDIOC_S_OUTPUT, &select_output);
+	if (options[OptSetFreq]) {
+		struct v4l2_frequency f = { 0 };
+		unsigned freq_caps;
+
+		if (node->caps & V4L2_CAP_MODULATOR) {
+			struct v4l2_modulator m = { 0 };
+
+			doioctl(node, VIDIOC_G_MODULATOR, &m);
+			freq_caps = m.capability;
+			f.type = V4L2_TUNER_RADIO;
+		} else {
+			struct v4l2_tuner t = { 0 };
+
+			doioctl(node, VIDIOC_G_TUNER, &t);
+			f.type = t.type;
+			freq_caps = t.capability;
+		}
+		if (freq_caps & V4L2_TUNER_CAP_1HZ)
+			f.frequency = select_freq * 1000;
+		else if (freq_caps & V4L2_TUNER_CAP_LOW)
+			f.frequency = select_freq / 62.5;
+		else
+			f.frequency = select_freq / 62500;
+		doioctl(node, VIDIOC_S_FREQUENCY, &f);
+	}
+
+	memset(&input, 0, sizeof(input));
+	doioctl(node, VIDIOC_G_INPUT, &input.index);
+	doioctl(node, VIDIOC_ENUMINPUT, &input);
+
+	if (input.capabilities & V4L2_IN_CAP_STD) {
+		v4l2_std_id std;
+
+		doioctl(node, VIDIOC_QUERYSTD, &std);
+		if (std)
+			doioctl(node, VIDIOC_S_STD, &std);
+	}
+
+	if (input.capabilities & V4L2_IN_CAP_DV_TIMINGS) {
+		struct v4l2_dv_timings t;
+
+		if (doioctl(node, VIDIOC_QUERY_DV_TIMINGS, &t) == 0)
+			doioctl(node, VIDIOC_S_DV_TIMINGS, &t);
+	}
+}
+
 int main(int argc, char **argv)
 {
 	int i;
 	struct node node = { -1 };
 	struct node video_node = { -1 };
 	struct node video_node2 = { -1 };
-	struct node radio_node = { -1, true };
-	struct node radio_node2 = { -1, true };
 	struct node vbi_node = { -1 };
 	struct node vbi_node2 = { -1 };
+	struct node radio_node = { -1 };
+	struct node radio_node2 = { -1 };
+	struct node sdr_node = { -1 };
+	struct node sdr_node2 = { -1 };
+	struct node expbuf_node = { -1 };
 
 	/* command args */
 	int ch;
 	const char *device = NULL;
-	const char *video_device = NULL;		/* -d device */
-	const char *radio_device = NULL;	/* -r device */
+	const char *video_device = NULL;	/* -d device */
 	const char *vbi_device = NULL;		/* -V device */
-	struct v4l2_capability vcap;	/* list_cap */
-	char short_options[26 * 2 * 2 + 1];
+	const char *radio_device = NULL;	/* -r device */
+	const char *sdr_device = NULL;		/* -S device */
+	const char *expbuf_device = NULL;	/* --expbuf-device device */
+	struct v4l2_capability vcap;		/* list_cap */
+	unsigned frame_count = 60;
+	char short_options[26 * 2 * 3 + 1];
 	int idx = 0;
 
 	for (i = 0; long_options[i].name; i++) {
 		if (!isalpha(long_options[i].val))
 			continue;
 		short_options[idx++] = long_options[i].val;
-		if (long_options[i].has_arg == required_argument)
+		if (long_options[i].has_arg == required_argument) {
 			short_options[idx++] = ':';
+		} else if (long_options[i].has_arg == optional_argument) {
+			short_options[idx++] = ':';
+			short_options[idx++] = ':';
+		}
 	}
 	while (1) {
 		int option_index = 0;
@@ -425,6 +539,15 @@ int main(int argc, char **argv)
 				video_device = newdev;
 			}
 			break;
+		case OptSetVbiDevice:
+			vbi_device = optarg;
+			if (vbi_device[0] >= '0' && vbi_device[0] <= '9' && strlen(vbi_device) <= 3) {
+				static char newdev[20];
+
+				sprintf(newdev, "/dev/vbi%s", vbi_device);
+				vbi_device = newdev;
+			}
+			break;
 		case OptSetRadioDevice:
 			radio_device = optarg;
 			if (radio_device[0] >= '0' && radio_device[0] <= '9' && strlen(radio_device) <= 3) {
@@ -434,14 +557,36 @@ int main(int argc, char **argv)
 				radio_device = newdev;
 			}
 			break;
-		case OptSetVbiDevice:
-			vbi_device = optarg;
-			if (vbi_device[0] >= '0' && vbi_device[0] <= '9' && strlen(vbi_device) <= 3) {
+		case OptSetSWRadioDevice:
+			sdr_device = optarg;
+			if (sdr_device[0] >= '0' && sdr_device[0] <= '9' && strlen(sdr_device) <= 3) {
 				static char newdev[20];
 
-				sprintf(newdev, "/dev/vbi%s", vbi_device);
-				vbi_device = newdev;
+				sprintf(newdev, "/dev/swradio%s", sdr_device);
+				sdr_device = newdev;
 			}
+			break;
+		case OptSetExpBufDevice:
+			expbuf_device = optarg;
+			if (expbuf_device[0] >= '0' && expbuf_device[0] <= '9' && strlen(expbuf_device) <= 3) {
+				static char newdev[20];
+
+				sprintf(newdev, "/dev/video%s", expbuf_device);
+				expbuf_device = newdev;
+			}
+			break;
+		case OptSetInput:
+			select_input = strtoul(optarg, NULL, 0);
+			break;
+		case OptSetOutput:
+			select_output = strtoul(optarg, NULL, 0);
+			break;
+		case OptStreaming:
+			if (optarg)
+				frame_count = strtoul(optarg, NULL, 0);
+			break;
+		case OptSetFreq:
+			select_freq = strtod(optarg, NULL);
 			break;
 		case OptNoWarnings:
 			show_warnings = false;
@@ -473,46 +618,82 @@ int main(int argc, char **argv)
 
 	struct utsname uts;
 	int v1, v2, v3;
+	int fd;
 
 	uname(&uts);
 	sscanf(uts.release, "%d.%d.%d", &v1, &v2, &v3);
 	if (v1 == 2 && v2 == 6)
 		kernel_version = v3;
 
-	if (!video_device && !radio_device && !vbi_device)
+	if (!video_device && !vbi_device && !radio_device && !sdr_device)
 		video_device = "/dev/video0";
 
-	if (video_device && (video_node.fd = test_open(video_device, O_RDWR)) < 0) {
-		fprintf(stderr, "Failed to open %s: %s\n", video_device,
-			strerror(errno));
-		exit(1);
+	if (video_device) {
+		fd = test_open(video_device, O_RDWR);
+		if (fd < 0) {
+			fprintf(stderr, "Failed to open %s: %s\n", video_device,
+				strerror(errno));
+			exit(1);
+		}
+		v4l_fd_test_init(&video_node.vfd, fd);
 	}
 
-	if (radio_device && (radio_node.fd = test_open(radio_device, O_RDWR)) < 0) {
-		fprintf(stderr, "Failed to open %s: %s\n", radio_device,
-			strerror(errno));
-		exit(1);
+	if (vbi_device) {
+		fd = test_open(vbi_device, O_RDWR);
+		if (fd < 0) {
+			fprintf(stderr, "Failed to open %s: %s\n", vbi_device,
+				strerror(errno));
+			exit(1);
+		}
+		v4l_fd_test_init(&vbi_node.vfd, fd);
 	}
 
-	if (vbi_device && (vbi_node.fd = test_open(vbi_device, O_RDWR)) < 0) {
-		fprintf(stderr, "Failed to open %s: %s\n", vbi_device,
-			strerror(errno));
-		exit(1);
+	if (radio_device) {
+		fd = test_open(radio_device, O_RDWR);
+		if (fd < 0) {
+			fprintf(stderr, "Failed to open %s: %s\n", radio_device,
+					strerror(errno));
+			exit(1);
+		}
+		v4l_fd_test_init(&radio_node.vfd, fd);
 	}
 
-	if (video_node.fd >= 0) {
-		node.fd = video_node.fd;
+	if (sdr_device) {
+		fd = test_open(sdr_device, O_RDWR);
+		if (fd < 0) {
+			fprintf(stderr, "Failed to open %s: %s\n", sdr_device,
+				strerror(errno));
+			exit(1);
+		}
+		v4l_fd_test_init(&sdr_node.vfd, fd);
+	}
+
+	if (expbuf_device) {
+		fd = open(expbuf_device, O_RDWR);
+		if (fd < 0) {
+			fprintf(stderr, "Failed to open %s: %s\n", expbuf_device,
+				strerror(errno));
+			exit(1);
+		}
+		v4l_fd_init(&expbuf_node.vfd, fd);
+	}
+
+	if (video_node.vfd.fd >= 0) {
+		node.vfd = video_node.vfd;
 		device = video_device;
 		node.is_video = true;
-	} else if (radio_node.fd >= 0) {
-		node.fd = radio_node.fd;
-		device = radio_device;
-		node.is_radio = true;
-		printf("is radio\n");
-	} else if (vbi_node.fd >= 0) {
-		node.fd = vbi_node.fd;
+	} else if (vbi_node.vfd.fd >= 0) {
+		node.vfd = vbi_node.vfd;
 		device = vbi_device;
 		node.is_vbi = true;
+	} else if (radio_node.vfd.fd >= 0) {
+		node.vfd = radio_node.vfd;
+		device = radio_device;
+		node.is_radio = true;
+	} else if (sdr_node.vfd.fd >= 0) {
+		node.vfd = sdr_node.vfd;
+		device = sdr_device;
+		node.is_sdr = true;
 	}
 	node.device = device;
 
@@ -522,23 +703,31 @@ int main(int argc, char **argv)
 	else
 		node.caps = vcap.capabilities;
 	if (node.caps & (V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_VBI_CAPTURE |
-			 V4L2_CAP_VIDEO_CAPTURE_MPLANE | V4L2_CAP_SLICED_VBI_CAPTURE |
-			 V4L2_CAP_RDS_CAPTURE | V4L2_CAP_RADIO | V4L2_CAP_TUNER))
+			 V4L2_CAP_VIDEO_CAPTURE_MPLANE | V4L2_CAP_SLICED_VBI_CAPTURE))
 		node.has_inputs = true;
 	if (node.caps & (V4L2_CAP_VIDEO_OUTPUT | V4L2_CAP_VBI_OUTPUT |
-			 V4L2_CAP_VIDEO_OUTPUT_MPLANE | V4L2_CAP_SLICED_VBI_OUTPUT |
-			 V4L2_CAP_RDS_OUTPUT | V4L2_CAP_MODULATOR))
+			 V4L2_CAP_VIDEO_OUTPUT_MPLANE | V4L2_CAP_SLICED_VBI_OUTPUT))
 		node.has_outputs = true;
 	if (node.caps & (V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_VBI_CAPTURE |
 			 V4L2_CAP_VIDEO_CAPTURE_MPLANE | V4L2_CAP_VIDEO_M2M_MPLANE |
 			 V4L2_CAP_VIDEO_M2M | V4L2_CAP_SLICED_VBI_CAPTURE |
-			 V4L2_CAP_RDS_CAPTURE))
+			 V4L2_CAP_RDS_CAPTURE | V4L2_CAP_SDR_CAPTURE))
 		node.can_capture = true;
 	if (node.caps & (V4L2_CAP_VIDEO_OUTPUT | V4L2_CAP_VBI_OUTPUT |
 			 V4L2_CAP_VIDEO_OUTPUT_MPLANE | V4L2_CAP_VIDEO_M2M_MPLANE |
 			 V4L2_CAP_VIDEO_M2M | V4L2_CAP_SLICED_VBI_OUTPUT |
 			 V4L2_CAP_RDS_OUTPUT))
 		node.can_output = true;
+	if (node.caps & (V4L2_CAP_VIDEO_CAPTURE_MPLANE | V4L2_CAP_VIDEO_OUTPUT_MPLANE |
+			 V4L2_CAP_VIDEO_M2M_MPLANE))
+		node.is_planar = true;
+	if (expbuf_device) {
+		doioctl(&expbuf_node, VIDIOC_QUERYCAP, &vcap);
+		if (vcap.capabilities & V4L2_CAP_DEVICE_CAPS)
+			expbuf_node.caps = vcap.device_caps;
+		else
+			expbuf_node.caps = vcap.capabilities;
+	}
 
 	/* Information Opts */
 
@@ -575,34 +764,45 @@ int main(int argc, char **argv)
 	if (video_device) {
 		video_node2 = node;
 		printf("\ttest second video open: %s\n",
-				ok((video_node2.fd = test_open(video_device, O_RDWR)) < 0));
-		if (video_node2.fd >= 0) {
+				ok((video_node2.vfd.fd = test_open(video_device, O_RDWR)) < 0));
+		if (video_node2.vfd.fd >= 0) {
 			printf("\ttest VIDIOC_QUERYCAP: %s\n", ok(testCap(&video_node2)));
 			printf("\ttest VIDIOC_G/S_PRIORITY: %s\n",
 					ok(testPrio(&node, &video_node2)));
 			node.node2 = &video_node2;
 		}
 	}
-	if (radio_device) {
-		radio_node2 = node;
-		printf("\ttest second radio open: %s\n",
-				ok((radio_node2.fd = test_open(radio_device, O_RDWR)) < 0));
-		if (radio_node2.fd >= 0) {
-			printf("\ttest VIDIOC_QUERYCAP: %s\n", ok(testCap(&radio_node2)));
-			printf("\ttest VIDIOC_G/S_PRIORITY: %s\n",
-					ok(testPrio(&node, &radio_node2)));
-			node.node2 = &video_node2;
-		}
-	}
 	if (vbi_device) {
 		vbi_node2 = node;
 		printf("\ttest second vbi open: %s\n",
-				ok((vbi_node2.fd = test_open(vbi_device, O_RDWR)) < 0));
-		if (vbi_node2.fd >= 0) {
+				ok((vbi_node2.vfd.fd = test_open(vbi_device, O_RDWR)) < 0));
+		if (vbi_node2.vfd.fd >= 0) {
 			printf("\ttest VIDIOC_QUERYCAP: %s\n", ok(testCap(&vbi_node2)));
 			printf("\ttest VIDIOC_G/S_PRIORITY: %s\n",
 					ok(testPrio(&node, &vbi_node2)));
-			node.node2 = &video_node2;
+			node.node2 = &vbi_node2;
+		}
+	}
+	if (radio_device) {
+		radio_node2 = node;
+		printf("\ttest second radio open: %s\n",
+				ok((radio_node2.vfd.fd = test_open(radio_device, O_RDWR)) < 0));
+		if (radio_node2.vfd.fd >= 0) {
+			printf("\ttest VIDIOC_QUERYCAP: %s\n", ok(testCap(&radio_node2)));
+			printf("\ttest VIDIOC_G/S_PRIORITY: %s\n",
+					ok(testPrio(&node, &radio_node2)));
+			node.node2 = &radio_node2;
+		}
+	}
+	if (sdr_device) {
+		sdr_node2 = node;
+		printf("\ttest second sdr open: %s\n",
+				ok((sdr_node2.vfd.fd = test_open(sdr_device, O_RDWR)) < 0));
+		if (sdr_node2.vfd.fd >= 0) {
+			printf("\ttest VIDIOC_QUERYCAP: %s\n", ok(testCap(&sdr_node2)));
+			printf("\ttest VIDIOC_G/S_PRIORITY: %s\n",
+					ok(testPrio(&node, &sdr_node2)));
+			node.node2 = &sdr_node2;
 		}
 	}
 	printf("\n");
@@ -639,66 +839,102 @@ int main(int argc, char **argv)
 			node.outputs, node.audio_outputs, node.modulators);
 	printf("\n");
 
-	/* Control ioctls */
-
-	printf("Control ioctls:\n");
-	printf("\ttest VIDIOC_QUERYCTRL/MENU: %s\n", ok(testQueryControls(&node)));
-	printf("\ttest VIDIOC_G/S_CTRL: %s\n", ok(testSimpleControls(&node)));
-	printf("\ttest VIDIOC_G/S/TRY_EXT_CTRLS: %s\n", ok(testExtendedControls(&node)));
-	printf("\ttest VIDIOC_(UN)SUBSCRIBE_EVENT/DQEVENT: %s\n", ok(testControlEvents(&node)));
-	printf("\ttest VIDIOC_G/S_JPEGCOMP: %s\n", ok(testJpegComp(&node)));
-	printf("\tStandard Controls: %d Private Controls: %d\n",
-			node.std_controls, node.priv_controls);
-	printf("\n");
-
 	/* I/O configuration ioctls */
 
 	printf("Input/Output configuration ioctls:\n");
 	printf("\ttest VIDIOC_ENUM/G/S/QUERY_STD: %s\n", ok(testStd(&node)));
 	printf("\ttest VIDIOC_ENUM/G/S/QUERY_DV_TIMINGS: %s\n", ok(testTimings(&node)));
 	printf("\ttest VIDIOC_DV_TIMINGS_CAP: %s\n", ok(testTimingsCap(&node)));
+	printf("\ttest VIDIOC_G/S_EDID: %s\n", ok(testEdid(&node)));
 	printf("\n");
 
-	/* Format ioctls */
+	unsigned max_io = node.inputs > node.outputs ? node.inputs : node.outputs;
 
-	printf("Format ioctls:\n");
-	printf("\ttest VIDIOC_ENUM_FMT/FRAMESIZES/FRAMEINTERVALS: %s\n", ok(testEnumFormats(&node)));
-	printf("\ttest VIDIOC_G/S_PARM: %s\n", ok(testParm(&node)));
-	printf("\ttest VIDIOC_G_FBUF: %s\n", ok(testFBuf(&node)));
-	printf("\ttest VIDIOC_G_FMT: %s\n", ok(testGetFormats(&node)));
-	printf("\ttest VIDIOC_TRY_FMT: %s\n", ok(testTryFormats(&node)));
-	printf("\ttest VIDIOC_S_FMT: %s\n", ok(testSetFormats(&node)));
-	printf("\ttest VIDIOC_G_SLICED_VBI_CAP: %s\n", ok(testSlicedVBICap(&node)));
-	printf("\n");
+	for (unsigned io = 0; io < (max_io ? max_io : 1); io++) {
+		node.controls.clear();
+		for (unsigned idx = 0; idx < V4L2_BUF_TYPE_SDR_CAPTURE + 1; idx++)
+			node.buftype_pixfmts[idx].clear();
 
-	/* Codec ioctls */
+		if (max_io) {
+			printf("Test %s %d:\n\n",
+				node.can_capture ? "input" : "output", io);
+			if (node.can_capture)
+				doioctl(&node, VIDIOC_S_INPUT, &io);
+			else
+				doioctl(&node, VIDIOC_S_OUTPUT, &io);
+		}
 
-	printf("Codec ioctls:\n");
-	printf("\ttest VIDIOC_(TRY_)ENCODER_CMD: %s\n", ok(testEncoder(&node)));
-	printf("\ttest VIDIOC_G_ENC_INDEX: %s\n", ok(testEncIndex(&node)));
-	printf("\ttest VIDIOC_(TRY_)DECODER_CMD: %s\n", ok(testDecoder(&node)));
-	printf("\n");
+		/* Control ioctls */
+
+		printf("\tControl ioctls:\n");
+		printf("\t\ttest VIDIOC_QUERYCTRL/MENU: %s\n", ok(testQueryControls(&node)));
+		printf("\t\ttest VIDIOC_G/S_CTRL: %s\n", ok(testSimpleControls(&node)));
+		printf("\t\ttest VIDIOC_G/S/TRY_EXT_CTRLS: %s\n", ok(testExtendedControls(&node)));
+		printf("\t\ttest VIDIOC_(UN)SUBSCRIBE_EVENT/DQEVENT: %s\n", ok(testControlEvents(&node)));
+		printf("\t\ttest VIDIOC_G/S_JPEGCOMP: %s\n", ok(testJpegComp(&node)));
+		printf("\t\tStandard Controls: %d Private Controls: %d\n",
+				node.std_controls, node.priv_controls);
+		printf("\n");
+
+		/* Format ioctls */
+
+		printf("\tFormat ioctls:\n");
+		printf("\t\ttest VIDIOC_ENUM_FMT/FRAMESIZES/FRAMEINTERVALS: %s\n", ok(testEnumFormats(&node)));
+		printf("\t\ttest VIDIOC_G/S_PARM: %s\n", ok(testParm(&node)));
+		printf("\t\ttest VIDIOC_G_FBUF: %s\n", ok(testFBuf(&node)));
+		printf("\t\ttest VIDIOC_G_FMT: %s\n", ok(testGetFormats(&node)));
+		printf("\t\ttest VIDIOC_TRY_FMT: %s\n", ok(testTryFormats(&node)));
+		printf("\t\ttest VIDIOC_S_FMT: %s\n", ok(testSetFormats(&node)));
+		printf("\t\ttest VIDIOC_G_SLICED_VBI_CAP: %s\n", ok(testSlicedVBICap(&node)));
+		printf("\n");
+
+		/* Codec ioctls */
+
+		printf("\tCodec ioctls:\n");
+		printf("\t\ttest VIDIOC_(TRY_)ENCODER_CMD: %s\n", ok(testEncoder(&node)));
+		printf("\t\ttest VIDIOC_G_ENC_INDEX: %s\n", ok(testEncIndex(&node)));
+		printf("\t\ttest VIDIOC_(TRY_)DECODER_CMD: %s\n", ok(testDecoder(&node)));
+		printf("\n");
+	}
 
 	/* Buffer ioctls */
 
 	printf("Buffer ioctls:\n");
 	printf("\ttest VIDIOC_REQBUFS/CREATE_BUFS/QUERYBUF: %s\n", ok(testReqBufs(&node)));
-	//printf("\ttest read/write: %s\n", ok(testReadWrite(&node)));
+	printf("\ttest VIDIOC_EXPBUF: %s\n", ok(testExpBuf(&node)));
+	if (options[OptStreaming]) {
+		streamingSetup(&node);
+
+		printf("\ttest read/write: %s\n", ok(testReadWrite(&node)));
+		// Reopen after each streaming test to reset the streaming state
+		// in case of any errors in the preceeding test.
+		reopen(&node);
+		printf("\ttest MMAP: %s\n", ok(testMmap(&node, frame_count)));
+		reopen(&node);
+		printf("\ttest USERPTR: %s\n", ok(testUserPtr(&node, frame_count)));
+		reopen(&node);
+		if (options[OptSetExpBufDevice] ||
+		    !(node.valid_memorytype & (1 << V4L2_MEMORY_DMABUF)))
+			printf("\ttest DMABUF: %s\n", ok(testDmaBuf(&expbuf_node, &node, frame_count)));
+		else if (!options[OptSetExpBufDevice])
+			printf("\ttest DMABUF: Cannot test, specify --expbuf-device\n");
+		reopen(&node);
+	}
 	printf("\n");
 
 	/* TODO:
 
 	   VIDIOC_CROPCAP, VIDIOC_G/S_CROP, VIDIOC_G/S_SELECTION
 	   VIDIOC_S_FBUF/OVERLAY
-	   VIDIOC_QBUF/DQBUF/QUERYBUF/PREPARE_BUFS/EXPBUF
-	   VIDIOC_STREAMON/OFF
 	   */
 
 	/* Final test report */
 
-	test_close(node.fd);
+	test_close(node.vfd.fd);
 	if (node.node2)
-		test_close(node.node2->fd);
+		test_close(node.node2->vfd.fd);
+	if (expbuf_device)
+		close(expbuf_node.vfd.fd);
 	printf("Total: %d, Succeeded: %d, Failed: %d, Warnings: %d\n",
 			tests_total, tests_ok, tests_total - tests_ok, warnings);
 	exit(app_result);

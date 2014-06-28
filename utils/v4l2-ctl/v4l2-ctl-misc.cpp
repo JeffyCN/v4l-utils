@@ -13,11 +13,6 @@
 #include <sys/time.h>
 #include <dirent.h>
 #include <math.h>
-#include <config.h>
-
-#include <linux/videodev2.h>
-#include <libv4l2.h>
-#include <string>
 
 #include "v4l2-ctl.h"
 
@@ -34,8 +29,9 @@ void misc_usage(void)
 	       "  --wait-for-event=<event>\n"
 	       "                     wait for an event [VIDIOC_DQEVENT]\n"
 	       "                     <event> is the event number or one of:\n"
-	       "                     eos, vsync, ctrl=<id>, frame_sync\n"
+	       "                     eos, vsync, ctrl=<id>, frame_sync, source_change=<pad>\n"
 	       "                     where <id> is the name of the control\n"
+	       "                     and where <pad> is the index of the pad or input\n"
 	       "  --poll-for-event=<event>\n"
 	       "                     poll for an event [VIDIOC_DQEVENT]\n"
 	       "                     see --wait-for-event for possible events\n"
@@ -391,7 +387,7 @@ void misc_get(int fd)
 				printf("\tFrames per second: %.3f (%d/%d)\n",
 						(1.0 * tf.denominator) / tf.numerator,
 						tf.denominator, tf.numerator);
-			printf("\tRead buffers     : %d\n", parm.parm.output.writebuffers);
+			printf("\tRead buffers     : %d\n", parm.parm.capture.readbuffers);
 		}
 	}
 

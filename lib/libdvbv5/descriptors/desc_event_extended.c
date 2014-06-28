@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 - Mauro Carvalho Chehab <mchehab@redhat.com>
+ * Copyright (c) 2011-2012 - Mauro Carvalho Chehab
  * Copyright (c) 2012 - Andre Roth <neolynx@gmail.com>
  *
  * This program is free software; you can redistribute it and/or
@@ -19,12 +19,11 @@
  *
  */
 
-#include "descriptors/desc_event_extended.h"
-#include "descriptors.h"
-#include "dvb-fe.h"
-#include "parse_string.h"
+#include <libdvbv5/desc_event_extended.h>
+#include <libdvbv5/dvb-fe.h>
+#include <parse_string.h>
 
-void dvb_desc_event_extended_init(struct dvb_v5_fe_parms *parms, const uint8_t *buf, struct dvb_desc *desc)
+int dvb_desc_event_extended_init(struct dvb_v5_fe_parms *parms, const uint8_t *buf, struct dvb_desc *desc)
 {
 	struct dvb_desc_event_extended *event = (struct dvb_desc_event_extended *) desc;
 	uint8_t len;  /* the length of the string in the input data */
@@ -62,6 +61,7 @@ void dvb_desc_event_extended_init(struct dvb_v5_fe_parms *parms, const uint8_t *
 	buf++;
 	parse_string(parms, &event->text, &event->text_emph, buf, len1, default_charset, output_charset);
 	buf += len;
+	return 0;
 }
 
 void dvb_desc_event_extended_free(struct dvb_desc *desc)
@@ -74,6 +74,6 @@ void dvb_desc_event_extended_free(struct dvb_desc *desc)
 void dvb_desc_event_extended_print(struct dvb_v5_fe_parms *parms, const struct dvb_desc *desc)
 {
 	const struct dvb_desc_event_extended *event = (const struct dvb_desc_event_extended *) desc;
-	dvb_log("|   Description   '%s'", event->text);
+	dvb_loginfo("|           '%s'", event->text);
 }
 

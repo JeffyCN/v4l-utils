@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 - Mauro Carvalho Chehab <mchehab@redhat.com>
+ * Copyright (c) 2011-2012 - Mauro Carvalho Chehab
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -27,10 +27,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h> /* strcasecmp */
 
 #include "parse_string.h"
-#include "dvb-log.h"
-#include "dvb-fe.h"
+#include <libdvbv5/dvb-log.h>
+#include <libdvbv5/dvb-fe.h>
 
 #define CS_OPTIONS "//TRANSLIT"
 
@@ -299,16 +300,43 @@ static struct charset_conv en300468_latin_00_to_utf8[256] = {
 	[0xff] = { 2, {0xc2, 0xad, } },
 };
 
+void iconv_to_charset(struct dvb_v5_fe_parms *parms,
+		      char *dest,
+		      size_t destlen,
+		      const unsigned char *src,
+		      size_t len,
+		      char *type, char *output_charset)
+{
+	char out_cs[strlen(output_charset) + 1 + sizeof(CS_OPTIONS)];
+	char *p = dest;
+
+	strcpy(out_cs, output_charset);
+	strcat(out_cs, CS_OPTIONS);
+
+	iconv_t cd = iconv_open(out_cs, type);
+	if (cd == (iconv_t)(-1)) {
+		memcpy(p, src, len);
+		p[len] = '\0';
+		dvb_logerr("Conversion from %s to %s not supported\n",
+				type, output_charset);
+	} else {
+		iconv(cd, (ICONV_CONST char **)&src, &len, &p, &destlen);
+		iconv_close(cd);
+		*p = '\0';
+	}
+}
+
 static void charset_conversion(struct dvb_v5_fe_parms *parms, char **dest, const unsigned char *s,
 			       size_t len,
 			       char *type, char *output_charset)
 {
-	char *p = *dest;
-	unsigned char *tmp;
 	size_t destlen = len * 3;
 	int need_conversion = 1;
 
+	/* Special handler for ISO-6937 */
 	if (!strcasecmp(type, "ISO-6937")) {
+		char *p = *dest;
+		unsigned char *tmp;
 		unsigned char *p1, *p2;
 
 		/* Convert charset to UTF-8 using Code table 00 - Latin */
@@ -333,25 +361,9 @@ static void charset_conversion(struct dvb_v5_fe_parms *parms, char **dest, const
 	}
 
 	/* Convert from original charset to the desired one */
-	if (need_conversion) {
-		char out_cs[strlen(output_charset) + 1 + sizeof(CS_OPTIONS)];
-
-		p = *dest;
-		strcpy(out_cs, output_charset);
-		strcat(out_cs, CS_OPTIONS);
-
-		iconv_t cd = iconv_open(out_cs, type);
-		if (cd == (iconv_t)(-1)) {
-			memcpy(p, s, len);
-			p[len] = '\0';
-			dvb_logerr("Conversion from %s to %s not supported\n",
-				 type, output_charset);
-		} else {
-			iconv(cd, (ICONV_CONST char **)&s, &len, &p, &destlen);
-			iconv_close(cd);
-			*p = '\0';
-		}
-	}
+	if (need_conversion)
+		iconv_to_charset(parms, *dest, destlen, s, len, type,
+				 output_charset);
 }
 
 void parse_string(struct dvb_v5_fe_parms *parms, char **dest, char **emph,
@@ -474,7 +486,10 @@ void parse_string(struct dvb_v5_fe_parms *parms, char **dest, char **emph,
 		*dest = realloc(*dest, strlen(*dest) + 1);
 
 	if (!len2) {
-		free (tmp2);
+		if (tmp2) {
+			free (tmp2);
+			tmp2 = NULL;
+		}
 		free (*emph);
 		*emph = NULL;
 	} else {
@@ -482,7 +497,9 @@ void parse_string(struct dvb_v5_fe_parms *parms, char **dest, char **emph,
 		*emph = realloc(*emph, strlen(*emph) + 1);
 	}
 
-	free(tmp1);
-	free(tmp2);
+	if (tmp1)
+		free(tmp1);
+	if (tmp2)
+		free(tmp2);
 }
 

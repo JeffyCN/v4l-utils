@@ -20,6 +20,8 @@
 #ifndef QV4L2_H
 #define QV4L2_H
 
+#include <config.h>
+
 #include <QMainWindow>
 #include <QTabWidget>
 #include <QSignalMapper>
@@ -33,6 +35,7 @@
 
 #include "v4l2-api.h"
 #include "raw2sliced.h"
+#include "capture-win.h"
 
 class QComboBox;
 class QSpinBox;
@@ -59,9 +62,15 @@ enum CapMethod {
 	methodUser
 };
 
+enum RenderMethod {
+	QV4L2_RENDER_GL,
+	QV4L2_RENDER_QT
+};
+
 struct buffer {
-	void   *start;
-	size_t  length;
+	unsigned planes;
+	void   *start[VIDEO_MAX_PLANES];
+	size_t  length[VIDEO_MAX_PLANES];
 };
 
 #define CTRL_FLAG_DISABLED	(V4L2_CTRL_FLAG_READ_ONLY | \
@@ -91,6 +100,10 @@ private:
 	void stopCapture();
 	void startOutput(unsigned buffer_size);
 	void stopOutput();
+	void newCaptureWin();
+	void startAudio();
+	void stopAudio();
+
 	struct buffer *m_buffers;
 	struct v4l2_format m_capSrcFormat;
 	struct v4l2_format m_capDestFormat;
@@ -100,6 +113,7 @@ private:
 	bool m_mustConvert;
 	CapMethod m_capMethod;
 	bool m_makeSnapshot;
+	RenderMethod m_renderMethod;
 
 private slots:
 	void capStart(bool);
@@ -108,6 +122,8 @@ private slots:
 	void snapshot();
 	void capVbiFrame();
 	void saveRaw(bool);
+	void setRenderMethod();
+	void changeAudioDevice();
 
 	// gui
 private slots:
@@ -116,6 +132,10 @@ private slots:
 	void ctrlAction(int);
 	void openRawFile(const QString &s);
 	void rejectedRawFile();
+	void setAudioBufferSize();
+	void enableScaling(bool enable);
+	void updatePixelAspectRatio();
+	void updateCropping();
 
 	void about();
 
@@ -158,6 +178,7 @@ private:
 	void updateStandard();
 	void updateFreq();
 	void updateFreqChannel();
+	bool showFrames();
 
 	GeneralTab *m_genTab;
 	VbiTab *m_vbiTab;
@@ -165,6 +186,11 @@ private:
 	QAction *m_snapshotAct;
 	QAction *m_saveRawAct;
 	QAction *m_showFramesAct;
+	QAction *m_useGLAct;
+	QAction *m_showAllAudioAct;
+	QAction *m_audioBufferAct;
+	QAction *m_scalingAct;
+	QAction *m_resetScalingAct;
 	QString m_filename;
 	QSignalMapper *m_sigMapper;
 	QTabWidget *m_tabs;
@@ -176,7 +202,6 @@ private:
 	WidgetMap m_widgetMap;
 	ClassMap m_classMap;
 	bool m_haveExtendedUserCtrls;
-	bool m_showFrames;
 	int m_vbiSize;
 	unsigned m_vbiWidth;
 	unsigned m_vbiHeight;
@@ -185,6 +210,7 @@ private:
 	unsigned m_lastFrame;
 	unsigned m_fps;
 	struct timeval m_tv;
+	struct timeval m_totalAudioLatency;
 	QFile m_saveRaw;
 };
 

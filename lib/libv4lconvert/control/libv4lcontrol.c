@@ -89,6 +89,10 @@ static const struct v4lcontrol_flags_info v4lcontrol_flags[] = {
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
 	{ 0x04f2, 0xb012, 0, "PACKARD BELL BV              ", "EasyNote_F0945",
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
+	/* This Asus has its camera the right way up, so we've an entry here
+	   to override the wildcard match from the upside_down table. */
+	{ 0x04f2, 0xb012, 0, "ASUSTeK Computer Inc.        ", "F3Sc      ",
+		0 },
 	{ 0x04f2, 0xb071, 0, "AXIOO", "PICO DJH Model",
 		V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED },
 	{ 0x04f2, 0xb071, 0, "PEGATRON CORPORATION", "H54",
@@ -269,7 +273,7 @@ static const char *asus_board_vendor[] = {
 	NULL };
 
 static const char *asus_board_name[] = {
-	"A3[A-Z]*",
+	"A3[A-Z]*", "A7M",
 	"B50[A-Z]*",
 	"F[23579][A-Z]*", "F70[A-Z]*", "F[58]2[A-Z]*",
 	"G[12][A-Z]*", "G[57]0[A-Z]*",
@@ -528,15 +532,6 @@ static void v4lcontrol_get_flags_from_db(struct v4lcontrol_data *data,
 	v4lcontrol_get_dmi_string(sysfs_prefix, "board_version", dmi_board_version,
 			sizeof(dmi_board_version));
 
-	for (i = 0; i < ARRAY_SIZE(upside_down); i++)
-		if (find_dmi_string(upside_down[i].board_vendor, dmi_board_vendor) &&
-		    find_dmi_string(upside_down[i].board_name, dmi_board_name) &&
-		    find_usb_id(upside_down[i].camera_id, vendor_id, product_id)) {
-			/* found entry */
-			data->flags |= V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED;
-			break;
-		}
- 
 	for (i = 0; i < ARRAY_SIZE(v4lcontrol_flags); i++)
 		if (v4lcontrol_flags[i].vendor_id == vendor_id &&
 				v4lcontrol_flags[i].product_id ==
@@ -557,6 +552,17 @@ static void v4lcontrol_get_flags_from_db(struct v4lcontrol_data *data,
 				 !strcmp(v4lcontrol_flags[i].dmi_board_version, dmi_board_version))) {
 			data->flags |= v4lcontrol_flags[i].flags;
 			data->flags_info = &v4lcontrol_flags[i];
+			/* Entries in the v4lcontrol_flags table override
+			   wildcard matches in the upside_down table. */
+			return;
+		}
+
+	for (i = 0; i < ARRAY_SIZE(upside_down); i++)
+		if (find_dmi_string(upside_down[i].board_vendor, dmi_board_vendor) &&
+		    find_dmi_string(upside_down[i].board_name, dmi_board_name) &&
+		    find_usb_id(upside_down[i].camera_id, vendor_id, product_id)) {
+			/* found entry */
+			data->flags |= V4LCONTROL_HFLIPPED | V4LCONTROL_VFLIPPED;
 			break;
 		}
 }

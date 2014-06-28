@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 - Mauro Carvalho Chehab <mchehab@redhat.com>
+ * Copyright (c) 2011-2012 - Mauro Carvalho Chehab
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -37,24 +37,24 @@
 #include <config.h>
 
 #include <linux/dvb/dmx.h>
-#include "dvb-file.h"
-#include "dvb-demux.h"
-#include "dvb-scan.h"
+#include "libdvbv5/dvb-file.h"
+#include "libdvbv5/dvb-demux.h"
+#include "libdvbv5/dvb-scan.h"
+#include "libdvbv5/header.h"
 
 #define CHANNEL_FILE	"channels.conf"
 #define PROGRAM_NAME	"dvbv5-zap"
 
 const char *argp_program_version = PROGRAM_NAME " version " V4L_UTILS_VERSION;
-const char *argp_program_bug_address = "Mauro Carvalho Chehab <mchehab@redhat.com>";
+const char *argp_program_bug_address = "Mauro Carvalho Chehab <m.chehab@samsung.com>";
 
 struct arguments {
 	char *confname, *lnb_name, *output, *demux_dev, *dvr_dev;
 	char *filename;
 	unsigned adapter, frontend, demux, get_detected, get_nit;
-	int force_dvbv3, lnb, sat_number;
+	int force_dvbv3, lna, lnb, sat_number;
 	unsigned diseqc_wait, silent, verbose, frontend_only, freq_bpf;
 	unsigned timeout, dvr, rec_psi, exit_after_tuning;
-	unsigned record;
 	unsigned n_apid, n_vpid, all_pids;
 	enum file_formats input_format, output_format;
 	unsigned traffic_monitor, low_traffic;
@@ -71,10 +71,10 @@ static const struct argp_option options[] = {
 	{"channels",	'c', "file",			0, "read channels list from 'file'", 0},
 	{"demux",	'd', "demux#",			0, "use given demux (default 0)", 0},
 	{"frontend",	'f', "frontend#",		0, "use given frontend (default 0)", 0},
-	{"frontend",	'F', NULL,			0, "set up frontend only, don't touch demux", 0},
 	{"input-format", 'I',	"format",		0, "Input format: ZAP, CHANNEL, DVBV5 (default: DVBV5)", 0},
+	{"lna",		'w', "LNA (0, 1, -1)",		0, "enable/disable/auto LNA power", 0},
 	{"lnbf",	'l', "LNBf_type",		0, "type of LNBf to use. 'help' lists the available ones", 0},
-	{"search",	'L', NULL,			0, "search/look for a string inside the traffic", 0},
+	{"search",	'L', "string",			0, "search/look for a string inside the traffic", 0},
 	{"monitor",	'm', NULL,			0, "monitors de DVB traffic", 0},
 	{"output",	'o', "file",			0, "output filename (use -o - for stdout)", 0},
 	{"pat",		'p', NULL,			0, "add pat and pmt to TS recording (implies -r)", 0},
@@ -145,7 +145,7 @@ static int parse(struct arguments *args,
 		return -2;
 
 	for (entry = dvb_file->first_entry; entry != NULL; entry = entry->next) {
-		if (!strcmp(entry->channel, channel))
+		if (entry->channel && !strcmp(entry->channel, channel))
 			break;
 		if (entry->vchannel && !strcmp(entry->vchannel, channel))
 			break;
@@ -156,12 +156,35 @@ static int parse(struct arguments *args,
 	if (!entry) {
 		for (entry = dvb_file->first_entry; entry != NULL;
 		     entry = entry->next) {
-			if (!strcasecmp(entry->channel, channel))
+			if (entry->channel && !strcasecmp(entry->channel, channel))
 				break;
 		}
 	}
+
+	/*
+	 * When this tool is used to just tune to a channel, to monitor it or
+	 * to capture all PIDs, all it needs is a frequency.
+	 * So, let the tool to accept a frequency as the tuning channel on those
+	 * cases.
+	 * This way, a file in "channel" format can be used instead of a zap file.
+	 * It is also easier to use it for testing purposes.
+	 */
+	if (!entry && (args->traffic_monitor || args->all_pids || args->exit_after_tuning)) {
+		uint32_t f, freq = atoi(channel);
+		if (freq) {
+			for (entry = dvb_file->first_entry; entry != NULL;
+			entry = entry->next) {
+				retrieve_entry_prop(entry, DTV_FREQUENCY, &f);
+				if (f == freq)
+					break;
+			}
+
+		}
+	}
+
 	if (!entry) {
 		ERROR("Can't find channel");
+		dvb_file_free(dvb_file);
 		return -3;
 	}
 
@@ -169,6 +192,7 @@ static int parse(struct arguments *args,
 		int lnb = dvb_sat_search_lnb(entry->lnb);
 		if (lnb == -1) {
 			PERROR("unknown LNB %s\n", entry->lnb);
+			dvb_file_free(dvb_file);
 			return -1;
 		}
 		parms->lnb = dvb_sat_get_lnb(lnb);
@@ -201,11 +225,9 @@ static int parse(struct arguments *args,
 	}
 	*sid = entry->service_id;
 
-	/* First of all, set the delivery system */
-	for (i = 0; i < entry->n_props; i++)
-		if (entry->props[i].cmd == DTV_DELIVERY_SYSTEM)
-			dvb_set_compat_delivery_system(parms,
-						       entry->props[i].u.data);
+        /* First of all, set the delivery system */
+	retrieve_entry_prop(entry, DTV_DELIVERY_SYSTEM, &sys);
+	dvb_set_compat_delivery_system(parms, sys);
 
 	/* Copy data into parms */
 	for (i = 0; i < entry->n_props; i++) {
@@ -246,11 +268,6 @@ static int parse(struct arguments *args,
 		}
 	}
 
-#if 0
-	/* HACK to test the write file function */
-	write_dvb_file("dvb_channels.conf", dvb_file);
-#endif
-
 	dvb_file_free(dvb_file);
 	return 0;
 }
@@ -282,6 +299,7 @@ static int setup_frontend(struct arguments *args,
 static void do_timeout(int x)
 {
 	(void)x;
+
 	if (timeout_flag == 0) {
 		timeout_flag = 1;
 		alarm(2);
@@ -367,23 +385,27 @@ static int check_frontend(struct arguments *args,
 			  struct dvb_v5_fe_parms *parms)
 {
 	int rc;
-	fe_status_t status;
+	fe_status_t status = 0;
 	do {
 		rc = dvb_fe_get_stats(parms);
-		if (rc)
+		if (rc) {
 			PERROR("dvb_fe_get_stats failed");
+			usleep(1000000);
+			continue;
+		}
 
+		status = 0;
 		rc = dvb_fe_retrieve_stats(parms, DTV_STATUS, &status);
 		if (!args->silent)
 			print_frontend_stats(stderr, args, parms);
-		if (args->exit_after_tuning && (status & FE_HAS_LOCK))
+		if (status & FE_HAS_LOCK)
 			break;
 		usleep(1000000);
 	} while (!timeout_flag);
 	if (args->silent < 2)
 		print_frontend_stats(stderr, args, parms);
 
-	return 0;
+	return status & FE_HAS_LOCK;
 }
 
 #define BUFLEN (188 * 256)
@@ -436,7 +458,6 @@ static error_t parse_opt(int k, char *optarg, struct argp_state *state)
 		break;
 	case 'o':
 		args->filename = strdup(optarg);
-		args->record = 1;
 		/* fall through */
 	case 'r':
 		args->dvr = 1;
@@ -449,6 +470,23 @@ static error_t parse_opt(int k, char *optarg, struct argp_state *state)
 		break;
 	case 'c':
 		args->confname = strdup(optarg);
+		break;
+	case 'w':
+		if (!strcasecmp(optarg,"on")) {
+			args->lna = 1;
+		} else if (!strcasecmp(optarg,"off")) {
+			args->lna = 0;
+		} else if (!strcasecmp(optarg,"auto")) {
+			args->lna = LNA_AUTO;
+		} else {
+			int val = strtoul(optarg, NULL, 0);
+			if (!val)
+				args->lna = 0;
+			else if (val > 0)
+				args->lna = 1;
+			else
+				args->lna = LNA_AUTO;
+		}
 		break;
 	case 'l':
 		args->lnb_name = strdup(optarg);
@@ -467,9 +505,6 @@ static error_t parse_opt(int k, char *optarg, struct argp_state *state)
 		break;
 	case 'v':
 		args->verbose++;
-		break;
-	case 'F':
-		args->frontend_only = 1;
 		break;
 	case 'A':
 		args->n_apid = strtoul(optarg, NULL, 0);
@@ -523,6 +558,7 @@ int do_traffic_monitor(struct arguments *args,
 
 	if ((fd = open(args->demux_dev, O_RDWR)) < 0) {
 		PERROR("failed opening '%s'", args->demux_dev);
+		close(dvr_fd);
 		return -1;
 	}
 
@@ -539,8 +575,13 @@ int do_traffic_monitor(struct arguments *args,
 
 	while (1) {
 		unsigned char buffer[BSIZE];
+		struct dvb_ts_packet_header *h = (void *)buffer;
 		int pid, ok;
 		ssize_t r;
+
+		if (timeout_flag)
+			break;
+
 		if ((r = read(dvr_fd, buffer, BSIZE)) <= 0) {
 			if (errno == EOVERFLOW) {
 				struct timeval now;
@@ -559,16 +600,24 @@ int do_traffic_monitor(struct arguments *args,
 			fprintf(stderr, "dvbtraffic: only read %zd bytes\n", r);
 			break;
 		}
-		if (buffer[0] != 0x47) {
-			continue;
-			printf("desync (%x)\n", buffer[0]);
-			while (buffer[0] != 0x47)
-				read(fd, buffer, 1);
+
+		if (h->sync_byte != 0x47) {
 			continue;
 		}
+
+		bswap16(h->bitfield);
+
+#if 0
+		/*
+		 * ITU-T Rec. H.222.0 decoders shall discard Transport Stream
+		 * packets with theadaptation_field_control field set to
+		 * a value of '00'.
+		 */
+		if (h->adaptation_field_control == 0)
+			continue;
+#endif
 		ok = 1;
-		pid = ((((unsigned) buffer[1]) << 8) |
-		       ((unsigned) buffer[2])) & 0x1FFF;
+		pid = h->pid;
 
 		if (args->search) {
 			int i, sl = strlen(args->search);
@@ -640,18 +689,22 @@ int main(int argc, char **argv)
 	int vpid = -1, apid = -1, sid = -1;
 	int pmtpid = 0;
 	int pat_fd = -1, pmt_fd = -1;
-	int audio_fd = 0, video_fd = 0;
-	int dvr_fd, file_fd;
-	struct dvb_v5_fe_parms *parms;
+	int audio_fd = -1, video_fd = -1;
+	int dvr_fd = -1, file_fd = -1;
+	int err = -1;
+	int r;
+	struct dvb_v5_fe_parms *parms = NULL;
 	const struct argp argp = {
 		.options = options,
 		.parser = parse_opt,
 		.doc = "DVB zap utility",
-		.args_doc = "<initial file>",
+		.args_doc = "<channel name> [or <frequency> if in monitor mode]",
 	};
 
 	memset(&args, 0, sizeof(args));
 	args.sat_number = -1;
+	args.lna = LNA_AUTO;
+	args.input_format = FILE_DVBV5;
 
 	argp_parse(&argp, argc, argv, 0, &idx, &args);
 
@@ -669,6 +722,12 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
+	if (!args.traffic_monitor && args.search) {
+		fprintf(stderr, "ERROR: search string can be used only on monitor mode\n");
+		argp_help(&argp, stderr, ARGP_HELP_STD_HELP, PROGRAM_NAME);
+		return -1;
+	}
+
 	if (args.lnb_name) {
 		lnb = dvb_sat_search_lnb(args.lnb_name);
 		if (lnb < 0) {
@@ -681,11 +740,19 @@ int main(int argc, char **argv)
 		}
 	}
 
-	asprintf(&args.demux_dev,
+	r = asprintf(&args.demux_dev,
 		 "/dev/dvb/adapter%i/demux%i", args.adapter, args.demux);
+	if (r < 0) {
+		fprintf(stderr, "asprintf error\n");
+		return -1;
+	}
 
-	asprintf(&args.dvr_dev,
+	r = asprintf(&args.dvr_dev,
 		 "/dev/dvb/adapter%i/dvr%i", args.adapter, args.demux);
+	if (r < 0) {
+		fprintf(stderr, "asprintf error\n");
+		return -1;
+	}
 
 	if (args.silent < 2)
 		fprintf(stderr, "using demux '%s'\n", args.demux_dev);
@@ -693,69 +760,81 @@ int main(int argc, char **argv)
 	if (!args.confname) {
 		if (!homedir)
 			ERROR("$HOME not set");
-		asprintf(&args.confname, "%s/.tzap/%i/%s",
+		r = asprintf(&args.confname, "%s/.tzap/%i/%s",
 			 homedir, args.adapter, CHANNEL_FILE);
-		if (access(args.confname, R_OK))
-			asprintf(&args.confname, "%s/.tzap/%s",
+		if (access(args.confname, R_OK)) {
+			free(args.confname);
+			r = asprintf(&args.confname, "%s/.tzap/%s",
 				homedir, CHANNEL_FILE);
+		}
 	}
 	fprintf(stderr, "reading channels from file '%s'\n", args.confname);
 
 	parms = dvb_fe_open(args.adapter, args.frontend, args.verbose, args.force_dvbv3);
 	if (!parms)
-		return -1;
+		goto err;
 	if (lnb)
 		parms->lnb = dvb_sat_get_lnb(lnb);
 	if (args.sat_number > 0)
 		parms->sat_number = args.sat_number % 3;
 	parms->diseqc_wait = args.diseqc_wait;
 	parms->freq_bpf = args.freq_bpf;
+	parms->lna = args.lna;
 
 	if (parse(&args, parms, channel, &vpid, &apid, &sid))
-		return -1;
+		goto err;
 
 	if (setup_frontend(&args, parms) < 0)
-		return -1;
+		goto err;
 
-	if (args.frontend_only) {
+	if (args.exit_after_tuning) {
+		err = 0;
 		check_frontend(&args, parms);
-		dvb_fe_close(parms);
-		return 0;
+		goto err;
 	}
 
-	if (args.traffic_monitor)
-		return do_traffic_monitor(&args, parms);
+	if (args.traffic_monitor) {
+		signal(SIGTERM, do_timeout);
+		signal(SIGINT, do_timeout);
+		if (args.timeout > 0) {
+			signal(SIGINT, do_timeout);
+			alarm(args.timeout);
+		}
+
+		err = do_traffic_monitor(&args, parms);
+		goto err;
+	}
 
 	if (args.rec_psi) {
 		if (sid < 0) {
 			fprintf(stderr, "Service id 0x%04x was not specified at the file\n",
 				sid);
-			return -1;
+			goto err;
 		}
 		pmtpid = get_pmt_pid(args.demux_dev, sid);
 		if (pmtpid <= 0) {
 			fprintf(stderr, "couldn't find pmt-pid for sid %04x\n",
 				sid);
-			return -1;
+			goto err;
 		}
 
 		if ((pat_fd = open(args.demux_dev, O_RDWR)) < 0) {
 			perror("opening pat demux failed");
-			return -1;
+			goto err;
 		}
 		if (dvb_set_pesfilter(pat_fd, 0, DMX_PES_OTHER,
 				args.dvr ? DMX_OUT_TS_TAP : DMX_OUT_DECODER,
 				args.dvr ? 64 * 1024 : 0) < 0)
-			return -1;
+			goto err;
 
 		if ((pmt_fd = open(args.demux_dev, O_RDWR)) < 0) {
 			perror("opening pmt demux failed");
-			return -1;
+			goto err;
 		}
 		if (dvb_set_pesfilter(pmt_fd, pmtpid, DMX_PES_OTHER,
 				args.dvr ? DMX_OUT_TS_TAP : DMX_OUT_DECODER,
 				args.dvr ? 64 * 1024 : 0) < 0)
-			return -1;
+			goto err;
 	}
 
 	if (args.all_pids++) {
@@ -771,40 +850,59 @@ int main(int argc, char **argv)
 		}
 		if ((video_fd = open(args.demux_dev, O_RDWR)) < 0) {
 			PERROR("failed opening '%s'", args.demux_dev);
-			return -1;
+			goto err;
 		}
+
 		if (args.silent < 2)
 			fprintf(stderr, "  dvb_set_pesfilter %d\n", vpid);
-		if (dvb_set_pesfilter(video_fd, vpid, DMX_PES_VIDEO,
+		if (vpid == 0x2000) {
+			if (ioctl(video_fd, DMX_SET_BUFFER_SIZE, 1024 * 1024) == -1)
+				perror("DMX_SET_BUFFER_SIZE failed");
+			if (dvb_set_pesfilter(video_fd, vpid, DMX_PES_OTHER,
+					      DMX_OUT_TS_TAP, 0) < 0)
+				goto err;
+		} else {
+			if (dvb_set_pesfilter(video_fd, vpid, DMX_PES_VIDEO,
 				args.dvr ? DMX_OUT_TS_TAP : DMX_OUT_DECODER,
 				args.dvr ? 64 * 1024 : 0) < 0)
-			return -1;
+				goto err;
+		}
 	}
 
-	if (apid >= 0) {
+	if (apid > 0) {
 		if (args.silent < 2)
 			fprintf(stderr, "audio pid %d\n", apid);
 		if ((audio_fd = open(args.demux_dev, O_RDWR)) < 0) {
 			PERROR("failed opening '%s'", args.demux_dev);
-			return -1;
+			goto err;
 		}
 		if (args.silent < 2)
 			fprintf(stderr, "  dvb_set_pesfilter %d\n", apid);
 		if (dvb_set_pesfilter(audio_fd, apid, DMX_PES_AUDIO,
 				args.dvr ? DMX_OUT_TS_TAP : DMX_OUT_DECODER,
 				args.dvr ? 64 * 1024 : 0) < 0)
-			return -1;
+			goto err;
 	}
 
 	signal(SIGALRM, do_timeout);
-	if (args.timeout > 0)
+	signal(SIGTERM, do_timeout);
+	if (args.timeout > 0) {
+		signal(SIGINT, do_timeout);
 		alarm(args.timeout);
+	}
 
-	if (args.record) {
-		if (args.filename != NULL) {
+	if (!check_frontend(&args, parms)) {
+		err = 1;
+		fprintf(stderr, "frontend doesn't lock\n");
+		goto err;
+	}
+
+	if (args.dvr) {
+		if (args.filename) {
+			file_fd = STDOUT_FILENO;
+
 			if (strcmp(args.filename, "-") != 0) {
-				file_fd =
-				    open(args.filename,
+				file_fd = open(args.filename,
 #ifdef O_LARGEFILE
 					 O_LARGEFILE |
 #endif
@@ -815,34 +913,52 @@ int main(int argc, char **argv)
 					       args.filename);
 					return -1;
 				}
-			} else {
-				file_fd = 1;
 			}
+		}
+
+		if (args.silent < 2)
+			print_frontend_stats(stderr, &args, parms);
+
+		if (file_fd >= 0) {
+			if ((dvr_fd = open(args.dvr_dev, O_RDONLY)) < 0) {
+				PERROR("failed opening '%s'", args.dvr_dev);
+				goto err;
+			}
+			if (!timeout_flag)
+				fprintf(stderr, "Record to file '%s' started\n", args.filename);
+			copy_to_file(dvr_fd, file_fd, args.timeout, args.silent);
 		} else {
-			PERROR("Record mode but no filename!");
-			return -1;
-		}
-
-		if ((dvr_fd = open(args.dvr_dev, O_RDONLY)) < 0) {
-			PERROR("failed opening '%s'", args.dvr_dev);
-			return -1;
+			if (!timeout_flag)
+				fprintf(stderr, "DVR interface '%s' can now be opened\n", args.dvr_dev);
+			while (timeout_flag == 0)
+				sleep(1);
 		}
 		if (args.silent < 2)
 			print_frontend_stats(stderr, &args, parms);
-
-		copy_to_file(dvr_fd, file_fd, args.timeout, args.silent);
-
-		if (args.silent < 2)
-			print_frontend_stats(stderr, &args, parms);
-	} else {
-		check_frontend(&args, parms);
 	}
+	err = 0;
 
-	close(pat_fd);
-	close(pmt_fd);
-	close(audio_fd);
-	close(video_fd);
-	dvb_fe_close(parms);
+err:
+	if (file_fd > 0)
+		close(file_fd);
+	if (dvr_fd > 0)
+		close(dvr_fd);
+	if (pat_fd > 0)
+		close(pat_fd);
+	if (pmt_fd > 0)
+		close(pmt_fd);
+	if (audio_fd > 0)
+		close(audio_fd);
+	if (video_fd > 0)
+		close(video_fd);
+	if (parms)
+		dvb_fe_close(parms);
+	if (args.confname)
+		free(args.confname);
+	if (args.demux_dev)
+		free(args.demux_dev);
+	if (args.dvr_dev)
+		free(args.dvr_dev);
 
-	return 0;
+	return err;
 }

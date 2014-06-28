@@ -115,7 +115,8 @@ am_v4l2_ctl_OBJECTS = v4l2-ctl.$(OBJEXT) v4l2-ctl-common.$(OBJEXT) \
 	v4l2-ctl-vidout.$(OBJEXT) v4l2-ctl-overlay.$(OBJEXT) \
 	v4l2-ctl-vbi.$(OBJEXT) v4l2-ctl-selection.$(OBJEXT) \
 	v4l2-ctl-misc.$(OBJEXT) v4l2-ctl-streaming.$(OBJEXT) \
-	v4l2-ctl-test-patterns.$(OBJEXT)
+	v4l2-ctl-test-patterns.$(OBJEXT) v4l2-ctl-sdr.$(OBJEXT) \
+	v4l2-ctl-edid.$(OBJEXT)
 v4l2_ctl_OBJECTS = $(am_v4l2_ctl_OBJECTS)
 v4l2_ctl_DEPENDENCIES = ../../lib/libv4l2/libv4l2.la \
 	../../lib/libv4lconvert/libv4lconvert.la
@@ -200,6 +201,8 @@ ETAGS = etags
 CTAGS = ctags
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 ACLOCAL = @ACLOCAL@
+ALSA_CFLAGS = @ALSA_CFLAGS@
+ALSA_LIBS = @ALSA_LIBS@
 AMTAR = @AMTAR@
 AM_DEFAULT_VERBOSITY = @AM_DEFAULT_VERBOSITY@
 AR = @AR@
@@ -253,6 +256,8 @@ LIBICONV = @LIBICONV@
 LIBOBJS = @LIBOBJS@
 LIBS = @LIBS@
 LIBTOOL = @LIBTOOL@
+LIBUDEV_CFLAGS = @LIBUDEV_CFLAGS@
+LIBUDEV_LIBS = @LIBUDEV_LIBS@
 LIBV4L1_PRIV_DIR = @LIBV4L1_PRIV_DIR@
 LIBV4L2_PLUGIN_DIR = @LIBV4L2_PLUGIN_DIR@
 LIBV4L2_PRIV_DIR = @LIBV4L2_PRIV_DIR@
@@ -283,6 +288,8 @@ PATH_SEPARATOR = @PATH_SEPARATOR@
 PKG_CONFIG = @PKG_CONFIG@
 PKG_CONFIG_LIBDIR = @PKG_CONFIG_LIBDIR@
 PKG_CONFIG_PATH = @PKG_CONFIG_PATH@
+QTGL_CFLAGS = @QTGL_CFLAGS@
+QTGL_LIBS = @QTGL_LIBS@
 QT_CFLAGS = @QT_CFLAGS@
 QT_LIBS = @QT_LIBS@
 RANLIB = @RANLIB@
@@ -333,6 +340,8 @@ keytablesystemdir = @keytablesystemdir@
 keytableuserdir = @keytableuserdir@
 libdir = @libdir@
 libexecdir = @libexecdir@
+libudev_CFLAGS = @libudev_CFLAGS@
+libudev_LIBS = @libudev_LIBS@
 libv4l1privdir = @libv4l1privdir@
 libv4l1subdir = @libv4l1subdir@
 libv4l2plugindir = @libv4l2plugindir@
@@ -364,9 +373,11 @@ ivtv_ctl_LDFLAGS = -lm
 v4l2_ctl_SOURCES = v4l2-ctl.cpp v4l2-ctl.h v4l2-ctl-common.cpp v4l2-ctl-tuner.cpp \
 	v4l2-ctl-io.cpp v4l2-ctl-stds.cpp v4l2-ctl-vidcap.cpp v4l2-ctl-vidout.cpp \
 	v4l2-ctl-overlay.cpp v4l2-ctl-vbi.cpp v4l2-ctl-selection.cpp v4l2-ctl-misc.cpp \
-	v4l2-ctl-streaming.cpp v4l2-ctl-test-patterns.cpp
+	v4l2-ctl-streaming.cpp v4l2-ctl-test-patterns.cpp v4l2-ctl-sdr.cpp \
+	v4l2-ctl-edid.cpp
 
 v4l2_ctl_LDADD = ../../lib/libv4l2/libv4l2.la ../../lib/libv4lconvert/libv4lconvert.la
+EXTRA_DIST = Android.mk
 all: all-am
 
 .SUFFIXES:
@@ -472,9 +483,11 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cx18-ctl.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ivtv-ctl.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-ctl-common.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-ctl-edid.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-ctl-io.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-ctl-misc.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-ctl-overlay.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-ctl-sdr.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-ctl-selection.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-ctl-stds.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-ctl-streaming.Po@am__quote@

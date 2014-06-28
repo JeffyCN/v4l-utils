@@ -129,7 +129,7 @@ static int capture(char *dev_name, int x_res, int y_res, int n_frames,
 			tv.tv_usec = 0;
 
 			r = select(fd + 1, &fds, NULL, NULL, &tv);
-		} while ((r == -1 && (errno = EINTR)));
+		} while ((r == -1 && (errno == EINTR)));
 		if (r == -1) {
 			perror("select");
 			return errno;
@@ -169,7 +169,7 @@ static int capture(char *dev_name, int x_res, int y_res, int n_frames,
  */
 
 const char *argp_program_version = "V4L2 grabber version " V4L_UTILS_VERSION;
-const char *argp_program_bug_address = "Mauro Carvalho Chehab <mchehab@redhat.com>";
+const char *argp_program_bug_address = "Mauro Carvalho Chehab <m.chehab@samsung.com>";
 
 static const char doc[] = "\nCapture images using libv4l, storing them as ppm files\n";
 

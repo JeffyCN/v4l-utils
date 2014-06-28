@@ -59,6 +59,18 @@ hardware can _really_ do it should use ENUM_FMT, not randomly try a bunch of
 S_FMT's). For more details on the v4l2_ functions see libv4l2.h .
 
 
+libdvbv5
+--------
+
+This library provides the DVBv5 API to userspace programs. It can be used to
+open DVB adapters, tune transponders and read PES and other data streams.
+There are as well several parsers for DVB, ATSC, ISBT formats.
+
+The API is currently EXPERIMENTAL and likely to change.
+Run configure with --enable-libdvbv5 in order to build a shared lib and
+install the header files.
+
+
 wrappers
 --------
 
@@ -169,4 +181,4 @@ A: Just replace the open call for your device by v4l2_open and all
 Q: I still need an example how to convert my application!
 A: Check out the patches for the VLC media player:
    https://trac.videolan.org/vlc/attachment/ticket/1804/vlc-0.8.6-libv4l1.patch
-   https://trac.videolan.org/vlc/attachment/ticket/1804/vlc-0.8.6-libv4l2.patch
+   https://trac.videolan.org/vlc/attachment/ticket/1804/vlc-0.9.3-libv4l2.patch

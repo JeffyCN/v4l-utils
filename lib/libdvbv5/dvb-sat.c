@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 - Mauro Carvalho Chehab <mchehab@redhat.com>
+ * Copyright (c) 2011-2012 - Mauro Carvalho Chehab
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -21,9 +21,10 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <strings.h> /* strcasecmp */
 
-#include "dvb-fe.h"
-#include "dvb-v5-std.h"
+#include <libdvbv5/dvb-fe.h>
+#include <libdvbv5/dvb-v5-std.h>
 
 static const struct dvb_sat_lnb lnb[] = {
 	{
@@ -302,7 +303,7 @@ static int dvbsat_diseqc_set_input(struct dvb_v5_fe_parms *parms, uint16_t t)
 	rc = dvb_fe_sec_voltage(parms, 1, vol_high);
 	if (rc)
 		return rc;
-	
+
 	if (parms->sat_number > 0) {
 		rc = dvb_fe_sec_tone(parms, SEC_TONE_OFF);
 		if (rc)

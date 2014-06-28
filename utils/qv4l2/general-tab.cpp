@@ -30,6 +30,16 @@
 
 #include <stdio.h>
 #include <errno.h>
+#include <QRegExp>
+
+bool GeneralTab::m_fullAudioName = false;
+
+enum audioDeviceAdd {
+	AUDIO_ADD_NO,
+	AUDIO_ADD_READ,
+	AUDIO_ADD_WRITE,
+	AUDIO_ADD_READWRITE
+};
 
 GeneralTab::GeneralTab(const QString &device, v4l2 &fd, int n, QWidget *parent) :
 	QGridLayout(parent),
@@ -38,21 +48,47 @@ GeneralTab::GeneralTab(const QString &device, v4l2 &fd, int n, QWidget *parent) 
 	m_col(0),
 	m_cols(n),
 	m_isRadio(false),
+	m_isSDR(false),
 	m_isVbi(false),
+	m_freqFac(16),
+	m_freqRfFac(16),
+	m_isPlanar(false),
+	m_videoInput(NULL),
+	m_videoOutput(NULL),
 	m_audioInput(NULL),
+	m_audioOutput(NULL),
 	m_tvStandard(NULL),
 	m_qryStandard(NULL),
 	m_videoTimings(NULL),
+	m_pixelAspectRatio(NULL),
+	m_crop(NULL),
 	m_qryTimings(NULL),
 	m_freq(NULL),
+	m_freqTable(NULL),
+	m_freqChannel(NULL),
+	m_audioMode(NULL),
+	m_subchannels(NULL),
+	m_freqRf(NULL),
+	m_stereoMode(NULL),
+	m_rdsMode(NULL),
+	m_detectSubchans(NULL),
 	m_vidCapFormats(NULL),
+	m_vidCapFields(NULL),
 	m_frameSize(NULL),
+	m_frameWidth(NULL),
+	m_frameHeight(NULL),
+	m_frameInterval(NULL),
 	m_vidOutFormats(NULL),
-	m_vbiMethods(NULL)
+	m_capMethods(NULL),
+	m_vbiMethods(NULL),
+	m_audioInDevice(NULL),
+	m_audioOutDevice(NULL)
 {
+	m_device.append(device);
 	setSpacing(3);
 
 	setSizeConstraint(QLayout::SetMinimumSize);
+
 
 	if (querycap(m_querycap)) {
 		addLabel("Device:");
@@ -69,18 +105,94 @@ GeneralTab::GeneralTab(const QString &device, v4l2 &fd, int n, QWidget *parent) 
 	}
 
 	g_tuner(m_tuner);
+	g_tuner(m_tuner_rf, 1);
 	g_modulator(m_modulator);
 
 	v4l2_input vin;
 	bool needsStd = false;
 	bool needsTimings = false;
 
-	if (m_tuner.capability && m_tuner.capability & V4L2_TUNER_CAP_LOW)
+	if (m_tuner.capability &&
+	    (m_tuner.capability & (V4L2_TUNER_CAP_LOW | V4L2_TUNER_CAP_1HZ)))
 		m_isRadio = true;
-	if (m_modulator.capability && m_modulator.capability & V4L2_TUNER_CAP_LOW)
+	if (m_modulator.capability &&
+	    (m_modulator.capability & (V4L2_TUNER_CAP_LOW | V4L2_TUNER_CAP_1HZ)))
 		m_isRadio = true;
-	if (m_querycap.capabilities & V4L2_CAP_DEVICE_CAPS)
+	if (m_querycap.capabilities & V4L2_CAP_DEVICE_CAPS) {
 		m_isVbi = caps() & (V4L2_CAP_VBI_CAPTURE | V4L2_CAP_SLICED_VBI_CAPTURE);
+		m_isSDR = caps() & V4L2_CAP_SDR_CAPTURE;
+		if (m_isSDR)
+			m_isRadio = true;
+	}
+	if (m_querycap.capabilities & V4L2_CAP_VIDEO_CAPTURE_MPLANE)
+		m_isPlanar = true;
+	m_buftype = (isPlanar() ? V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE :
+		  V4L2_BUF_TYPE_VIDEO_CAPTURE);
+
+	if (hasAlsaAudio()) {
+		m_audioInDevice = new QComboBox(parent);
+		m_audioOutDevice = new QComboBox(parent);
+		m_audioInDevice->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+		m_audioOutDevice->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+
+		if (createAudioDeviceList()) {
+			addLabel("Audio Input Device");
+			connect(m_audioInDevice, SIGNAL(activated(int)), SLOT(changeAudioDevice()));
+			addWidget(m_audioInDevice);
+
+			addLabel("Audio Output Device");
+			connect(m_audioOutDevice, SIGNAL(activated(int)), SLOT(changeAudioDevice()));
+			addWidget(m_audioOutDevice);
+
+			if (isRadio()) {
+				setAudioDeviceBufferSize(75);
+			} else {
+				v4l2_fract fract;
+				if (!v4l2::get_interval(m_buftype, fract)) {
+					// Default values are for 30 FPS
+					fract.numerator = 33;
+					fract.denominator = 1000;
+				}
+				// Standard capacity is two frames
+				setAudioDeviceBufferSize((fract.numerator * 2000) / fract.denominator);
+			}
+		} else {
+			delete m_audioInDevice;
+			delete m_audioOutDevice;
+			m_audioInDevice = NULL;
+			m_audioOutDevice = NULL;
+		}
+	}
+
+	if (!isRadio() && !isVbi()) {
+		m_pixelAspectRatio = new QComboBox(parent);
+		m_pixelAspectRatio->addItem("Autodetect");
+		m_pixelAspectRatio->addItem("Square");
+		m_pixelAspectRatio->addItem("NTSC/PAL-M/PAL-60");
+		m_pixelAspectRatio->addItem("NTSC/PAL-M/PAL-60, Anamorphic");
+		m_pixelAspectRatio->addItem("PAL/SECAM");
+		m_pixelAspectRatio->addItem("PAL/SECAM, Anamorphic");
+
+		// Update hints by calling a get
+		getPixelAspectRatio();
+
+		addLabel("Pixel Aspect Ratio");
+		addWidget(m_pixelAspectRatio);
+		connect(m_pixelAspectRatio, SIGNAL(activated(int)), SLOT(changePixelAspectRatio()));
+
+		m_crop = new QComboBox(parent);
+		m_crop->addItem("None");
+		m_crop->addItem("Top and Bottom Line");
+		m_crop->addItem("Widescreen 14:9 (Letterbox)");
+		m_crop->addItem("Widescreen 16:9 (Letterbox)");
+		m_crop->addItem("Cinema 1.85:1 (Letterbox)");
+		m_crop->addItem("Cinema 2.39:1 (Letterbox)");
+		m_crop->addItem("Traditional 4:3 (Pillarbox)");
+
+		addLabel("Cropping");
+		addWidget(m_crop);
+		connect(m_crop, SIGNAL(activated(int)), SIGNAL(cropChanged()));
+	}
 
 	if (!isRadio() && enum_input(vin, true)) {
 		addLabel("Input");
@@ -91,6 +203,12 @@ GeneralTab::GeneralTab(const QString &device, v4l2 &fd, int n, QWidget *parent) 
 				needsStd = true;
 			if (vin.capabilities & V4L2_IN_CAP_DV_TIMINGS)
 				needsTimings = true;
+
+			struct v4l2_event_subscription sub = {
+				V4L2_EVENT_SOURCE_CHANGE, vin.index
+			};
+
+			subscribe_event(sub);
 		} while (enum_input(vin));
 		addWidget(m_videoInput);
 		connect(m_videoInput, SIGNAL(activated(int)), SLOT(inputChanged(int)));
@@ -112,6 +230,7 @@ GeneralTab::GeneralTab(const QString &device, v4l2 &fd, int n, QWidget *parent) 
 	if (!isRadio() && enum_audio(vaudio, true)) {
 		addLabel("Input Audio");
 		m_audioInput = new QComboBox(parent);
+		m_audioInput->setMinimumContentsLength(10);
 		do {
 			m_audioInput->addItem((char *)vaudio.name);
 		} while (enum_audio(vaudio));
@@ -124,6 +243,7 @@ GeneralTab::GeneralTab(const QString &device, v4l2 &fd, int n, QWidget *parent) 
 	if (!isRadio() && enum_audout(vaudout, true)) {
 		addLabel("Output Audio");
 		m_audioOutput = new QComboBox(parent);
+		m_audioOutput->setMinimumContentsLength(10);
 		do {
 			m_audioOutput->addItem((char *)vaudout.name);
 		} while (enum_audout(vaudout));
@@ -137,6 +257,7 @@ GeneralTab::GeneralTab(const QString &device, v4l2 &fd, int n, QWidget *parent) 
 
 		addLabel("TV Standard");
 		m_tvStandard = new QComboBox(parent);
+		m_tvStandard->setMinimumContentsLength(10);
 		addWidget(m_tvStandard);
 		connect(m_tvStandard, SIGNAL(activated(int)), SLOT(standardChanged(int)));
 		refreshStandards();
@@ -151,6 +272,7 @@ GeneralTab::GeneralTab(const QString &device, v4l2 &fd, int n, QWidget *parent) 
 	if (needsTimings) {
 		addLabel("Video Timings");
 		m_videoTimings = new QComboBox(parent);
+		m_videoTimings->setMinimumContentsLength(15);
 		addWidget(m_videoTimings);
 		connect(m_videoTimings, SIGNAL(activated(int)), SLOT(timingsChanged(int)));
 		refreshTimings();
@@ -161,41 +283,48 @@ GeneralTab::GeneralTab(const QString &device, v4l2 &fd, int n, QWidget *parent) 
 	}
 
 	if (m_tuner.capability) {
-		QDoubleValidator *val;
-		double factor = (m_tuner.capability & V4L2_TUNER_CAP_LOW) ? 16 : 16000;
+		const char *unit = (m_tuner.capability & V4L2_TUNER_CAP_LOW) ? " kHz" :
+			(m_tuner.capability & V4L2_TUNER_CAP_1HZ ? " Hz" : " MHz");
 
-		val = new QDoubleValidator(m_tuner.rangelow / factor, m_tuner.rangehigh / factor, 3, parent);
-		m_freq = new QLineEdit(parent);
-		m_freq->setValidator(val);
-		m_freq->setWhatsThis(QString("Frequency\nLow: %1\nHigh: %2")
-				.arg(m_tuner.rangelow / factor).arg(m_tuner.rangehigh / factor));
-		connect(m_freq, SIGNAL(lostFocus()), SLOT(freqChanged()));
-		connect(m_freq, SIGNAL(returnPressed()), SLOT(freqChanged()));
+		m_freqFac = (m_tuner.capability & V4L2_TUNER_CAP_1HZ) ? 1 : 16;
+		m_freq = new QDoubleSpinBox(parent);
+		m_freq->setMinimum(m_tuner.rangelow / m_freqFac);
+		m_freq->setMaximum(m_tuner.rangehigh / m_freqFac);
+		m_freq->setSingleStep(1.0 / m_freqFac);
+		m_freq->setSuffix(unit);
+		m_freq->setDecimals((m_tuner.capability & V4L2_TUNER_CAP_1HZ) ? 0 : 4);
+		m_freq->setWhatsThis(QString("Frequency\nLow: %1 %3\nHigh: %2 %3")
+				     .arg((double)m_tuner.rangelow / m_freqFac, 0, 'f', 2)
+				     .arg((double)m_tuner.rangehigh / m_freqFac, 0, 'f', 2)
+				     .arg(unit));
+		m_freq->setStatusTip(m_freq->whatsThis());
+		connect(m_freq, SIGNAL(valueChanged(double)), SLOT(freqChanged(double)));
 		updateFreq();
-		if (m_tuner.capability & V4L2_TUNER_CAP_LOW)
-			addLabel("Frequency (kHz)");
-		else
-			addLabel("Frequency (MHz)");
+		addLabel("Frequency");
 		addWidget(m_freq);
+	}
 
-		if (!m_tuner.capability & V4L2_TUNER_CAP_LOW) {
-			addLabel("Frequency Table");
-			m_freqTable = new QComboBox(parent);
-			for (int i = 0; v4l2_channel_lists[i].name; i++) {
-				m_freqTable->addItem(v4l2_channel_lists[i].name);
-			}
-			addWidget(m_freqTable);
-			connect(m_freqTable, SIGNAL(activated(int)), SLOT(freqTableChanged(int)));
-
-			addLabel("Channels");
-			m_freqChannel = new QComboBox(parent);
-			m_freqChannel->setSizeAdjustPolicy(QComboBox::AdjustToContents);
-			addWidget(m_freqChannel);
-			connect(m_freqChannel, SIGNAL(activated(int)), SLOT(freqChannelChanged(int)));
-			updateFreqChannel();
+	if (m_tuner.capability && !isRadio()) {
+		addLabel("Frequency Table");
+		m_freqTable = new QComboBox(parent);
+		for (int i = 0; v4l2_channel_lists[i].name; i++) {
+			m_freqTable->addItem(v4l2_channel_lists[i].name);
 		}
+		addWidget(m_freqTable);
+		connect(m_freqTable, SIGNAL(activated(int)), SLOT(freqTableChanged(int)));
+
+		addLabel("Channels");
+		m_freqChannel = new QComboBox(parent);
+		m_freqChannel->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+		addWidget(m_freqChannel);
+		connect(m_freqChannel, SIGNAL(activated(int)), SLOT(freqChannelChanged(int)));
+		updateFreqChannel();
+	}
+
+	if (m_tuner.capability && !isSDR()) {
 		addLabel("Audio Mode");
 		m_audioMode = new QComboBox(parent);
+		m_audioMode->setMinimumContentsLength(12);
 		m_audioMode->setSizeAdjustPolicy(QComboBox::AdjustToContents);
 		m_audioMode->addItem("Mono");
 		int audIdx = 0;
@@ -230,23 +359,50 @@ GeneralTab::GeneralTab(const QString &device, v4l2 &fd, int n, QWidget *parent) 
 		detectSubchansClicked();
 	}
 
-	if (m_modulator.capability) {
-		QDoubleValidator *val;
-		double factor = (m_modulator.capability & V4L2_TUNER_CAP_LOW) ? 16 : 16000;
+	if (m_tuner_rf.capability) {
+		const char *unit = (m_tuner_rf.capability & V4L2_TUNER_CAP_LOW) ? " kHz" :
+			(m_tuner_rf.capability & V4L2_TUNER_CAP_1HZ ? " Hz" : " MHz");
 
-		val = new QDoubleValidator(m_modulator.rangelow / factor, m_modulator.rangehigh / factor, 3, parent);
-		m_freq = new QLineEdit(parent);
-		m_freq->setValidator(val);
-		m_freq->setWhatsThis(QString("Frequency\nLow: %1\nHigh: %2")
-				.arg(m_modulator.rangelow / factor).arg(m_modulator.rangehigh / factor));
-		connect(m_freq, SIGNAL(lostFocus()), SLOT(freqChanged()));
-		connect(m_freq, SIGNAL(returnPressed()), SLOT(freqChanged()));
+		m_freqRfFac = (m_tuner_rf.capability & V4L2_TUNER_CAP_1HZ) ? 1 : 16;
+		m_freqRf = new QDoubleSpinBox(parent);
+		m_freqRf->setMinimum(m_tuner_rf.rangelow / m_freqRfFac);
+		m_freqRf->setMaximum(m_tuner_rf.rangehigh / m_freqRfFac);
+		m_freqRf->setSingleStep(1.0 / m_freqRfFac);
+		m_freqRf->setSuffix(unit);
+		m_freqRf->setDecimals((m_tuner_rf.capability & V4L2_TUNER_CAP_1HZ) ? 0 : 4);
+		m_freqRf->setWhatsThis(QString("RF Frequency\nLow: %1 %3\nHigh: %2 %3")
+				     .arg((double)m_tuner_rf.rangelow / m_freqRfFac, 0, 'f', 2)
+				     .arg((double)m_tuner_rf.rangehigh / m_freqRfFac, 0, 'f', 2)
+				     .arg(unit));
+		m_freqRf->setStatusTip(m_freqRf->whatsThis());
+		connect(m_freqRf, SIGNAL(valueChanged(double)), SLOT(freqRfChanged(double)));
+		updateFreqRf();
+		addLabel("RF Frequency");
+		addWidget(m_freqRf);
+	}
+
+	if (m_modulator.capability) {
+		const char *unit = (m_modulator.capability & V4L2_TUNER_CAP_LOW) ? " kHz" :
+			(m_modulator.capability & V4L2_TUNER_CAP_1HZ ? " Hz" : " MHz");
+
+		m_freqFac = (m_modulator.capability & V4L2_TUNER_CAP_1HZ) ? 1 : 16;
+		m_freq = new QDoubleSpinBox(parent);
+		m_freq->setMinimum(m_modulator.rangelow / m_freqFac);
+		m_freq->setMaximum(m_modulator.rangehigh / m_freqFac);
+		m_freq->setSingleStep(1.0 / m_freqFac);
+		m_freq->setSuffix(unit);
+		m_freq->setDecimals((m_modulator.capability & V4L2_TUNER_CAP_1HZ) ? 0 : 4);
+		m_freq->setWhatsThis(QString("Frequency\nLow: %1 %3\nHigh: %2 %3")
+				     .arg((double)m_modulator.rangelow / m_freqFac, 0, 'f', 2)
+				     .arg((double)m_modulator.rangehigh / m_freqFac, 0, 'f', 2)
+				     .arg(unit));
+		m_freq->setStatusTip(m_freq->whatsThis());
+		connect(m_freq, SIGNAL(valueChanged(double)), SLOT(freqChanged(double)));
 		updateFreq();
-		if (m_modulator.capability & V4L2_TUNER_CAP_LOW)
-			addLabel("Frequency (kHz)");
-		else
-			addLabel("Frequency (MHz)");
+		addLabel("Frequency");
 		addWidget(m_freq);
+	}
+	if (m_modulator.capability && !isSDR()) {
 		if (m_modulator.capability & V4L2_TUNER_CAP_STEREO) {
 			addLabel("Stereo");
 			m_stereoMode = new QCheckBox(parent);
@@ -284,7 +440,8 @@ GeneralTab::GeneralTab(const QString &device, v4l2 &fd, int n, QWidget *parent) 
 	v4l2_fmtdesc fmt;
 	addLabel("Capture Image Formats");
 	m_vidCapFormats = new QComboBox(parent);
-	if (enum_fmt_cap(fmt, true)) {
+	m_vidCapFormats->setMinimumContentsLength(20);
+	if (enum_fmt_cap(fmt, m_buftype, true)) {
 		do {
 			QString s(pixfmt2s(fmt.pixelformat) + " (");
 
@@ -292,7 +449,7 @@ GeneralTab::GeneralTab(const QString &device, v4l2 &fd, int n, QWidget *parent) 
 				m_vidCapFormats->addItem(s + "Emulated)");
 			else
 				m_vidCapFormats->addItem(s + (const char *)fmt.description + ")");
-		} while (enum_fmt_cap(fmt));
+		} while (enum_fmt_cap(fmt, m_buftype));
 	}
 	addWidget(m_vidCapFormats);
 	connect(m_vidCapFormats, SIGNAL(activated(int)), SLOT(vidCapFormatChanged(int)));
@@ -308,15 +465,23 @@ GeneralTab::GeneralTab(const QString &device, v4l2 &fd, int n, QWidget *parent) 
 
 	addLabel("Frame Size");
 	m_frameSize = new QComboBox(parent);
+	m_frameSize->setMinimumContentsLength(10);
 	m_frameSize->setSizeAdjustPolicy(QComboBox::AdjustToContents);
 	addWidget(m_frameSize);
 	connect(m_frameSize, SIGNAL(activated(int)), SLOT(frameSizeChanged(int)));
 
 	addLabel("Frame Interval");
 	m_frameInterval = new QComboBox(parent);
+	m_frameInterval->setMinimumContentsLength(6);
 	m_frameInterval->setSizeAdjustPolicy(QComboBox::AdjustToContents);
 	addWidget(m_frameInterval);
 	connect(m_frameInterval, SIGNAL(activated(int)), SLOT(frameIntervalChanged(int)));
+
+	addLabel("Field");
+	m_vidCapFields = new QComboBox(parent);
+	m_vidCapFields->setMinimumContentsLength(21);
+	addWidget(m_vidCapFields);
+	connect(m_vidCapFields, SIGNAL(activated(int)), SLOT(vidCapFieldChanged(int)));
 
 	updateVideoInput();
 	updateVidCapFormat();
@@ -338,7 +503,9 @@ capture_method:
 	addLabel("Capture Method");
 	m_capMethods = new QComboBox(parent);
 	m_buftype = isSlicedVbi() ? V4L2_BUF_TYPE_SLICED_VBI_CAPTURE :
-		(isVbi() ? V4L2_BUF_TYPE_VBI_CAPTURE : V4L2_BUF_TYPE_VIDEO_CAPTURE);
+		(isVbi() ? V4L2_BUF_TYPE_VBI_CAPTURE : 
+		 (isPlanar() ? V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE :
+		  V4L2_BUF_TYPE_VIDEO_CAPTURE));
 	if (caps() & V4L2_CAP_STREAMING) {
 		v4l2_requestbuffers reqbuf;
 
@@ -370,6 +537,208 @@ done:
 	setRowStretch(rowCount() - 1, 1);
 }
 
+void GeneralTab::setHaveBuffers(bool haveBuffers)
+{
+	if (m_videoInput)
+		m_videoInput->setDisabled(haveBuffers);
+	if (m_videoOutput)
+		m_videoOutput->setDisabled(haveBuffers);
+	if (m_tvStandard)
+		m_tvStandard->setDisabled(haveBuffers);
+	if (m_videoTimings)
+		m_videoTimings->setDisabled(haveBuffers);
+	if (m_vidCapFormats)
+		m_vidCapFormats->setDisabled(haveBuffers);
+	if (m_vidCapFields)
+		m_vidCapFields->setDisabled(haveBuffers);
+	if (m_frameSize)
+		m_frameSize->setDisabled(haveBuffers);
+	if (m_frameWidth)
+		m_frameWidth->setDisabled(haveBuffers);
+	if (m_frameHeight)
+		m_frameHeight->setDisabled(haveBuffers);
+	if (m_vidOutFormats)
+		m_vidOutFormats->setDisabled(haveBuffers);
+	if (m_capMethods)
+		m_capMethods->setDisabled(haveBuffers);
+	if (m_vbiMethods)
+		m_vbiMethods->setDisabled(haveBuffers);
+}
+
+void GeneralTab::showAllAudioDevices(bool use)
+{
+	QString oldIn(m_audioInDevice->currentText());
+	QString oldOut(m_audioOutDevice->currentText());
+
+	m_fullAudioName = use;
+	if (oldIn == NULL || oldOut == NULL || !createAudioDeviceList())
+		return;
+
+	// Select a similar device as before the listings method change
+	// check by comparing old selection with any matching in the new list
+	bool setIn = false, setOut = false;
+	int listSize = std::max(m_audioInDevice->count(), m_audioOutDevice->count());
+
+	for (int i = 0; i < listSize; i++) {
+		QString oldInCmp(oldIn.left(std::min(m_audioInDevice->itemText(i).length(), oldIn.length())));
+		QString oldOutCmp(oldOut.left(std::min(m_audioOutDevice->itemText(i).length(), oldOut.length())));
+
+		if (!setIn && i < m_audioInDevice->count()
+		    && m_audioInDevice->itemText(i).startsWith(oldInCmp)) {
+			setIn = true;
+			m_audioInDevice->setCurrentIndex(i);
+		}
+
+		if (!setOut && i < m_audioOutDevice->count()
+		    && m_audioOutDevice->itemText(i).startsWith(oldOutCmp)) {
+			setOut = true;
+			m_audioOutDevice->setCurrentIndex(i);
+		}
+	}
+}
+
+bool GeneralTab::filterAudioInDevice(QString &deviceName)
+{
+	// Removes S/PDIF, front speakers and surround from input devices
+	// as they are output devices, not input
+	if (deviceName.contains("surround")
+	    || deviceName.contains("front")
+	    || deviceName.contains("iec958"))
+		return false;
+
+	// Removes sysdefault too if not full audio mode listings
+	if (!m_fullAudioName && deviceName.contains("sysdefault"))
+		return false;
+
+	return true;
+}
+
+bool GeneralTab::filterAudioOutDevice(QString &deviceName)
+{
+	// Removes advanced options if not full audio mode listings
+	if (!m_fullAudioName && (deviceName.contains("surround")
+				 || deviceName.contains("front")
+				 || deviceName.contains("iec958")
+				 || deviceName.contains("sysdefault"))) {
+		return false;
+	}
+
+	return true;
+}
+
+int GeneralTab::addAudioDevice(void *hint, int deviceNum)
+{
+	int added = 0;
+#ifdef HAVE_ALSA
+	char *name;
+	char *iotype;
+	QString deviceName;
+	QString listName;
+	QStringList deviceType;
+	iotype = snd_device_name_get_hint(hint, "IOID");
+	name = snd_device_name_get_hint(hint, "NAME");
+	deviceName.append(name);
+
+	snd_card_get_name(deviceNum, &name);
+	listName.append(name);
+
+	deviceType = deviceName.split(":");
+
+	// Add device io capability to list name
+	if (m_fullAudioName) {
+		listName.append(" ");
+
+		// Makes the surround name more readable
+		if (deviceName.contains("surround"))
+			listName.append(QString("surround %1.%2")
+					.arg(deviceType.value(0)[8]).arg(deviceType.value(0)[9]));
+		else
+			listName.append(deviceType.value(0));
+
+	} else if (!deviceType.value(0).contains("default")) {
+		listName.append(" ").append(deviceType.value(0));
+	}
+
+	// Add device number if it is not 0
+	if (deviceName.contains("DEV=")) {
+		int devNo;
+		QStringList deviceNo = deviceName.split("DEV=");
+		devNo = deviceNo.value(1).toInt();
+		if (devNo)
+			listName.append(QString(" %1").arg(devNo));
+	}
+
+	if ((iotype == NULL || strncmp(iotype, "Input", 5) == 0) && filterAudioInDevice(deviceName)) {
+		m_audioInDevice->addItem(listName);
+		m_audioInDeviceMap[listName] = snd_device_name_get_hint(hint, "NAME");
+		added += AUDIO_ADD_READ;
+	}
+
+	if ((iotype == NULL || strncmp(iotype, "Output", 6) == 0)  && filterAudioOutDevice(deviceName)) {
+		m_audioOutDevice->addItem(listName);
+		m_audioOutDeviceMap[listName] = snd_device_name_get_hint(hint, "NAME");
+		added += AUDIO_ADD_WRITE;
+	}
+#endif
+	return added;
+}
+
+bool GeneralTab::createAudioDeviceList()
+{
+#ifdef HAVE_ALSA
+	if (m_audioInDevice == NULL || m_audioOutDevice == NULL)
+		return false;
+
+	m_audioInDevice->clear();
+	m_audioOutDevice->clear();
+	m_audioInDeviceMap.clear();
+	m_audioOutDeviceMap.clear();
+
+	m_audioInDevice->addItem("None");
+	m_audioOutDevice->addItem("Default");
+	m_audioInDeviceMap["None"] = "None";
+	m_audioOutDeviceMap["Default"] = "default";
+
+	int deviceNum = -1;
+	int audioDevices = 0;
+	int matchDevice = matchAudioDevice();
+	int indexDevice = -1;
+	int indexCount = 0;
+
+	while (snd_card_next(&deviceNum) >= 0) {
+		if (deviceNum == -1)
+			break;
+
+		audioDevices++;
+		if (deviceNum == matchDevice && indexDevice == -1)
+			indexDevice = indexCount;
+
+		void **hint;
+
+		snd_device_name_hint(deviceNum, "pcm", &hint);
+		for (int i = 0; hint[i] != NULL; i++) {
+			int addAs = addAudioDevice(hint[i], deviceNum);
+			if (addAs == AUDIO_ADD_READ || addAs == AUDIO_ADD_READWRITE)
+				indexCount++;
+		}
+		snd_device_name_free_hint(hint);
+	}
+
+	snd_config_update_free_global();
+	m_audioInDevice->setCurrentIndex(indexDevice + 1);
+	changeAudioDevice();
+	return m_audioInDeviceMap.size() > 1 && m_audioOutDeviceMap.size() > 1 && audioDevices > 1;
+#else
+	return false;
+#endif
+}
+
+void GeneralTab::changeAudioDevice()
+{
+	m_audioOutDevice->setEnabled(getAudioInDevice() != NULL ? getAudioInDevice().compare("None") : false);
+	emit audioDeviceChanged();
+}
+
 void GeneralTab::addWidget(QWidget *w, Qt::Alignment align)
 {
 	QGridLayout::addWidget(w, m_row, m_col, align | Qt::AlignVCenter);
@@ -398,6 +767,7 @@ void GeneralTab::inputChanged(int input)
 		updateAudioInput();
 
 	updateVideoInput();
+	updateVidCapFormat();
 }
 
 void GeneralTab::outputChanged(int output)
@@ -446,15 +816,34 @@ void GeneralTab::freqChannelChanged(int idx)
 {
 	double f = v4l2_channel_lists[m_freqTable->currentIndex()].list[idx].freq;
 
-	m_freq->setText(QString::number(f / 1000.0));
-	freqChanged();
+	m_freq->setValue(f / 1000.0);
+	freqChanged(m_freq->value());
 }
 
-void GeneralTab::freqChanged()
+void GeneralTab::freqChanged(double f)
 {
-	double f = m_freq->text().toDouble();
+	v4l2_frequency freq;
 
-	s_frequency(f * 16, m_isRadio);
+	if (!m_freq->isEnabled())
+		return;
+
+	g_frequency(freq);
+	freq.frequency = f * m_freqFac;
+	s_frequency(freq);
+	updateFreq();
+}
+
+void GeneralTab::freqRfChanged(double f)
+{
+	v4l2_frequency freq;
+
+	if (!m_freqRf->isEnabled())
+		return;
+
+	g_frequency(freq, 1);
+	freq.frequency = f * m_freqRfFac;
+	s_frequency(freq);
+	updateFreqRf();
 }
 
 void GeneralTab::audioModeChanged(int)
@@ -511,15 +900,64 @@ void GeneralTab::vidCapFormatChanged(int idx)
 {
 	v4l2_fmtdesc desc;
 
-	enum_fmt_cap(desc, true, idx);
+	enum_fmt_cap(desc, m_buftype, true, idx);
 
 	v4l2_format fmt;
 
-	g_fmt_cap(fmt);
-	fmt.fmt.pix.pixelformat = desc.pixelformat;
+	g_fmt_cap(m_buftype, fmt);
+	if (isPlanar())
+		fmt.fmt.pix_mp.pixelformat = desc.pixelformat;
+	else
+		fmt.fmt.pix.pixelformat = desc.pixelformat;
 	if (try_fmt(fmt))
 		s_fmt(fmt);
 
+	updateVidCapFormat();
+}
+
+static const char *field2s(int val)
+{
+	switch (val) {
+	case V4L2_FIELD_ANY:
+		return "Any";
+	case V4L2_FIELD_NONE:
+		return "None";
+	case V4L2_FIELD_TOP:
+		return "Top";
+	case V4L2_FIELD_BOTTOM:
+		return "Bottom";
+	case V4L2_FIELD_INTERLACED:
+		return "Interlaced";
+	case V4L2_FIELD_SEQ_TB:
+		return "Sequential Top-Bottom";
+	case V4L2_FIELD_SEQ_BT:
+		return "Sequential Bottom-Top";
+	case V4L2_FIELD_ALTERNATE:
+		return "Alternating";
+	case V4L2_FIELD_INTERLACED_TB:
+		return "Interlaced Top-Bottom";
+	case V4L2_FIELD_INTERLACED_BT:
+		return "Interlaced Bottom-Top";
+	default:
+		return "";
+	}
+}
+
+void GeneralTab::vidCapFieldChanged(int idx)
+{
+	v4l2_format fmt;
+
+	g_fmt_cap(m_buftype, fmt);
+	for (__u32 f = V4L2_FIELD_NONE; f <= V4L2_FIELD_INTERLACED_BT; f++) {
+		if (m_vidCapFields->currentText() == QString(field2s(f))) {
+			if (isPlanar())
+				fmt.fmt.pix_mp.field = f;
+			else
+				fmt.fmt.pix.field = f;
+			s_fmt(fmt);
+			break;
+		}
+	}
 	updateVidCapFormat();
 }
 
@@ -528,8 +966,13 @@ void GeneralTab::frameWidthChanged()
 	v4l2_format fmt;
 	int val = m_frameWidth->value();
 
-	g_fmt_cap(fmt);
-	fmt.fmt.pix.width = val;
+	if (!m_frameWidth->isEnabled())
+		return;
+	g_fmt_cap(m_buftype, fmt);
+	if (isPlanar())
+		fmt.fmt.pix_mp.width = val;
+	else
+		fmt.fmt.pix.width = val;
 	if (try_fmt(fmt))
 		s_fmt(fmt);
 
@@ -541,8 +984,13 @@ void GeneralTab::frameHeightChanged()
 	v4l2_format fmt;
 	int val = m_frameHeight->value();
 
-	g_fmt_cap(fmt);
-	fmt.fmt.pix.height = val;
+	if (!m_frameHeight->isEnabled())
+		return;
+	g_fmt_cap(m_buftype, fmt);
+	if (isPlanar())
+		fmt.fmt.pix_mp.height = val;
+	else
+		fmt.fmt.pix.height = val;
 	if (try_fmt(fmt))
 		s_fmt(fmt);
 
@@ -556,9 +1004,14 @@ void GeneralTab::frameSizeChanged(int idx)
 	if (enum_framesizes(frmsize, m_pixelformat, idx)) {
 		v4l2_format fmt;
 
-		g_fmt_cap(fmt);
-		fmt.fmt.pix.width = frmsize.discrete.width;
-		fmt.fmt.pix.height = frmsize.discrete.height;
+		g_fmt_cap(m_buftype, fmt);
+		if (isPlanar()) {
+			fmt.fmt.pix_mp.width = frmsize.discrete.width;
+			fmt.fmt.pix_mp.height = frmsize.discrete.height;
+		} else {
+			fmt.fmt.pix.width = frmsize.discrete.width;
+			fmt.fmt.pix.height = frmsize.discrete.height;
+		}
 		if (try_fmt(fmt))
 			s_fmt(fmt);
 	}
@@ -571,10 +1024,9 @@ void GeneralTab::frameIntervalChanged(int idx)
 
 	if (enum_frameintervals(frmival, m_pixelformat, m_width, m_height, idx)
 	    && frmival.type == V4L2_FRMIVAL_TYPE_DISCRETE) {
-		if (set_interval(frmival.discrete))
+		if (set_interval(m_buftype, frmival.discrete))
 			m_interval = frmival.discrete;
 	}
-	updateVidCapFormat();
 }
 
 void GeneralTab::vidOutFormatChanged(int idx)
@@ -595,7 +1047,9 @@ void GeneralTab::vidOutFormatChanged(int idx)
 void GeneralTab::vbiMethodsChanged(int idx)
 {
 	m_buftype = isSlicedVbi() ? V4L2_BUF_TYPE_SLICED_VBI_CAPTURE :
-		(isVbi() ? V4L2_BUF_TYPE_VBI_CAPTURE : V4L2_BUF_TYPE_VIDEO_CAPTURE);
+		(isVbi() ? V4L2_BUF_TYPE_VBI_CAPTURE :
+		 (isPlanar() ? V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE :
+		  V4L2_BUF_TYPE_VIDEO_CAPTURE));
 }
 
 void GeneralTab::updateVideoInput()
@@ -613,6 +1067,20 @@ void GeneralTab::updateVideoInput()
 		m_tvStandard->setEnabled(in.capabilities & V4L2_IN_CAP_STD);
 		if (m_qryStandard)
 			m_qryStandard->setEnabled(in.capabilities & V4L2_IN_CAP_STD);
+		bool enableFreq = in.type == V4L2_INPUT_TYPE_TUNER;
+		if (m_freq)
+			m_freq->setEnabled(enableFreq);
+		if (m_freqTable)
+			m_freqTable->setEnabled(enableFreq);
+		if (m_freqChannel)
+			m_freqChannel->setEnabled(enableFreq);
+		if (m_detectSubchans) {
+			m_detectSubchans->setEnabled(enableFreq);
+			if (!enableFreq)
+				m_subchannels->setText("");
+			else
+				detectSubchansClicked();
+		}
 	}
 	if (m_videoTimings) {
 		refreshTimings();
@@ -620,6 +1088,8 @@ void GeneralTab::updateVideoInput()
 		m_videoTimings->setEnabled(in.capabilities & V4L2_IN_CAP_DV_TIMINGS);
 		m_qryTimings->setEnabled(in.capabilities & V4L2_IN_CAP_DV_TIMINGS);
 	}
+	if (m_audioInput)
+		m_audioInput->setEnabled(in.audioset);
 }
 
 void GeneralTab::updateVideoOutput()
@@ -657,6 +1127,7 @@ void GeneralTab::updateAudioInput()
 		what += ", has AVL";
 	if (audio.mode & V4L2_AUDMODE_AVL)
 		what += ", AVL is on";
+	m_audioInput->setStatusTip(what);
 	m_audioInput->setWhatsThis(what);
 }
 
@@ -709,8 +1180,11 @@ void GeneralTab::updateStandard()
 		(double)vs.frameperiod.numerator / vs.frameperiod.denominator,
 		vs.frameperiod.numerator, vs.frameperiod.denominator,
 		vs.framelines);
+	m_tvStandard->setStatusTip(what);
 	m_tvStandard->setWhatsThis(what);
 	updateVidCapFormat();
+	if (!isVbi())
+		changePixelAspectRatio();
 }
 
 void GeneralTab::qryStdClicked()
@@ -720,7 +1194,7 @@ void GeneralTab::qryStdClicked()
 	if (!query_std(std))
 		return;
 
-	if (std == V4L2_STD_ALL) {
+	if (std == V4L2_STD_UNKNOWN) {
 		info("No standard detected\n");
 	} else {
 		s_std(std);
@@ -772,6 +1246,7 @@ void GeneralTab::updateTimings()
 	what.sprintf("Video Timings (%u)\n"
 		"Frame %ux%u\n",
 		p.index, p.timings.bt.width, p.timings.bt.height);
+	m_videoTimings->setStatusTip(what);
 	m_videoTimings->setWhatsThis(what);
 	updateVidCapFormat();
 }
@@ -786,6 +1261,18 @@ void GeneralTab::qryTimingsClicked()
 	}
 }
 
+void GeneralTab::sourceChange(const v4l2_event &ev)
+{
+	if (!m_videoInput)
+		return;
+	if ((int)ev.id != m_videoInput->currentIndex())
+		return;
+	if (m_qryStandard && m_qryStandard->isEnabled())
+		m_qryStandard->click();
+	else if (m_qryTimings && m_qryTimings->isEnabled())
+		m_qryTimings->click();
+}
+
 void GeneralTab::updateFreq()
 {
 	v4l2_frequency f;
@@ -793,7 +1280,7 @@ void GeneralTab::updateFreq()
 	g_frequency(f);
 	/* m_freq listens to valueChanged block it to avoid recursion */
 	m_freq->blockSignals(true);
-	m_freq->setText(QString::number(f.frequency / 16.0));
+	m_freq->setValue((double)f.frequency / m_freqFac);
 	m_freq->blockSignals(false);
 }
 
@@ -806,6 +1293,17 @@ void GeneralTab::updateFreqChannel()
 		m_freqChannel->addItem(list[i].name);
 }
 
+void GeneralTab::updateFreqRf()
+{
+	v4l2_frequency f;
+
+	g_frequency(f, 1);
+	/* m_freqRf listens to valueChanged block it to avoid recursion */
+	m_freqRf->blockSignals(true);
+	m_freqRf->setValue((double)f.frequency / m_freqRfFac);
+	m_freqRf->blockSignals(false);
+}
+
 void GeneralTab::updateVidCapFormat()
 {
 	v4l2_fmtdesc desc;
@@ -813,21 +1311,74 @@ void GeneralTab::updateVidCapFormat()
 
 	if (isVbi())
 		return;
-	g_fmt_cap(fmt);
-	m_pixelformat = fmt.fmt.pix.pixelformat;
-	m_width       = fmt.fmt.pix.width;
-	m_height      = fmt.fmt.pix.height;
+	g_fmt_cap(m_buftype, fmt);
+	if (isPlanar()) {
+		m_pixelformat = fmt.fmt.pix_mp.pixelformat;
+		m_width       = fmt.fmt.pix_mp.width;
+		m_height      = fmt.fmt.pix_mp.height;
+	} else {
+		m_pixelformat = fmt.fmt.pix.pixelformat;
+		m_width       = fmt.fmt.pix.width;
+		m_height      = fmt.fmt.pix.height;
+	}
 	updateFrameSize();
 	updateFrameInterval();
-	if (enum_fmt_cap(desc, true)) {
+	if (enum_fmt_cap(desc, m_buftype, true)) {
 		do {
-			if (desc.pixelformat == fmt.fmt.pix.pixelformat)
-				break;
-		} while (enum_fmt_cap(desc));
+			if (isPlanar()) {
+				if (desc.pixelformat == fmt.fmt.pix_mp.pixelformat)
+					break;
+			} else {
+				if (desc.pixelformat == fmt.fmt.pix.pixelformat)
+					break;
+			}
+		} while (enum_fmt_cap(desc, m_buftype));
 	}
-	if (desc.pixelformat != fmt.fmt.pix.pixelformat)
-		return;
+	if (isPlanar()) {
+		if (desc.pixelformat != fmt.fmt.pix_mp.pixelformat)
+			return;
+	} else {
+		if (desc.pixelformat != fmt.fmt.pix.pixelformat)
+			return;
+	}
 	m_vidCapFormats->setCurrentIndex(desc.index);
+	updateVidCapFields();
+}
+
+void GeneralTab::updateVidCapFields()
+{
+	v4l2_format fmt;
+	v4l2_format tmp;
+	bool first = true;
+
+	g_fmt_cap(m_buftype, fmt);
+
+	for (__u32 f = V4L2_FIELD_NONE; f <= V4L2_FIELD_INTERLACED_BT; f++) {
+		tmp = fmt;
+		if (isPlanar()) {
+			tmp.fmt.pix_mp.field = f;
+			if (!try_fmt(tmp) || tmp.fmt.pix_mp.field != f)
+				continue;
+			if (first) {
+				m_vidCapFields->clear();
+				first = false;
+			}
+			m_vidCapFields->addItem(field2s(f));
+			if (fmt.fmt.pix_mp.field == f)
+				m_vidCapFields->setCurrentIndex(m_vidCapFields->count() - 1);
+		} else {
+			tmp.fmt.pix.field = f;
+			if (!try_fmt(tmp) || tmp.fmt.pix.field != f)
+				continue;
+			if (first) {
+				m_vidCapFields->clear();
+				first = false;
+			}
+			m_vidCapFields->addItem(field2s(f));
+			if (fmt.fmt.pix.field == f)
+				m_vidCapFields->setCurrentIndex(m_vidCapFields->count() - 1);
+		}
+	}
 }
 
 void GeneralTab::updateFrameSize()
@@ -861,10 +1412,10 @@ void GeneralTab::updateFrameSize()
 	}
 	if (!ok) {
 		frmsize.stepwise.min_width = 8;
-		frmsize.stepwise.max_width = 1920;
+		frmsize.stepwise.max_width = 4096;
 		frmsize.stepwise.step_width = 1;
 		frmsize.stepwise.min_height = 8;
-		frmsize.stepwise.max_height = 1200;
+		frmsize.stepwise.max_height = 2160;
 		frmsize.stepwise.step_height = 1;
 	}
 	m_frameWidth->setEnabled(true);
@@ -881,6 +1432,70 @@ void GeneralTab::updateFrameSize()
 	updateFrameInterval();
 }
 
+CropMethod GeneralTab::getCropMethod()
+{
+	switch (m_crop->currentIndex()) {
+	case 1:
+		return QV4L2_CROP_TB;
+	case 2:
+		return QV4L2_CROP_W149;
+	case 3:
+		return QV4L2_CROP_W169;
+	case 4:
+		return QV4L2_CROP_C185;
+	case 5:
+		return QV4L2_CROP_C239;
+	case 6:
+		return QV4L2_CROP_P43;
+	default:
+		return QV4L2_CROP_NONE;
+	}
+}
+
+void GeneralTab::changePixelAspectRatio()
+{
+	// Update hints by calling a get
+	getPixelAspectRatio();
+	info("");
+	emit pixelAspectRatioChanged();
+}
+
+double GeneralTab::getPixelAspectRatio()
+{
+	v4l2_fract ratio = { 1, 1 };
+
+	switch (m_pixelAspectRatio->currentIndex()) {
+	case 0:
+		ratio = g_pixel_aspect(m_buftype);
+		break;
+	case 2:
+		ratio.numerator = 11;
+		ratio.denominator = 10;
+		break;
+	case 3:
+		ratio.numerator = 33;
+		ratio.denominator = 40;
+		break;
+	case 4:
+		ratio.numerator = 11;
+		ratio.denominator = 12;
+		break;
+	case 5:
+		ratio.numerator = 11;
+		ratio.denominator = 16;
+		break;
+	default:
+		break;
+	}
+
+	m_pixelAspectRatio->setWhatsThis(QString("Pixel Aspect Ratio %1:%2")
+			 .arg(ratio.denominator).arg(ratio.numerator));
+	m_pixelAspectRatio->setStatusTip(m_pixelAspectRatio->whatsThis());
+	// Note: ratio is y / x, whereas we want x / y, so we return
+	// denominator / numerator.
+	return (double)ratio.denominator / ratio.numerator;
+}
+
 void GeneralTab::updateFrameInterval()
 {
 	v4l2_frmivalenum frmival;
@@ -894,7 +1509,7 @@ void GeneralTab::updateFrameInterval()
 	m_frameInterval->setEnabled(m_has_interval);
 	if (m_has_interval) {
 	        m_interval = frmival.discrete;
-        	curr_ok = v4l2::get_interval(curr);
+        	curr_ok = v4l2::get_interval(m_buftype, curr);
 		do {
 			m_frameInterval->addItem(QString("%1 fps")
 				.arg((double)frmival.discrete.denominator / frmival.discrete.numerator));
@@ -931,4 +1546,74 @@ bool GeneralTab::get_interval(struct v4l2_fract &interval)
 		interval = m_interval;
 
 	return m_has_interval;
+}
+
+QString GeneralTab::getAudioInDevice()
+{
+	if (m_audioInDevice == NULL)
+		return NULL;
+
+	return m_audioInDeviceMap[m_audioInDevice->currentText()];
+}
+
+QString GeneralTab::getAudioOutDevice()
+{
+	if (m_audioOutDevice == NULL)
+		return NULL;
+
+	return m_audioOutDeviceMap[m_audioOutDevice->currentText()];
+}
+
+void GeneralTab::setAudioDeviceBufferSize(int size)
+{
+	m_audioDeviceBufferSize = size;
+}
+
+int GeneralTab::getAudioDeviceBufferSize()
+{
+	return m_audioDeviceBufferSize;
+}
+
+#ifdef HAVE_ALSA
+int GeneralTab::checkMatchAudioDevice(void *md, const char *vid, const enum device_type type)
+{
+	const char *devname = NULL;
+
+	while ((devname = get_associated_device(md, devname, type, vid, MEDIA_V4L_VIDEO)) != NULL) {
+		if (type == MEDIA_SND_CAP) {
+			QStringList devAddr = QString(devname).split(QRegExp("[:,]"));
+			return devAddr.value(1).toInt();
+		}
+	}
+	return -1;
+}
+
+int GeneralTab::matchAudioDevice()
+{
+	QStringList devPath = m_device.split("/");
+	QString curDev = devPath.value(devPath.count() - 1);
+
+	void *media;
+	const char *video = NULL;
+	int match;
+
+	media = discover_media_devices();
+
+	while ((video = get_associated_device(media, video, MEDIA_V4L_VIDEO, NULL, NONE)) != NULL)
+		if (curDev.compare(video) == 0)
+			for (int i = 0; i <= MEDIA_SND_HW; i++)
+				if ((match = checkMatchAudioDevice(media, video, static_cast<device_type>(i))) != -1)
+					return match;
+
+	return -1;
+}
+#endif
+
+bool GeneralTab::hasAlsaAudio()
+{
+#ifdef HAVE_ALSA
+	return !isVbi();
+#else
+	return false;
+#endif
 }

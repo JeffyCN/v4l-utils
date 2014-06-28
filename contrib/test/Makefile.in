@@ -79,8 +79,8 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 noinst_PROGRAMS = ioctl-test$(EXEEXT) sliced-vbi-test$(EXEEXT) \
-	sliced-vbi-detect$(EXEEXT) vbi-test$(EXEEXT) v4lgrab$(EXEEXT) \
-	v4l2grab$(EXEEXT) driver-test$(EXEEXT) stress-buffer$(EXEEXT) \
+	sliced-vbi-detect$(EXEEXT) v4l2grab$(EXEEXT) \
+	driver-test$(EXEEXT) stress-buffer$(EXEEXT) \
 	capture-example$(EXEEXT) $(am__EXEEXT_1) $(am__EXEEXT_2)
 @HAVE_X11_TRUE@am__append_1 = pixfmt-test
 @HAVE_GLU_TRUE@am__append_2 = v4l2gl
@@ -141,12 +141,6 @@ am_v4l2grab_OBJECTS = v4l2grab.$(OBJEXT)
 v4l2grab_OBJECTS = $(am_v4l2grab_OBJECTS)
 v4l2grab_DEPENDENCIES = ../../lib/libv4l2/libv4l2.la \
 	../../lib/libv4lconvert/libv4lconvert.la
-am_v4lgrab_OBJECTS = v4lgrab.$(OBJEXT)
-v4lgrab_OBJECTS = $(am_v4lgrab_OBJECTS)
-v4lgrab_LDADD = $(LDADD)
-am_vbi_test_OBJECTS = vbi-test.$(OBJEXT)
-vbi_test_OBJECTS = $(am_vbi_test_OBJECTS)
-vbi_test_LDADD = $(LDADD)
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -184,13 +178,11 @@ am__v_CCLD_1 =
 SOURCES = $(capture_example_SOURCES) $(driver_test_SOURCES) \
 	$(ioctl_test_SOURCES) $(pixfmt_test_SOURCES) \
 	$(sliced_vbi_detect_SOURCES) $(sliced_vbi_test_SOURCES) \
-	$(stress_buffer_SOURCES) $(v4l2gl_SOURCES) $(v4l2grab_SOURCES) \
-	$(v4lgrab_SOURCES) $(vbi_test_SOURCES)
+	$(stress_buffer_SOURCES) $(v4l2gl_SOURCES) $(v4l2grab_SOURCES)
 DIST_SOURCES = $(capture_example_SOURCES) $(driver_test_SOURCES) \
 	$(ioctl_test_SOURCES) $(pixfmt_test_SOURCES) \
 	$(sliced_vbi_detect_SOURCES) $(sliced_vbi_test_SOURCES) \
-	$(stress_buffer_SOURCES) $(v4l2gl_SOURCES) $(v4l2grab_SOURCES) \
-	$(v4lgrab_SOURCES) $(vbi_test_SOURCES)
+	$(stress_buffer_SOURCES) $(v4l2gl_SOURCES) $(v4l2grab_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -217,6 +209,8 @@ ETAGS = etags
 CTAGS = ctags
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 ACLOCAL = @ACLOCAL@
+ALSA_CFLAGS = @ALSA_CFLAGS@
+ALSA_LIBS = @ALSA_LIBS@
 AMTAR = @AMTAR@
 AM_DEFAULT_VERBOSITY = @AM_DEFAULT_VERBOSITY@
 AR = @AR@
@@ -270,6 +264,8 @@ LIBICONV = @LIBICONV@
 LIBOBJS = @LIBOBJS@
 LIBS = @LIBS@
 LIBTOOL = @LIBTOOL@
+LIBUDEV_CFLAGS = @LIBUDEV_CFLAGS@
+LIBUDEV_LIBS = @LIBUDEV_LIBS@
 LIBV4L1_PRIV_DIR = @LIBV4L1_PRIV_DIR@
 LIBV4L2_PLUGIN_DIR = @LIBV4L2_PLUGIN_DIR@
 LIBV4L2_PRIV_DIR = @LIBV4L2_PRIV_DIR@
@@ -300,6 +296,8 @@ PATH_SEPARATOR = @PATH_SEPARATOR@
 PKG_CONFIG = @PKG_CONFIG@
 PKG_CONFIG_LIBDIR = @PKG_CONFIG_LIBDIR@
 PKG_CONFIG_PATH = @PKG_CONFIG_PATH@
+QTGL_CFLAGS = @QTGL_CFLAGS@
+QTGL_LIBS = @QTGL_LIBS@
 QT_CFLAGS = @QT_CFLAGS@
 QT_LIBS = @QT_LIBS@
 RANLIB = @RANLIB@
@@ -350,6 +348,8 @@ keytablesystemdir = @keytablesystemdir@
 keytableuserdir = @keytableuserdir@
 libdir = @libdir@
 libexecdir = @libexecdir@
+libudev_CFLAGS = @libudev_CFLAGS@
+libudev_LIBS = @libudev_LIBS@
 libv4l1privdir = @libv4l1privdir@
 libv4l1subdir = @libv4l1subdir@
 libv4l2plugindir = @libv4l2plugindir@
@@ -388,8 +388,6 @@ v4l2gl_LDADD = ../../lib/libv4l2/libv4l2.la ../../lib/libv4lconvert/libv4lconver
 ioctl_test_SOURCES = ioctl-test.c ioctl-test.h ioctl_32.h ioctl_64.h
 sliced_vbi_test_SOURCES = sliced-vbi-test.c
 sliced_vbi_detect_SOURCES = sliced-vbi-detect.c
-vbi_test_SOURCES = vbi-test.c
-v4lgrab_SOURCES = v4lgrab.c
 stress_buffer_SOURCES = stress-buffer.c
 capture_example_SOURCES = capture-example.c
 EXTRA_DIST = \
@@ -475,14 +473,6 @@ v4l2grab$(EXEEXT): $(v4l2grab_OBJECTS) $(v4l2grab_DEPENDENCIES) $(EXTRA_v4l2grab
 	@rm -f v4l2grab$(EXEEXT)
 	$(AM_V_CCLD)$(LINK) $(v4l2grab_OBJECTS) $(v4l2grab_LDADD) $(LIBS)
 
-v4lgrab$(EXEEXT): $(v4lgrab_OBJECTS) $(v4lgrab_DEPENDENCIES) $(EXTRA_v4lgrab_DEPENDENCIES) 
-	@rm -f v4lgrab$(EXEEXT)
-	$(AM_V_CCLD)$(LINK) $(v4lgrab_OBJECTS) $(v4lgrab_LDADD) $(LIBS)
-
-vbi-test$(EXEEXT): $(vbi_test_OBJECTS) $(vbi_test_DEPENDENCIES) $(EXTRA_vbi_test_DEPENDENCIES) 
-	@rm -f vbi-test$(EXEEXT)
-	$(AM_V_CCLD)$(LINK) $(vbi_test_OBJECTS) $(vbi_test_LDADD) $(LIBS)
-
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
 
@@ -498,8 +488,6 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/stress-buffer.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2gl.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2grab.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4lgrab.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/vbi-test.Po@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.o$$||'`;\

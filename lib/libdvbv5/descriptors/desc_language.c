@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 - Mauro Carvalho Chehab <mchehab@redhat.com>
+ * Copyright (c) 2011-2012 - Mauro Carvalho Chehab
  * Copyright (c) 2012 - Andre Roth <neolynx@gmail.com>
  *
  * This program is free software; you can redistribute it and/or
@@ -19,11 +19,10 @@
  *
  */
 
-#include "descriptors/desc_language.h"
-#include "descriptors.h"
-#include "dvb-fe.h"
+#include <libdvbv5/desc_language.h>
+#include <libdvbv5/dvb-fe.h>
 
-void dvb_desc_language_init(struct dvb_v5_fe_parms *parms, const uint8_t *buf, struct dvb_desc *desc)
+int dvb_desc_language_init(struct dvb_v5_fe_parms *parms, const uint8_t *buf, struct dvb_desc *desc)
 {
 	struct dvb_desc_language *lang = (struct dvb_desc_language *) desc;
 
@@ -32,11 +31,12 @@ void dvb_desc_language_init(struct dvb_v5_fe_parms *parms, const uint8_t *buf, s
 	lang->language[2] = buf[2];
 	lang->language[3] = '\0';
 	lang->audio_type  = buf[3];
+	return 0;
 }
 
 void dvb_desc_language_print(struct dvb_v5_fe_parms *parms, const struct dvb_desc *desc)
 {
 	const struct dvb_desc_language *lang = (const struct dvb_desc_language *) desc;
-	dvb_log("|                   lang: %s (type: %d)", lang->language, lang->audio_type);
+	dvb_loginfo("|           lang: %s (type: %d)", lang->language, lang->audio_type);
 }
 
