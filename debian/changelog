@@ -1,3 +1,9 @@
+v4l-utils (1.2.0-2) unstable; urgency=medium
+
+  * Require udev build dependencies only on Linux
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Sat, 28 Jun 2014 21:06:52 +0200
+
 v4l-utils (1.2.0-1) unstable; urgency=medium
 
   [ James McCoy ]
