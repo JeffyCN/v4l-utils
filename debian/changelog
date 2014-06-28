@@ -1,9 +1,24 @@
+v4l-utils (1.2.0-1) unstable; urgency=medium
+
+  [ James McCoy ]
+  * Move debian/upstream to debian/upstream/metadata
+
+  [ Gregor Jasny ]
+  * Add upstream tarball signature verification
+  * Imported Upstream version 1.2.0
+  * Add qv4l2 manpage
+  * Release 1.2.0-1
+  * Refresh kFreeBSD libdvb5 patch
+  * Add more build-dependencies
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Sat, 28 Jun 2014 19:16:11 +0200
+
 v4l-utils (1.0.1-1) unstable; urgency=medium
 
   * Imported Upstream version 1.0.1
   * Bumped standards to version 3.9.4 (no changes needed)
   * Fix typo in package description (Closes: #733100)
-  
+
  -- Gregor Jasny <gjasny@googlemail.com>  Mon, 13 Jan 2014 22:17:00 +0100
 
 v4l-utils (1.0.0-1) unstable; urgency=low
@@ -57,7 +72,7 @@ v4l-utils (0.8.8-3) unstable; urgency=low
 
 v4l-utils (0.8.8-2) unstable; urgency=low
 
-  * Add patches from stable-0.8 branch  
+  * Add patches from stable-0.8 branch
     - Build fixes for GCC 4.7
     - Add 04f2:b169 USB ID to ASUS upside down table
     - Add Lenovo Thinkpad X220 Tablet to upside down table
@@ -232,7 +247,7 @@ v4l-utils (0.8.1-1) unstable; urgency=low
 
   * New upstream version (Closes: #598969)
   * Bumped standards to version 3.9.1 (no changes needed)
-  * Updated copyright file 
+  * Updated copyright file
 
  -- Gregor Jasny <gjasny@googlemail.com>  Sun, 03 Oct 2010 16:26:40 +0200
 
@@ -295,7 +310,7 @@ libv4l (0.6.1-1) unstable; urgency=low
 libv4l (0.6.0-2) unstable; urgency=low
 
   * Add UID to SHM segment name and fallback to malloc (Closes: #542204)
-  * Bumped standards to version 3.8.3 (no changes needed) 
+  * Bumped standards to version 3.8.3 (no changes needed)
 
  -- Gregor Jasny <gjasny@googlemail.com>  Wed, 19 Aug 2009 14:42:00 +0200
 
