@@ -3,7 +3,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.59)
-AC_INIT([v4l-utils],[1.0.1])
+AC_INIT([v4l-utils],[1.2.0])
 
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIR([m4])
@@ -24,6 +24,7 @@ AC_CONFIG_FILES([Makefile
 	utils/decode_tm6000/Makefile
 	utils/dvb/Makefile
 	utils/keytable/Makefile
+	utils/media-ctl/Makefile
 	utils/rds/Makefile
 	utils/v4l2-compliance/Makefile
 	utils/v4l2-ctl/Makefile
@@ -52,7 +53,7 @@ m4_ifdef([AM_SILENT_RULES], [AM_SILENT_RULES([yes])])
 
 # Checks for programs.
 AC_PROG_CXX
-AC_PROG_CC
+AC_PROG_CC_C99
 AC_PROG_INSTALL
 AC_PROG_LIBTOOL
 AC_PROG_MKDIR_P
@@ -128,8 +129,43 @@ if test "x$qt_pkgconfig" = "xtrue"; then
    AC_SUBST(UIC)
    AC_SUBST(RCC)
 else
-   AC_MSG_WARN(Qt4 is not available)
+   AC_MSG_WARN(Qt4 or higher is not available)
 fi
+
+PKG_CHECK_MODULES(QTGL, [QtOpenGL >= 4.4 gl], [qt_pkgconfig_gl=true], [qt_pkgconfig_gl=false])
+if test "x$qt_pkgconfig_gl" = "xtrue"; then
+   AC_DEFINE([HAVE_QTGL], [1], [qt has opengl support])
+else
+   AC_MSG_WARN(Qt4 OpenGL or higher is not available)
+fi
+
+PKG_CHECK_MODULES(ALSA, [alsa], [alsa_pkgconfig=true], [alsa_pkgconfig=false])
+if test "x$alsa_pkgconfig" = "xtrue"; then
+   AC_DEFINE([HAVE_ALSA], [1], [alsa library is present])
+else
+   AC_MSG_WARN(ALSA library not available)
+fi
+
+AC_ARG_WITH([libudev],
+    AS_HELP_STRING([--with-libudev],
+	[Enable libudev to detect a device name]))
+
+AS_IF([test "x$with_libudev" = "xyes"],
+    [PKG_CHECK_MODULES(libudev, libudev, have_libudev=yes, have_libudev=no)],
+    [have_libudev=no])
+
+AS_IF([test "x$have_libudev" = "xyes"],
+    [
+	AC_DEFINE([HAVE_LIBUDEV], [], [Use libudev])
+	LIBUDEV_CFLAGS="$libudev_CFLAGS"
+	LIBUDEV_LIBS="$libudev_LIBS"
+	AC_SUBST(LIBUDEV_CFLAGS)
+	AC_SUBST(LIBUDEV_LIBS)
+    ],
+    [AS_IF([test "x$with_libudev" = "xyes"],
+	[AC_MSG_ERROR([libudev requested but not found])
+    ])
+])
 
 AC_SUBST([JPEG_LIBS])
 
@@ -213,7 +249,7 @@ AC_ARG_ENABLE(libv4l,
   AS_HELP_STRING([--disable-libv4l], [disable dynamic libv4l compilation]),
   [case "${enableval}" in
      yes | no ) ;;
-     *) AC_MSG_ERROR(bad value ${enableval} for --enable-libv4l) ;;
+     *) AC_MSG_ERROR(bad value ${enableval} for --disable-libv4l) ;;
    esac]
 )
 
@@ -221,7 +257,7 @@ AC_ARG_ENABLE(v4l-utils,
   AS_HELP_STRING([--disable-v4l-utils], [disable v4l-utils compilation]),
   [case "${enableval}" in
      yes | no ) ;;
-     *) AC_MSG_ERROR(bad value ${enableval} for --enable-v4l-utils) ;;
+     *) AC_MSG_ERROR(bad value ${enableval} for --disable-v4l-utils) ;;
    esac]
 )
 
@@ -233,16 +269,17 @@ AC_ARG_ENABLE(qv4l2,
    esac]
 )
 
-AM_CONDITIONAL([WITH_LIBDVBV5], [test x$enable_libdvbv5 = xyes])
-AM_CONDITIONAL([WITH_LIBV4L], [test x$enable_libv4l != xno])
-AM_CONDITIONAL([WITH_V4LUTILS], [test x$enable_v4l_utils != "xno"])
-AM_CONDITIONAL([WITH_QV4L2], [test ${qt_pkgconfig} = true -a x$enable_qv4l2 != xno])
-AM_CONDITIONAL([WITH_V4L_PLUGINS], [test x$enable_libv4l != xno -a x$enable_shared != xno])
+AM_CONDITIONAL([WITH_LIBDVBV5],     [test x$enable_libdvbv5  = xyes])
+AM_CONDITIONAL([WITH_LIBV4L],       [test x$enable_libv4l    != xno])
+AM_CONDITIONAL([WITH_V4LUTILS],	    [test x$enable_v4l_utils != xno])
+AM_CONDITIONAL([WITH_QV4L2],	    [test ${qt_pkgconfig}  = true -a x$enable_qv4l2 != xno])
+AM_CONDITIONAL([WITH_V4L_PLUGINS],  [test x$enable_libv4l != xno -a x$enable_shared != xno])
 AM_CONDITIONAL([WITH_V4L_WRAPPERS], [test x$enable_libv4l != xno -a x$enable_shared != xno])
+AM_CONDITIONAL([WITH_QTGL],	    [test ${qt_pkgconfig_gl} = true])
 
 # append -static to libtool compile and link command to enforce static libs
 AS_IF([test x$enable_libdvbv5 != xyes], [AC_SUBST([ENFORCE_LIBDVBV5_STATIC], ["-static"])])
-AS_IF([test x$enable_libv4l = xno], [AC_SUBST([ENFORCE_LIBV4L_STATIC], ["-static"])])
+AS_IF([test x$enable_libv4l = xno],   [AC_SUBST([ENFORCE_LIBV4L_STATIC],   ["-static"])])
 
 # misc
 

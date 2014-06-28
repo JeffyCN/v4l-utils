@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 - Mauro Carvalho Chehab <mchehab@redhat.com>
+ * Copyright (c) 2011-2012 - Mauro Carvalho Chehab
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -31,9 +31,9 @@
 
 #include <config.h>
 
-#include "dvb-file.h"
-#include "dvb-demux.h"
-#include "dvb-scan.h"
+#include "libdvbv5/dvb-file.h"
+#include "libdvbv5/dvb-demux.h"
+#include "libdvbv5/dvb-scan.h"
 
 #define PROGRAM_NAME	"dvb-format-convert"
 
@@ -51,7 +51,7 @@ static const struct argp_option options[] = {
 };
 
 const char *argp_program_version = PROGRAM_NAME " version " V4L_UTILS_VERSION;
-const char *argp_program_bug_address = "Mauro Carvalho Chehab <mchehab@redhat.com>";
+const char *argp_program_bug_address = "Mauro Carvalho Chehab <m.chehab@samsung.com>";
 
 static error_t parse_opt(int k, char *optarg, struct argp_state *state)
 {

@@ -468,7 +468,7 @@ sub output_arrays($$$$$)
   }
 }
 
-my $fe_file = "$dir/uapi/linux/dvb/frontend.h";
+my $fe_file = "$dir/linux/dvb/frontend.h";
 
 copy $fe_file, "../include/dvb-frontend.h";
 
@@ -481,7 +481,7 @@ print OUT <<EOF;
  */
 #ifndef _DVB_V5_CONSTS_H
 #define _DVB_V5_CONSTS_H
-#include "../include/dvb-frontend.h"
+#include <libdvbv5/dvb-frontend.h>
 EOF
 output_arrays ("fe_caps_name", \%fe_caps, "unsigned", 1, 1);
 output_arrays ("fe_status_name", \%fe_status, "unsigned", 1, 1);

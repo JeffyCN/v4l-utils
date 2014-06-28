@@ -21,12 +21,26 @@
 #ifndef _V4L2_COMPLIANCE_H_
 #define _V4L2_COMPLIANCE_H_
 
+#include <stdarg.h>
 #include <cerrno>
 #include <string>
 #include <list>
 #include <set>
 #include <linux/videodev2.h>
+
+#ifndef NO_LIBV4L2
 #include <libv4l2.h>
+#else
+#define v4l2_open(file, oflag, ...) (-1)
+#define v4l2_close(fd) (-1)
+#define v4l2_read(fd, buffer, n) (-1)
+#define v4l2_write(fd, buffer, n) (-1)
+#define v4l2_ioctl(fd, request, ...) (-1)
+#define v4l2_mmap(start, length, prot, flags, fd, offset) (MAP_FAILED)
+#define v4l2_munmap(_start, length) (-1)
+#endif
+
+#include <cv4l-helpers.h>
 
 #if !defined(ENODATA) && (defined(__FreeBSD__) || defined(__FreeBSD_kernel__))
 #define ENODATA ENOTSUP
@@ -39,7 +53,7 @@ extern int kernel_version;
 extern unsigned warnings;
 
 struct test_queryctrl: v4l2_queryctrl {
-	unsigned menu_mask;
+	__u64 menu_mask;
 };
 
 typedef std::list<test_queryctrl> qctrl_list;
@@ -48,11 +62,13 @@ typedef std::set<__u32> pixfmt_set;
 struct node;
 
 struct node {
-	int fd;
+	struct v4l_fd vfd;
 	bool is_video;
 	bool is_radio;
 	bool is_vbi;
+	bool is_sdr;
 	bool is_m2m;
+	bool is_planar;
 	bool can_capture;
 	bool can_output;
 	const char *device;
@@ -70,9 +86,10 @@ struct node {
 	unsigned priv_controls;
 	qctrl_list controls;
 	__u32 fbuf_caps;
-	pixfmt_set buftype_pixfmts[V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE + 1];
+	pixfmt_set buftype_pixfmts[V4L2_BUF_TYPE_SDR_CAPTURE + 1];
 	__u32 valid_buftypes;
 	__u32 valid_buftype;
+	__u32 valid_memorytype;
 };
 
 #define info(fmt, args...) 					\
@@ -112,17 +129,45 @@ static inline int test_close(int fd)
 
 static inline void reopen(struct node *node)
 {
-	test_close(node->fd);
-	if ((node->fd = test_open(node->device, O_RDWR)) < 0) {
+	test_close(node->vfd.fd);
+	if ((node->vfd.fd = test_open(node->device, O_RDWR)) < 0) {
 		fprintf(stderr, "Failed to open %s: %s\n", node->device,
 			strerror(errno));
 		exit(1);
 	}
 }
 
-static inline int test_ioctl(int fd, int cmd, void *arg)
+static inline ssize_t test_read(int fd, void *buffer, size_t n)
 {
+	return wrapper ? v4l2_read(fd, buffer, n) : read(fd, buffer, n);
+}
+
+static inline ssize_t test_write(int fd, const void *buffer, size_t n)
+{
+	return wrapper ? v4l2_write(fd, buffer, n) : write(fd, buffer, n);
+}
+
+static inline int test_ioctl(int fd, unsigned long cmd, ...)
+{
+	void *arg;
+	va_list ap;
+
+	va_start(ap, cmd);
+	arg = va_arg(ap, void *);
+	va_end(ap);
 	return wrapper ? v4l2_ioctl(fd, cmd, arg) : ioctl(fd, cmd, arg);
+}
+
+static inline void *test_mmap(void *start, size_t length, int prot, int flags,
+		int fd, int64_t offset)
+{
+ 	return wrapper ? v4l2_mmap(start, length, prot, flags, fd, offset) :
+		mmap(start, length, prot, flags, fd, offset);
+}
+
+static inline int test_munmap(void *start, size_t length)
+{
+ 	return wrapper ? v4l2_munmap(start, length) : munmap(start, length);
 }
 
 static inline int check_fract(const struct v4l2_fract *f)
@@ -137,8 +182,10 @@ static inline double fract2f(const struct v4l2_fract *f)
 	return (double)f->numerator / (double)f->denominator;
 }
 
-int doioctl_name(struct node *node, unsigned long int request, void *parm, const char *name);
+int doioctl_name(struct node *node, unsigned long int request, void *parm,
+		 const char *name, bool no_wrapper = false);
 #define doioctl(n, r, p) doioctl_name(n, r, p, #r)
+#define doioctl_no_wrap(n, r, p) doioctl_name(n, r, p, #r, true)
 
 std::string cap2s(unsigned cap);
 std::string buftype2s(int type);
@@ -182,6 +229,7 @@ int testJpegComp(struct node *node);
 int testStd(struct node *node);
 int testTimings(struct node *node);
 int testTimingsCap(struct node *node);
+int testEdid(struct node *node);
 
 // Format ioctl tests
 int testEnumFormats(struct node *node);
@@ -200,5 +248,9 @@ int testDecoder(struct node *node);
 // Buffer ioctl tests
 int testReqBufs(struct node *node);
 int testReadWrite(struct node *node);
+int testExpBuf(struct node *node);
+int testMmap(struct node *node, unsigned frame_count);
+int testUserPtr(struct node *node, unsigned frame_count);
+int testDmaBuf(struct node *expbuf_node, struct node *node, unsigned frame_count);
 
 #endif

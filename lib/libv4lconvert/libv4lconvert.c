@@ -974,6 +974,10 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 			fmt->fmt.pix.pixelformat = V4L2_PIX_FMT_RGB24;
 			v4lconvert_fixup_fmt(fmt);
 			break;
+		default:
+			V4LCONVERT_ERR("Unknown destination format in conversion\n");
+			errno = EINVAL;
+			return -1;
 		}
 
 		result = v4lconvert_se401_to_rgb24(data, src, src_size, d,
@@ -1047,11 +1051,6 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 			result = v4lconvert_y10b_to_yuv420(data, src, dest,
 							   width, height);
 			break;
-		}
-		if (result == 0) {
-			V4LCONVERT_ERR("y10b conversion failed\n");
-			errno = EPIPE;
-			result = -1;
 		}
 		break;
 
@@ -1328,13 +1327,6 @@ int v4lconvert_convert(struct v4lconvert_data *data,
 		return to_copy;
 	}
 
-	/* When field is V4L2_FIELD_ALTERNATE, each buffer only contains half the
-	   lines */
-	if (my_src_fmt.fmt.pix.field == V4L2_FIELD_ALTERNATE) {
-		my_src_fmt.fmt.pix.height /= 2;
-		my_dest_fmt.fmt.pix.height /= 2;
-	}
-
 	/* sanity check, is the dest buffer large enough? */
 	switch (my_dest_fmt.fmt.pix.pixelformat) {
 	case V4L2_PIX_FMT_RGB24:
@@ -1549,6 +1541,7 @@ int v4lconvert_enum_framesizes(struct v4lconvert_data *data,
 	}
 
 	frmsize->type = data->framesizes[frmsize->index].type;
+	memset(frmsize->reserved, 0, sizeof(frmsize->reserved));
 	switch (frmsize->type) {
 	case V4L2_FRMSIZE_TYPE_DISCRETE:
 		frmsize->discrete = data->framesizes[frmsize->index].discrete;

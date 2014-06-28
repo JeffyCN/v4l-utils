@@ -206,6 +206,8 @@ am__distuninstallcheck_listfiles = $(distuninstallcheck_listfiles) \
   | sed 's|^\./|$(prefix)/|' | grep -v '$(infodir)/dir$$'
 distcleancheck_listfiles = find . -type f -print
 ACLOCAL = @ACLOCAL@
+ALSA_CFLAGS = @ALSA_CFLAGS@
+ALSA_LIBS = @ALSA_LIBS@
 AMTAR = @AMTAR@
 AM_DEFAULT_VERBOSITY = @AM_DEFAULT_VERBOSITY@
 AR = @AR@
@@ -259,6 +261,8 @@ LIBICONV = @LIBICONV@
 LIBOBJS = @LIBOBJS@
 LIBS = @LIBS@
 LIBTOOL = @LIBTOOL@
+LIBUDEV_CFLAGS = @LIBUDEV_CFLAGS@
+LIBUDEV_LIBS = @LIBUDEV_LIBS@
 LIBV4L1_PRIV_DIR = @LIBV4L1_PRIV_DIR@
 LIBV4L2_PLUGIN_DIR = @LIBV4L2_PLUGIN_DIR@
 LIBV4L2_PRIV_DIR = @LIBV4L2_PRIV_DIR@
@@ -289,6 +293,8 @@ PATH_SEPARATOR = @PATH_SEPARATOR@
 PKG_CONFIG = @PKG_CONFIG@
 PKG_CONFIG_LIBDIR = @PKG_CONFIG_LIBDIR@
 PKG_CONFIG_PATH = @PKG_CONFIG_PATH@
+QTGL_CFLAGS = @QTGL_CFLAGS@
+QTGL_LIBS = @QTGL_LIBS@
 QT_CFLAGS = @QT_CFLAGS@
 QT_LIBS = @QT_LIBS@
 RANLIB = @RANLIB@
@@ -339,6 +345,8 @@ keytablesystemdir = @keytablesystemdir@
 keytableuserdir = @keytableuserdir@
 libdir = @libdir@
 libexecdir = @libexecdir@
+libudev_CFLAGS = @libudev_CFLAGS@
+libudev_LIBS = @libudev_LIBS@
 libv4l1privdir = @libv4l1privdir@
 libv4l1subdir = @libv4l1subdir@
 libv4l2plugindir = @libv4l2plugindir@
@@ -367,7 +375,7 @@ udevrulesdir = @udevrulesdir@
 AUTOMAKE_OPTIONS = foreign
 ACLOCAL_AMFLAGS = -I m4
 SUBDIRS = lib $(am__append_1)
-EXTRA_DIST = include COPYING.libv4l README.libv4l README.lib-multi-threading
+EXTRA_DIST = android-config.h include COPYING.libv4l README.libv4l README.lib-multi-threading
 all: config.h
 	$(MAKE) $(AM_MAKEFLAGS) all-recursive
 
@@ -854,25 +862,32 @@ uninstall-am:
 # custom targets
 
 sync-with-kernel:
-	@if [ ! -f $(KERNEL_DIR)/include/uapi/linux/videodev2.h -o \
-	      ! -f $(KERNEL_DIR)/include/uapi/linux/v4l2-controls.h -o \
-	      ! -f $(KERNEL_DIR)/include/uapi/linux/v4l2-common.h -o \
-	      ! -f $(KERNEL_DIR)/include/uapi/linux/ivtv.h -o \
-	      ! -f $(KERNEL_DIR)/include/uapi/linux/dvb/frontend.h -o \
-	      ! -f $(KERNEL_DIR)/include/uapi/linux/dvb/dmx.h -o \
-	      ! -f $(KERNEL_DIR)/include/uapi/linux/dvb/audio.h -o \
-	      ! -f $(KERNEL_DIR)/include/uapi/linux/dvb/video.h ]; then \
+	@if [ ! -f $(KERNEL_DIR)/usr/include/linux/videodev2.h -o \
+	      ! -f $(KERNEL_DIR)/usr/include/linux/fb.h -o \
+	      ! -f $(KERNEL_DIR)/usr/include/linux/v4l2-controls.h -o \
+	      ! -f $(KERNEL_DIR)/usr/include/linux/v4l2-common.h -o \
+	      ! -f $(KERNEL_DIR)/usr/include/linux/v4l2-subdev.h -o \
+	      ! -f $(KERNEL_DIR)/usr/include/linux/v4l2-mediabus.h -o \
+	      ! -f $(KERNEL_DIR)/usr/include/linux/ivtv.h -o \
+	      ! -f $(KERNEL_DIR)/usr/include/linux/dvb/frontend.h -o \
+	      ! -f $(KERNEL_DIR)/usr/include/linux/dvb/dmx.h -o \
+	      ! -f $(KERNEL_DIR)/usr/include/linux/dvb/audio.h -o \
+	      ! -f $(KERNEL_DIR)/usr/include/linux/dvb/video.h ]; then \
 	  echo "Error you must set KERNEL_DIR to point to an extracted kernel source dir"; \
+	  echo "and run 'make headers_install' in \$$KERNEL_DIR."; \
 	  exit 1; \
 	fi
-	cp -a $(KERNEL_DIR)/include/uapi/linux/videodev2.h $(top_srcdir)/include/linux
-	cp -a $(KERNEL_DIR)/include/uapi/linux/v4l2-controls.h $(top_srcdir)/include/linux
-	cp -a $(KERNEL_DIR)/include/uapi/linux/v4l2-common.h $(top_srcdir)/include/linux
-	cp -a $(KERNEL_DIR)/include/uapi/linux/ivtv.h $(top_srcdir)/include/linux
-	cp -a $(KERNEL_DIR)/include/uapi/linux/dvb/frontend.h $(top_srcdir)/include/linux/dvb
-	cp -a $(KERNEL_DIR)/include/uapi/linux/dvb/dmx.h $(top_srcdir)/include/linux/dvb
-	cp -a $(KERNEL_DIR)/include/uapi/linux/dvb/audio.h $(top_srcdir)/include/linux/dvb
-	cp -a $(KERNEL_DIR)/include/uapi/linux/dvb/video.h $(top_srcdir)/include/linux/dvb
+	cp -a $(KERNEL_DIR)/usr/include/linux/videodev2.h $(top_srcdir)/include/linux
+	cp -a $(KERNEL_DIR)/usr/include/linux/fb.h $(top_srcdir)/include/linux
+	cp -a $(KERNEL_DIR)/usr/include/linux/v4l2-controls.h $(top_srcdir)/include/linux
+	cp -a $(KERNEL_DIR)/usr/include/linux/v4l2-common.h $(top_srcdir)/include/linux
+	cp -a $(KERNEL_DIR)/usr/include/linux/v4l2-subdev.h $(top_srcdir)/include/linux
+	cp -a $(KERNEL_DIR)/usr/include/linux/v4l2-mediabus.h $(top_srcdir)/include/linux
+	cp -a $(KERNEL_DIR)/usr/include/linux/ivtv.h $(top_srcdir)/include/linux
+	cp -a $(KERNEL_DIR)/usr/include/linux/dvb/frontend.h $(top_srcdir)/include/linux/dvb
+	cp -a $(KERNEL_DIR)/usr/include/linux/dvb/dmx.h $(top_srcdir)/include/linux/dvb
+	cp -a $(KERNEL_DIR)/usr/include/linux/dvb/audio.h $(top_srcdir)/include/linux/dvb
+	cp -a $(KERNEL_DIR)/usr/include/linux/dvb/video.h $(top_srcdir)/include/linux/dvb
 
 	$(MAKE) -C utils/keytable $@
 	$(MAKE) -C utils/xc3028-firmware $@

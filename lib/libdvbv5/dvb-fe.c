@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 - Mauro Carvalho Chehab <mchehab@redhat.com>
+ * Copyright (c) 2011-2012 - Mauro Carvalho Chehab
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -19,8 +19,8 @@
 #include <sys/types.h>
 
 #include "dvb-v5.h"
-#include "dvb-v5-std.h"
-#include "dvb-fe.h"
+#include <libdvbv5/dvb-v5-std.h>
+#include <libdvbv5/dvb-fe.h>
 
 #include <inttypes.h>
 #include <math.h>
@@ -35,6 +35,13 @@ static void dvb_v5_free(struct dvb_v5_fe_parms *parms)
 	free(parms);
 }
 
+struct dvb_v5_fe_parms dummy_fe;
+struct dvb_v5_fe_parms *dvb_fe_dummy()
+{
+	dummy_fe.logfunc = dvb_default_log;
+	return &dummy_fe;
+}
+
 struct dvb_v5_fe_parms *dvb_fe_open(int adapter, int frontend, unsigned verbose,
 				    unsigned use_legacy_call)
 {
@@ -45,12 +52,16 @@ struct dvb_v5_fe_parms *dvb_fe_open(int adapter, int frontend, unsigned verbose,
 struct dvb_v5_fe_parms *dvb_fe_open2(int adapter, int frontend, unsigned verbose,
 				    unsigned use_legacy_call, dvb_logfunc logfunc)
 {
-	int fd, i;
+	int fd, i, r;
 	char *fname;
 	struct dtv_properties dtv_prop;
 	struct dvb_v5_fe_parms *parms = NULL;
 
-	asprintf(&fname, "/dev/dvb/adapter%i/frontend%i", adapter, frontend);
+	r = asprintf(&fname, "/dev/dvb/adapter%i/frontend%i", adapter, frontend);
+	if (r < 0) {
+		logfunc(LOG_ERR, "asprintf error");
+		return NULL;
+	}
 	if (!fname) {
 		logfunc(LOG_ERR, "fname calloc: %s", strerror(errno));
 		return NULL;
@@ -59,12 +70,14 @@ struct dvb_v5_fe_parms *dvb_fe_open2(int adapter, int frontend, unsigned verbose
 	fd = open(fname, O_RDWR, 0);
 	if (fd == -1) {
 		logfunc(LOG_ERR, "%s while opening %s", strerror(errno), fname);
+		free(fname);
 		return NULL;
 	}
 	parms = calloc(sizeof(*parms), 1);
 	if (!parms) {
 		logfunc(LOG_ERR, "parms calloc: %s", strerror(errno));
 		close(fd);
+		free(fname);
 		return NULL;
 	}
 	parms->fname = fname;
@@ -73,11 +86,13 @@ struct dvb_v5_fe_parms *dvb_fe_open2(int adapter, int frontend, unsigned verbose
 	parms->sat_number = -1;
 	parms->abort = 0;
 	parms->logfunc = logfunc;
+	parms->lna = LNA_AUTO;
 
 	if (ioctl(fd, FE_GET_INFO, &parms->info) == -1) {
 		dvb_perror("FE_GET_INFO");
 		dvb_v5_free(parms);
 		close(fd);
+		free(fname);
 		return NULL;
 	}
 
@@ -157,6 +172,7 @@ struct dvb_v5_fe_parms *dvb_fe_open2(int adapter, int frontend, unsigned verbose
 			dvb_logerr("delivery system not detected");
 			dvb_v5_free(parms);
 			close(fd);
+			free(fname);
 			return NULL;
 		}
 	} else {
@@ -168,6 +184,7 @@ struct dvb_v5_fe_parms *dvb_fe_open2(int adapter, int frontend, unsigned verbose
 			dvb_perror("FE_GET_PROPERTY");
 			dvb_v5_free(parms);
 			close(fd);
+			free(fname);
 			return NULL;
 		}
 		parms->num_systems = parms->dvb_prop[0].u.buffer.len;
@@ -178,6 +195,7 @@ struct dvb_v5_fe_parms *dvb_fe_open2(int adapter, int frontend, unsigned verbose
 			dvb_logerr("driver died while trying to set the delivery system");
 			dvb_v5_free(parms);
 			close(fd);
+			free(fname);
 			return NULL;
 		}
 	}
@@ -371,7 +389,6 @@ int dvb_set_compat_delivery_system(struct dvb_v5_fe_parms *parms,
 	uint32_t delsys = SYS_UNDEFINED;
 	enum dvbv3_emulation_type type;
 
-
 	/* Check if the desired delivery system is supported */
 	for (i = 0; i < parms->num_systems; i++) {
 		if (parms->systems[i] == desired_system) {
@@ -399,10 +416,12 @@ int dvb_set_compat_delivery_system(struct dvb_v5_fe_parms *parms,
 	if (delsys == SYS_UNDEFINED)
 		return -1;
 
-	dvb_set_sys(parms, desired_system);
+	dvb_log("Using a DVBv3 compat file for %s", delivery_system_name[delsys]);
+
+	dvb_set_sys(parms, delsys);
 
 	/* Put ISDB-T into auto mode */
-	if (desired_system == SYS_ISDBT) {
+	if (delsys == SYS_ISDBT) {
 		dvb_fe_store_parm(parms, DTV_BANDWIDTH_HZ, 6000000);
 		dvb_fe_store_parm(parms, DTV_ISDBT_PARTIAL_RECEPTION, 0);
 		dvb_fe_store_parm(parms, DTV_ISDBT_SOUND_BROADCASTING, 0);
@@ -514,7 +533,7 @@ static int dvb_copy_fe_props(const struct dtv_property *from, int n, struct dtv_
 
 int dvb_fe_get_parms(struct dvb_v5_fe_parms *parms)
 {
-	int n = 0;
+	int i, n = 0;
 	const unsigned int *sys_props;
 	struct dtv_properties prop;
 	struct dvb_frontend_parameters v3_parms;
@@ -546,6 +565,11 @@ int dvb_fe_get_parms(struct dvb_v5_fe_parms *parms)
 			dvb_perror("FE_GET_PROPERTY");
 			return errno;
 		}
+
+		/* copy back params from temporary fe_prop */
+		for (i = 0; i < n; i++)
+			dvb_fe_store_parm(parms, fe_prop[i].cmd, fe_prop[i].u.data);
+
 		if (parms->verbose) {
 			dvb_log("Got parameters for %s:",
 			       delivery_system_name[parms->current_sys]);
@@ -605,12 +629,29 @@ int dvb_fe_set_parms(struct dvb_v5_fe_parms *parms)
 	struct dvb_frontend_parameters v3_parms;
 	uint32_t bw;
 
+	if (parms->lna != LNA_AUTO && !parms->legacy_fe) {
+		struct dvb_v5_fe_parms tmp_lna_parms;
+
+		memset(&prop, 0, sizeof(prop));
+		prop.props = tmp_lna_parms.dvb_prop;
+
+		prop.props[0].cmd = DTV_LNA;
+		prop.props[0].u.data = parms->lna;
+		prop.num = 1;
+		if (ioctl(parms->fd, FE_SET_PROPERTY, &prop) == -1) {
+			dvb_perror("Setting LNA");
+			parms->lna = LNA_AUTO;
+		} else if (parms->lna != LNA_AUTO && parms->verbose)
+			dvb_logdbg("LNA is %s", parms->lna ? "ON" : "OFF");
+	}
+
 	if (dvb_fe_is_satellite(tmp_parms.current_sys))
 		dvb_sat_set_parms(&tmp_parms);
 
 	/* Filter out any user DTV_foo property such as DTV_POLARIZATION */
 	tmp_parms.n_props = dvb_copy_fe_props(tmp_parms.dvb_prop, tmp_parms.n_props, tmp_parms.dvb_prop);
 
+	memset(&prop, 0, sizeof(prop));
 	prop.props = tmp_parms.dvb_prop;
 	prop.num = tmp_parms.n_props;
 	prop.props[prop.num].cmd = DTV_TUNE;
@@ -784,7 +825,7 @@ int dvb_fe_retrieve_stats(struct dvb_v5_fe_parms *parms,
 
 	*value = stat->uvalue;
 
-	if (parms->verbose)
+	if (parms->verbose > 1)
 		dvb_logdbg("Stats for %s = %d", dvb_cmd_name(cmd), *value);
 
 	return 0;
@@ -998,8 +1039,8 @@ static enum dvb_quality dvbv_fe_cnr_to_quality(struct dvb_v5_fe_parms *parms,
 				       ARRAY_SIZE(dvb_s_cnr_2_qual));
 		break;
 	case SYS_ISDBT:
-		dvb_fe_retrieve_parm(parms, DTV_MODULATION, &modulation);
-		dvb_fe_retrieve_parm(parms, DTV_INNER_FEC, &fec);
+		dvb_fe_retrieve_parm(parms, DTV_ISDBT_LAYERA_MODULATION, &modulation);
+		dvb_fe_retrieve_parm(parms, DTV_ISDBT_LAYERA_FEC, &fec);
 		if (modulation == QAM_AUTO)
 			modulation = QAM_64;	/* Assume worse case */
 		qual = cnr_arr_to_qual(modulation, fec, cnr->svalue,
@@ -1145,7 +1186,7 @@ int dvb_fe_get_stats(struct dvb_v5_fe_parms *parms)
 
 		/* Do a DVBv5.10 stats call */
 		if (ioctl(parms->fd, FE_GET_PROPERTY, &props) == -1)
-			return errno;
+			goto dvbv3_fallback;
 
 		/*
 		 * All props with len=0 mean that this device doesn't have any

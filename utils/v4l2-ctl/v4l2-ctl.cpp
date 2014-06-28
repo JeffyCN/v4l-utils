@@ -35,23 +35,17 @@
 #include <sys/time.h>
 #include <dirent.h>
 #include <math.h>
-#include <config.h>
+
+#include "v4l2-ctl.h"
 
 #ifdef HAVE_SYS_KLOG_H
 #include <sys/klog.h>
 #endif
 
-#include <linux/videodev2.h>
-#include <libv4l2.h>
-
 #include <list>
 #include <vector>
 #include <map>
-#include <string>
 #include <algorithm>
-
-
-#include "v4l2-ctl.h"
 
 char options[OptLast];
 
@@ -59,24 +53,23 @@ static int app_result;
 int verbose;
 
 unsigned capabilities;
+unsigned out_capabilities;
+bool is_multiplanar;
+__u32 vidcap_buftype;
+__u32 vidout_buftype;
 
 static struct option long_options[] = {
 	{"list-audio-inputs", no_argument, 0, OptListAudioInputs},
 	{"list-audio-outputs", no_argument, 0, OptListAudioOutputs},
 	{"all", no_argument, 0, OptAll},
 	{"device", required_argument, 0, OptSetDevice},
+	{"out-device", required_argument, 0, OptSetOutDevice},
 	{"get-fmt-video", no_argument, 0, OptGetVideoFormat},
 	{"set-fmt-video", required_argument, 0, OptSetVideoFormat},
 	{"try-fmt-video", required_argument, 0, OptTryVideoFormat},
-	{"get-fmt-video-mplane", no_argument, 0, OptGetVideoMplaneFormat},
-	{"set-fmt-video-mplane", required_argument, 0, OptSetVideoMplaneFormat},
-	{"try-fmt-video-mplane", required_argument, 0, OptTryVideoMplaneFormat},
 	{"get-fmt-video-out", no_argument, 0, OptGetVideoOutFormat},
 	{"set-fmt-video-out", required_argument, 0, OptSetVideoOutFormat},
 	{"try-fmt-video-out", required_argument, 0, OptTryVideoOutFormat},
-	{"get-fmt-video-out-mplane", no_argument, 0, OptGetVideoOutMplaneFormat},
-	{"set-fmt-video-out-mplane", required_argument, 0, OptSetVideoOutMplaneFormat},
-	{"try-fmt-video-out-mplane", required_argument, 0, OptTryVideoOutMplaneFormat},
 	{"help", no_argument, 0, OptHelp},
 	{"help-tuner", no_argument, 0, OptHelpTuner},
 	{"help-io", no_argument, 0, OptHelpIO},
@@ -85,11 +78,15 @@ static struct option long_options[] = {
 	{"help-vidout", no_argument, 0, OptHelpVidOut},
 	{"help-overlay", no_argument, 0, OptHelpOverlay},
 	{"help-vbi", no_argument, 0, OptHelpVbi},
+	{"help-sdr", no_argument, 0, OptHelpSdr},
 	{"help-selection", no_argument, 0, OptHelpSelection},
 	{"help-misc", no_argument, 0, OptHelpMisc},
 	{"help-streaming", no_argument, 0, OptHelpStreaming},
+	{"help-edid", no_argument, 0, OptHelpEdid},
 	{"help-all", no_argument, 0, OptHelpAll},
+#ifndef NO_LIBV4L2
 	{"wrapper", no_argument, 0, OptUseWrapper},
+#endif
 	{"concise", no_argument, 0, OptConcise},
 	{"get-output", no_argument, 0, OptGetOutput},
 	{"set-output", required_argument, 0, OptSetOutput},
@@ -105,14 +102,19 @@ static struct option long_options[] = {
 	{"set-freq", required_argument, 0, OptSetFreq},
 	{"list-standards", no_argument, 0, OptListStandards},
 	{"list-formats", no_argument, 0, OptListFormats},
-	{"list-formats-mplane", no_argument, 0, OptListMplaneFormats},
 	{"list-formats-ext", no_argument, 0, OptListFormatsExt},
-	{"list-formats-ext-mplane", no_argument, 0, OptListMplaneFormatsExt},
+	{"list-fields", no_argument, 0, OptListFields},
 	{"list-framesizes", required_argument, 0, OptListFrameSizes},
 	{"list-frameintervals", required_argument, 0, OptListFrameIntervals},
 	{"list-formats-overlay", no_argument, 0, OptListOverlayFormats},
+	{"list-formats-sdr", no_argument, 0, OptListSdrFormats},
 	{"list-formats-out", no_argument, 0, OptListOutFormats},
-	{"list-formats-out-mplane", no_argument, 0, OptListOutMplaneFormats},
+	{"list-fields-out", no_argument, 0, OptListOutFields},
+	{"clear-clips", no_argument, 0, OptClearClips},
+	{"clear-bitmap", no_argument, 0, OptClearBitmap},
+	{"add-clip", required_argument, 0, OptAddClip},
+	{"add-bitmap", required_argument, 0, OptAddBitmap},
+	{"find-fb", no_argument, 0, OptFindFb},
 	{"get-standard", no_argument, 0, OptGetStandard},
 	{"set-standard", required_argument, 0, OptSetStandard},
 	{"get-detected-standard", no_argument, 0, OptQueryStandard},
@@ -132,11 +134,8 @@ static struct option long_options[] = {
 	{"verbose", no_argument, 0, OptVerbose},
 	{"log-status", no_argument, 0, OptLogStatus},
 	{"get-fmt-overlay", no_argument, 0, OptGetOverlayFormat},
-	{"set-fmt-overlay", required_argument, 0, OptSetOverlayFormat},
-	{"try-fmt-overlay", required_argument, 0, OptTryOverlayFormat},
-	{"get-fmt-output-overlay", no_argument, 0, OptGetOutputOverlayFormat},
-	{"set-fmt-output-overlay", required_argument, 0, OptSetOutputOverlayFormat},
-	{"try-fmt-output-overlay", required_argument, 0, OptTryOutputOverlayFormat},
+	{"set-fmt-overlay", optional_argument, 0, OptSetOverlayFormat},
+	{"try-fmt-overlay", optional_argument, 0, OptTryOverlayFormat},
 	{"get-fmt-sliced-vbi", no_argument, 0, OptGetSlicedVbiFormat},
 	{"set-fmt-sliced-vbi", required_argument, 0, OptSetSlicedVbiFormat},
 	{"try-fmt-sliced-vbi", required_argument, 0, OptTrySlicedVbiFormat},
@@ -144,7 +143,14 @@ static struct option long_options[] = {
 	{"set-fmt-sliced-vbi-out", required_argument, 0, OptSetSlicedVbiOutFormat},
 	{"try-fmt-sliced-vbi-out", required_argument, 0, OptTrySlicedVbiOutFormat},
 	{"get-fmt-vbi", no_argument, 0, OptGetVbiFormat},
+	{"set-fmt-vbi", required_argument, 0, OptSetVbiFormat},
+	{"try-fmt-vbi", required_argument, 0, OptTryVbiFormat},
 	{"get-fmt-vbi-out", no_argument, 0, OptGetVbiOutFormat},
+	{"set-fmt-vbi-out", required_argument, 0, OptSetVbiOutFormat},
+	{"try-fmt-vbi-out", required_argument, 0, OptTryVbiOutFormat},
+	{"get-fmt-sdr", no_argument, 0, OptGetSdrFormat},
+	{"set-fmt-sdr", required_argument, 0, OptSetSdrFormat},
+	{"try-fmt-sdr", required_argument, 0, OptTrySdrFormat},
 	{"get-sliced-vbi-cap", no_argument, 0, OptGetSlicedVbiCap},
 	{"get-sliced-vbi-out-cap", no_argument, 0, OptGetSlicedVbiOutCap},
 	{"get-fbuf", no_argument, 0, OptGetFBuf},
@@ -186,6 +192,9 @@ static struct option long_options[] = {
 	{"try-encoder-cmd", required_argument, 0, OptTryEncoderCmd},
 	{"decoder-cmd", required_argument, 0, OptDecoderCmd},
 	{"try-decoder-cmd", required_argument, 0, OptTryDecoderCmd},
+	{"set-edid", required_argument, 0, OptSetEdid},
+	{"clear-edid", optional_argument, 0, OptClearEdid},
+	{"get-edid", optional_argument, 0, OptGetEdid},
 	{"tuner-index", required_argument, 0, OptTunerIndex},
 	{"list-buffers", no_argument, 0, OptListBuffers},
 	{"list-buffers-out", no_argument, 0, OptListBuffersOut},
@@ -193,6 +202,7 @@ static struct option long_options[] = {
 	{"list-buffers-sliced-vbi", no_argument, 0, OptListBuffersSlicedVbi},
 	{"list-buffers-vbi-out", no_argument, 0, OptListBuffersVbiOut},
 	{"list-buffers-sliced-vbi-out", no_argument, 0, OptListBuffersSlicedVbiOut},
+	{"list-buffers-sdr", no_argument, 0, OptListBuffersSdr},
 	{"stream-count", required_argument, 0, OptStreamCount},
 	{"stream-skip", required_argument, 0, OptStreamSkip},
 	{"stream-loop", no_argument, 0, OptStreamLoop},
@@ -200,10 +210,12 @@ static struct option long_options[] = {
 	{"stream-to", required_argument, 0, OptStreamTo},
 	{"stream-mmap", optional_argument, 0, OptStreamMmap},
 	{"stream-user", optional_argument, 0, OptStreamUser},
+	{"stream-dmabuf", no_argument, 0, OptStreamDmaBuf},
 	{"stream-from", required_argument, 0, OptStreamFrom},
 	{"stream-pattern", required_argument, 0, OptStreamPattern},
 	{"stream-out-mmap", optional_argument, 0, OptStreamOutMmap},
 	{"stream-out-user", optional_argument, 0, OptStreamOutUser},
+	{"stream-out-dmabuf", no_argument, 0, OptStreamOutDmaBuf},
 	{0, 0, 0, 0}
 };
 
@@ -217,9 +229,11 @@ static void usage_all(void)
        vidout_usage();
        overlay_usage();
        vbi_usage();
+       sdr_usage();
        selection_usage();
        misc_usage();
        streaming_usage();
+       edid_usage();
 }
 
 static int test_open(const char *file, int oflag)
@@ -285,6 +299,8 @@ std::string buftype2s(int type)
 		return "Sliced VBI Output";
 	case V4L2_BUF_TYPE_VIDEO_OUTPUT_OVERLAY:
 		return "Video Output Overlay";
+	case V4L2_BUF_TYPE_SDR_CAPTURE:
+		return "SDR Capture";
 	default:
 		return "Unknown (" + num2s(type) + ")";
 	}
@@ -430,7 +446,26 @@ void printfmt(const struct v4l2_format &vfmt)
 		printf("\tChroma Key  : 0x%08x\n", vfmt.fmt.win.chromakey);
 		printf("\tGlobal Alpha: 0x%02x\n", vfmt.fmt.win.global_alpha);
 		printf("\tClip Count  : %u\n", vfmt.fmt.win.clipcount);
-		printf("\tClip Bitmap : %s\n", vfmt.fmt.win.bitmap ? "Yes" : "No");
+		if (vfmt.fmt.win.clips)
+			for (unsigned i = 0; i < vfmt.fmt.win.clipcount; i++) {
+				struct v4l2_rect &r = vfmt.fmt.win.clips[i].c;
+
+				printf("\t\tClip %2d: %ux%u@%ux%u\n", i,
+						r.width, r.height, r.left, r.top);
+			}
+		printf("\tClip Bitmap : %s", vfmt.fmt.win.bitmap ? "Yes, " : "No\n");
+		if (vfmt.fmt.win.bitmap) {
+			unsigned char *bitmap = (unsigned char *)vfmt.fmt.win.bitmap;
+			unsigned stride = (vfmt.fmt.win.w.width + 7) / 8;
+			unsigned cnt = 0;
+
+			for (unsigned y = 0; y < vfmt.fmt.win.w.height; y++)
+				for (unsigned x = 0; x < vfmt.fmt.win.w.width; x++)
+					if (bitmap[y * stride + x / 8] & (1 << (x & 7)))
+						cnt++;
+			printf("%u bits of %u are set\n", cnt,
+					vfmt.fmt.win.w.width * vfmt.fmt.win.w.height);
+		}
 		break;
 	case V4L2_BUF_TYPE_VBI_CAPTURE:
 	case V4L2_BUF_TYPE_VBI_OUTPUT:
@@ -458,6 +493,9 @@ void printfmt(const struct v4l2_format &vfmt)
 		}
 		printf("\tI/O Size       : %u\n", vfmt.fmt.sliced.io_size);
 		break;
+	case V4L2_BUF_TYPE_SDR_CAPTURE:
+		printf("\tSample Format   : %s\n", fcc2s(vfmt.fmt.sdr.pixelformat).c_str());
+		break;
 	}
 }
 
@@ -472,7 +510,7 @@ std::string fmtdesc2s(unsigned flags)
 	return flags2s(flags, fmtdesc_def);
 }
 
-void print_video_formats(int fd, enum v4l2_buf_type type)
+void print_video_formats(int fd, __u32 type)
 {
 	struct v4l2_fmtdesc fmt;
 
@@ -519,6 +557,8 @@ static std::string cap2s(unsigned cap)
 		s += "\t\tSliced VBI Capture\n";
 	if (cap & V4L2_CAP_SLICED_VBI_OUTPUT)
 		s += "\t\tSliced VBI Output\n";
+	if (cap & V4L2_CAP_SDR_CAPTURE)
+		s += "\t\tSDR Capture\n";
 	if (cap & V4L2_CAP_RDS_CAPTURE)
 		s += "\t\tRDS Capture\n";
 	if (cap & V4L2_CAP_RDS_OUTPUT)
@@ -632,27 +672,61 @@ void print_v4lstd(v4l2_std_id std)
 	}
 }
 
-int parse_fmt(char *optarg, __u32 &width, __u32 &height, __u32 &pixelformat)
+__u32 parse_field(const char *s)
+{
+	if (!strcmp(s, "any")) return V4L2_FIELD_ANY;
+	if (!strcmp(s, "none")) return V4L2_FIELD_NONE;
+	if (!strcmp(s, "top")) return V4L2_FIELD_TOP;
+	if (!strcmp(s, "bottom")) return V4L2_FIELD_BOTTOM;
+	if (!strcmp(s, "interlaced")) return V4L2_FIELD_INTERLACED;
+	if (!strcmp(s, "seq_tb")) return V4L2_FIELD_SEQ_TB;
+	if (!strcmp(s, "seq_bt")) return V4L2_FIELD_SEQ_BT;
+	if (!strcmp(s, "alternate")) return V4L2_FIELD_ALTERNATE;
+	if (!strcmp(s, "interlaced_tb")) return V4L2_FIELD_INTERLACED_TB;
+	if (!strcmp(s, "interlaced_bt")) return V4L2_FIELD_INTERLACED_BT;
+	return V4L2_FIELD_ANY;
+}
+
+static __u32 parse_colorspace(const char *s)
+{
+	if (!strcmp(s, "smpte170m")) return V4L2_COLORSPACE_SMPTE170M;
+	if (!strcmp(s, "smpte240m")) return V4L2_COLORSPACE_SMPTE240M;
+	if (!strcmp(s, "rec709")) return V4L2_COLORSPACE_REC709;
+	if (!strcmp(s, "bt878")) return V4L2_COLORSPACE_BT878;
+	if (!strcmp(s, "470m")) return V4L2_COLORSPACE_470_SYSTEM_M;
+	if (!strcmp(s, "470bg")) return V4L2_COLORSPACE_470_SYSTEM_BG;
+	if (!strcmp(s, "jpeg")) return V4L2_COLORSPACE_JPEG;
+	if (!strcmp(s, "srgb")) return V4L2_COLORSPACE_SRGB;
+	return 0;
+}
+
+int parse_fmt(char *optarg, __u32 &width, __u32 &height, __u32 &pixelformat,
+	      __u32 &field, __u32 &colorspace, __u32 *bytesperline)
 {
 	char *value, *subs;
 	int fmts = 0;
+	unsigned bpl_index = 0;
 
+	field = V4L2_FIELD_ANY;
 	subs = optarg;
 	while (*subs != '\0') {
 		static const char *const subopts[] = {
 			"width",
 			"height",
 			"pixelformat",
+			"field",
+			"colorspace",
+			"bytesperline",
 			NULL
 		};
 
 		switch (parse_subopt(&subs, subopts, &value)) {
 		case 0:
-			width = strtol(value, 0L, 0);
+			width = strtoul(value, 0L, 0);
 			fmts |= FmtWidth;
 			break;
 		case 1:
-			height = strtol(value, 0L, 0);
+			height = strtoul(value, 0L, 0);
 			fmts |= FmtHeight;
 			break;
 		case 2:
@@ -663,6 +737,26 @@ int parse_fmt(char *optarg, __u32 &width, __u32 &height, __u32 &pixelformat)
 			else
 				pixelformat = strtol(value, 0L, 0);
 			fmts |= FmtPixelFormat;
+			break;
+		case 3:
+			field = parse_field(value);
+			fmts |= FmtField;
+			break;
+		case 4:
+			colorspace = parse_colorspace(value);
+			if (colorspace)
+				fmts |= FmtColorspace;
+			else
+				fprintf(stderr, "unknown colorspace %s\n", value);
+			break;
+		case 5:
+			bytesperline[bpl_index] = strtoul(value, 0L, 0);
+			if (bytesperline[bpl_index] > 0xffff) {
+				fprintf(stderr, "bytesperline can't be more than 65535\n");
+				bytesperline[bpl_index] = 0;
+			}
+			bpl_index++;
+			fmts |= FmtBytesPerLine;
 			break;
 		default:
 			return 0;
@@ -690,6 +784,9 @@ static void print_event(const struct v4l2_event *ev)
 	case V4L2_EVENT_FRAME_SYNC:
 		printf("frame_sync %d\n", ev->u.frame_sync.frame_sequence);
 		break;
+	case V4L2_EVENT_SOURCE_CHANGE:
+		printf("source_change: pad/input=%d changes: %x\n", ev->id, ev->u.src_change.changes);
+		break;
 	default:
 		if (ev->type >= V4L2_EVENT_PRIVATE_START)
 			printf("unknown private event (%08x)\n", ev->type);
@@ -715,6 +812,9 @@ static __u32 parse_event(const char *e, const char **name)
 	else if (!strncmp(e, "ctrl=", 5)) {
 		event = V4L2_EVENT_CTRL;
 		*name = e + 5;
+	} else if (!strncmp(e, "source_change=", 14)) {
+		event = V4L2_EVENT_SOURCE_CHANGE;
+		*name = e + 14;
 	}
 
 	if (event == 0) {
@@ -736,6 +836,7 @@ __u32 find_pixel_format(int fd, unsigned index, bool output, bool mplane)
 	else
 		fmt.type = mplane ?  V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE :
 			V4L2_BUF_TYPE_VIDEO_CAPTURE;
+
 	if (doioctl(fd, VIDIOC_ENUM_FMT, &fmt))
 		return 0;
 	return fmt.pixelformat;
@@ -746,17 +847,19 @@ int main(int argc, char **argv)
 	int i;
 
 	int fd = -1;
+	int out_fd = -1;
 
 	/* command args */
 	int ch;
 	const char *device = "/dev/video0";	/* -d device */
+	const char *out_device = NULL;
 	struct v4l2_capability vcap;	/* list_cap */
 	__u32 wait_for_event = 0;	/* wait for this event */
 	const char *wait_event_id = NULL;
 	__u32 poll_for_event = 0;	/* poll for this event */
 	const char *poll_event_id = NULL;
 	unsigned secs = 0;
-	char short_options[26 * 2 * 2 + 1];
+	char short_options[26 * 2 * 3 + 1];
 	int idx = 0;
 
 	memset(&vcap, 0, sizeof(vcap));
@@ -769,8 +872,12 @@ int main(int argc, char **argv)
 		if (!isalpha(long_options[i].val))
 			continue;
 		short_options[idx++] = long_options[i].val;
-		if (long_options[i].has_arg == required_argument)
+		if (long_options[i].has_arg == required_argument) {
 			short_options[idx++] = ':';
+		} else if (long_options[i].has_arg == optional_argument) {
+			short_options[idx++] = ':';
+			short_options[idx++] = ':';
+		}
 	}
 	while (1) {
 		int option_index = 0;
@@ -807,6 +914,9 @@ int main(int argc, char **argv)
 		case OptHelpVbi:
 			vbi_usage();
 			return 0;
+		case OptHelpSdr:
+			sdr_usage();
+			return 0;
 		case OptHelpSelection:
 			selection_usage();
 			return 0;
@@ -815,6 +925,9 @@ int main(int argc, char **argv)
 			return 0;
 		case OptHelpStreaming:
 			streaming_usage();
+			return 0;
+		case OptHelpEdid:
+			edid_usage();
 			return 0;
 		case OptHelpAll:
 			usage_all();
@@ -826,6 +939,15 @@ int main(int argc, char **argv)
 
 				sprintf(newdev, "/dev/video%s", device);
 				device = newdev;
+			}
+			break;
+		case OptSetOutDevice:
+			out_device = optarg;
+			if (out_device[0] >= '0' && out_device[0] <= '9' && strlen(out_device) <= 3) {
+				static char newdev[20];
+
+				sprintf(newdev, "/dev/video%s", out_device);
+				out_device = newdev;
 			}
 			break;
 		case OptWaitForEvent:
@@ -860,9 +982,11 @@ int main(int argc, char **argv)
 			vidout_cmd(ch, optarg);
 			overlay_cmd(ch, optarg);
 			vbi_cmd(ch, optarg);
+			sdr_cmd(ch, optarg);
 			selection_cmd(ch, optarg);
 			misc_cmd(ch, optarg);
 			streaming_cmd(ch, optarg);
+			edid_cmd(ch, optarg);
 			break;
 		}
 	}
@@ -882,10 +1006,37 @@ int main(int argc, char **argv)
 	}
 
 	verbose = options[OptVerbose];
-	doioctl(fd, VIDIOC_QUERYCAP, &vcap);
+	if (doioctl(fd, VIDIOC_QUERYCAP, &vcap)) {
+		fprintf(stderr, "%s: not a v4l2 node\n", device);
+		exit(1);
+	}
 	capabilities = vcap.capabilities;
 	if (capabilities & V4L2_CAP_DEVICE_CAPS)
 		capabilities = vcap.device_caps;
+
+	is_multiplanar = capabilities & (V4L2_CAP_VIDEO_CAPTURE_MPLANE |
+					 V4L2_CAP_VIDEO_M2M_MPLANE |
+					 V4L2_CAP_VIDEO_OUTPUT_MPLANE);
+
+	vidcap_buftype = is_multiplanar ? V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE :
+					  V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	vidout_buftype = is_multiplanar ? V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE :
+					  V4L2_BUF_TYPE_VIDEO_OUTPUT;
+
+	if (out_device) {
+		if ((out_fd = test_open(out_device, O_RDWR)) < 0) {
+			fprintf(stderr, "Failed to open %s: %s\n", out_device,
+					strerror(errno));
+			exit(1);
+		}
+		if (doioctl(out_fd, VIDIOC_QUERYCAP, &vcap)) {
+			fprintf(stderr, "%s: not a v4l2 node\n", out_device);
+			exit(1);
+		}
+		out_capabilities = vcap.capabilities;
+		if (out_capabilities & V4L2_CAP_DEVICE_CAPS)
+			out_capabilities = vcap.device_caps;
+	}
 
 	common_process_controls(fd);
 
@@ -916,11 +1067,11 @@ int main(int argc, char **argv)
 		options[OptGetTuner] = 1;
 		options[OptGetModulator] = 1;
 		options[OptGetOverlayFormat] = 1;
-		options[OptGetOutputOverlayFormat] = 1;
 		options[OptGetVbiFormat] = 1;
 		options[OptGetVbiOutFormat] = 1;
 		options[OptGetSlicedVbiFormat] = 1;
 		options[OptGetSlicedVbiOutFormat] = 1;
+		options[OptGetSdrFormat] = 1;
 		options[OptGetFBuf] = 1;
 		options[OptGetCropCap] = 1;
 		options[OptGetOutputCropCap] = 1;
@@ -964,9 +1115,11 @@ int main(int argc, char **argv)
 	vidout_set(fd);
 	overlay_set(fd);
 	vbi_set(fd);
+	sdr_set(fd);
 	selection_set(fd);
-	streaming_set(fd);
+	streaming_set(fd, out_fd);
 	misc_set(fd);
+	edid_set(fd);
 
 	/* Get options */
 
@@ -978,8 +1131,10 @@ int main(int argc, char **argv)
 	vidout_get(fd);
 	overlay_get(fd);
 	vbi_get(fd);
+	sdr_get(fd);
 	selection_get(fd);
 	misc_get(fd);
+	edid_get(fd);
 
 	/* List options */
 
@@ -990,7 +1145,8 @@ int main(int argc, char **argv)
 	vidout_list(fd);
 	overlay_list(fd);
 	vbi_list(fd);
-	streaming_list(fd);
+	sdr_list(fd);
+	streaming_list(fd, out_fd);
 
 	if (options[OptWaitForEvent]) {
 		struct v4l2_event_subscription sub;
@@ -1000,6 +1156,8 @@ int main(int argc, char **argv)
 		sub.type = wait_for_event;
 		if (wait_for_event == V4L2_EVENT_CTRL)
 			sub.id = common_find_ctrl_id(wait_event_id);
+		else if (wait_for_event == V4L2_EVENT_SOURCE_CHANGE)
+			sub.id = strtoul(wait_event_id, 0L, 0);
 		if (!doioctl(fd, VIDIOC_SUBSCRIBE_EVENT, &sub))
 			if (!doioctl(fd, VIDIOC_DQEVENT, &ev))
 				print_event(&ev);
@@ -1014,6 +1172,8 @@ int main(int argc, char **argv)
 		sub.type = poll_for_event;
 		if (poll_for_event == V4L2_EVENT_CTRL)
 			sub.id = common_find_ctrl_id(poll_event_id);
+		else if (poll_for_event == V4L2_EVENT_SOURCE_CHANGE)
+			sub.id = strtoul(poll_event_id, 0L, 0);
 		if (!doioctl(fd, VIDIOC_SUBSCRIBE_EVENT, &sub)) {
 			fd_set fds;
 			__u32 seq = 0;
@@ -1048,5 +1208,7 @@ int main(int argc, char **argv)
 	}
 
 	test_close(fd);
+	if (out_device)
+		test_close(out_fd);
 	exit(app_result);
 }

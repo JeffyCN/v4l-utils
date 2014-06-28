@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 - Mauro Carvalho Chehab <mchehab@redhat.com>
+ * Copyright (c) 2011-2012 - Mauro Carvalho Chehab
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -21,11 +21,98 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h> /* strcasecmp */
 #include <unistd.h>
 
-#include "dvb-file.h"
-#include "dvb-v5-std.h"
-#include "dvb-scan.h"
+#include <libdvbv5/dvb-file.h>
+#include <libdvbv5/dvb-v5-std.h>
+#include <libdvbv5/dvb-scan.h>
+#include <libdvbv5/dvb-log.h>
+#include <libdvbv5/descriptors.h>
+#include <libdvbv5/nit.h>
+#include <libdvbv5/sdt.h>
+#include <libdvbv5/pat.h>
+#include <libdvbv5/pmt.h>
+#include <libdvbv5/vct.h>
+#include <libdvbv5/desc_ts_info.h>
+#include <libdvbv5/desc_logical_channel.h>
+#include <libdvbv5/desc_language.h>
+#include <libdvbv5/desc_network_name.h>
+#include <libdvbv5/desc_cable_delivery.h>
+#include <libdvbv5/desc_sat.h>
+#include <libdvbv5/desc_terrestrial_delivery.h>
+#include <libdvbv5/desc_service.h>
+#include <libdvbv5/desc_service_list.h>
+#include <libdvbv5/desc_frequency_list.h>
+#include <libdvbv5/desc_event_short.h>
+#include <libdvbv5/desc_event_extended.h>
+#include <libdvbv5/desc_atsc_service_location.h>
+#include <libdvbv5/desc_hierarchy.h>
+
+int store_entry_prop(struct dvb_entry *entry,
+		     uint32_t cmd, uint32_t value)
+{
+	int i;
+
+	for (i = 0; i < entry->n_props; i++) {
+		if (cmd == entry->props[i].cmd)
+			break;
+	}
+	if (i == entry->n_props) {
+		if (i == DTV_MAX_COMMAND) {
+			fprintf(stderr, "Can't add property %s\n",
+			       dvb_v5_name[cmd]);
+			return -1;
+		}
+		entry->n_props++;
+		entry->props[i].cmd = cmd;
+	}
+
+	entry->props[i].u.data = value;
+
+	return 0;
+}
+
+int retrieve_entry_prop(struct dvb_entry *entry,
+			uint32_t cmd, uint32_t *value)
+{
+	int i;
+
+	for (i = 0; i < entry->n_props; i++) {
+		if (cmd == entry->props[i].cmd) {
+			*value = entry->props[i].u.data;
+			return 0;
+		}
+	}
+
+	return -1;
+}
+
+static void adjust_delsys(struct dvb_entry *entry)
+{
+	uint32_t delsys = SYS_UNDEFINED;
+
+	retrieve_entry_prop(entry, DTV_DELIVERY_SYSTEM, &delsys);
+	switch (delsys) {
+	case SYS_ATSC:
+	case SYS_DVBC_ANNEX_B: {
+		uint32_t modulation = VSB_8;
+
+		retrieve_entry_prop(entry, DTV_MODULATION, &modulation);
+		switch (modulation) {
+		case VSB_8:
+		case VSB_16:
+			delsys = SYS_ATSC;
+			break;
+		default:
+			delsys = SYS_DVBC_ANNEX_B;
+			break;
+		}
+		store_entry_prop(entry, DTV_DELIVERY_SYSTEM, delsys);
+		break;
+	}
+	} /* switch */
+}
 
 /*
  * Generic parse function for all formats each channel is contained into
@@ -181,9 +268,10 @@ struct dvb_file *parse_format_oneline(const char *fname,
 			entry->props[entry->n_props].cmd = DTV_INVERSION;
 			entry->props[entry->n_props++].u.data = INVERSION_AUTO;
 		}
-
+		adjust_delsys(entry);
 	} while (1);
-	fclose (fd);
+	fclose(fd);
+	free(buf);
 	return dvb_file;
 
 error:
@@ -191,6 +279,7 @@ error:
 		 err_msg, line, fname);
 	dvb_file_free(dvb_file);
 	fclose(fd);
+	free(buf);
 	return NULL;
 }
 
@@ -267,6 +356,7 @@ int write_format_oneline(const char *fname,
 				 delsys);
 			goto error;
 		}
+		adjust_delsys(entry);
 		if (parse_file->has_delsys_id) {
 			fprintf(fp, "%s", formats[i].id);
 			first = 0;
@@ -290,12 +380,15 @@ int write_format_oneline(const char *fname,
 				data = entry->props[j].u.data;
 
 				if (table->prop == DTV_BANDWIDTH_HZ) {
-					if (data < ARRAY_SIZE(fe_bandwidth_name))
-						data = fe_bandwidth_name[data];
-					else
+					for (j = 0; j < ARRAY_SIZE(fe_bandwidth_name); j++) {
+						if (fe_bandwidth_name[j] == data) {
+							data = j;
+							break;
+						}
+					}
+					if (j == ARRAY_SIZE(fe_bandwidth_name))
 						data = BANDWIDTH_AUTO;
 				}
-
 				if (data >= table->size) {
 					sprintf(err_msg,
 						 "value not supported");
@@ -356,30 +449,6 @@ error:
 		 err_msg, line, fname);
 	fclose(fp);
 	return -1;
-}
-
-static int store_entry_prop(struct dvb_entry *entry,
-			    uint32_t cmd, uint32_t value)
-{
-	int i;
-
-	for (i = 0; i < entry->n_props; i++) {
-		if (cmd == entry->props[i].cmd)
-			break;
-	}
-	if (i == entry->n_props) {
-		if (i == DTV_MAX_COMMAND) {
-			fprintf(stderr, "Can't add property %s\n",
-			       dvb_v5_name[cmd]);
-			return -1;
-		}
-		entry->n_props++;
-		entry->props[i].cmd = cmd;
-	}
-
-	entry->props[i].u.data = value;
-
-	return 0;
 }
 
 #define CHANNEL "CHANNEL"
@@ -557,6 +626,7 @@ struct dvb_file *read_dvb_file(const char *fname)
 				dvb_file->first_entry = calloc(sizeof(*entry), 1);
 				entry = dvb_file->first_entry;
 			} else {
+				adjust_delsys(entry);
 				entry->next = calloc(sizeof(*entry), 1);
 				entry = entry->next;
 			}
@@ -605,6 +675,8 @@ struct dvb_file *read_dvb_file(const char *fname)
 			}
 		}
 	} while (1);
+	if (entry)
+		adjust_delsys(entry);
 	fclose(fd);
 	return dvb_file;
 
@@ -629,6 +701,7 @@ int write_dvb_file(const char *fname, struct dvb_file *dvb_file)
 	}
 
 	for (entry = dvb_file->first_entry; entry != NULL; entry = entry->next) {
+		adjust_delsys(entry);
 		if (entry->channel) {
 			fprintf(fp, "[%s]\n", entry->channel);
 			if (entry->vchannel)
@@ -737,141 +810,52 @@ int write_dvb_file(const char *fname, struct dvb_file *dvb_file)
 	return 0;
 };
 
-char *dvb_vchannel(struct dvb_v5_descriptors *dvb_desc,
-		   int service)
+static char *dvb_vchannel(struct dvb_v5_fe_parms *parms, struct dvb_table_nit *nit, uint16_t service_id)
 {
-	struct service_table *service_table = &dvb_desc->sdt_table.service_table[service];
-	struct lcn_table *lcn = dvb_desc->nit_table.lcn;
 	int i;
 	char *buf;
 
-	if (!lcn) {
-		if (!dvb_desc->nit_table.virtual_channel)
-			return NULL;
+	if (!nit)
+		return NULL;
 
-		asprintf(&buf, "%d.%d", dvb_desc->nit_table.virtual_channel,
-			 service);
-		return buf;
-	}
+for( struct dvb_desc_logical_channel *desc = (struct dvb_desc_logical_channel *) nit->descriptor; desc; desc = (struct dvb_desc_logical_channel *) desc->next ) \
+		if(desc->type == logical_channel_number_descriptor) {
+/* FIXME:  dvb_desc_find(struct dvb_desc_logical_channel, desc, nit, logical_channel_number_descriptor) ? */
+		struct dvb_desc_logical_channel *d = (void *)desc;
+		size_t len;
+		int r;
 
-	for (i = 0; i < dvb_desc->nit_table.lcn_len; i++) {
-		if (lcn[i].service_id == service_table->service_id) {
-			asprintf(&buf, "%d.%d.%d",
-					dvb_desc->nit_table.virtual_channel,
-					lcn[i].lcn, service);
-			return buf;
+		len = d->length / sizeof(d->lcn);
+		for (i = 0; i < len; i++) {
+			if (service_id == d->lcn[i].service_id) {
+				r = asprintf(&buf, "%d.%d",
+					d->lcn[i].logical_channel_number, i);
+				if (r < 0)
+					dvb_perror("asprintf");
+				return buf;
+			}
 		}
 	}
-	asprintf(&buf, "%d.%d", dvb_desc->nit_table.virtual_channel,
-			service);
-	return buf;
-}
 
-static void handle_std_specific_parms(struct dvb_entry *entry,
-				      struct dvb_v5_descriptors *dvb_desc)
-{
-	struct nit_table *nit_table = &dvb_desc->nit_table;
-	int i;
+	dvb_desc_find(struct dvb_desc_ts_info, desc, nit, TS_Information_descriptior) {
+		const struct dvb_desc_ts_info *d = (const void *) desc;
+		const struct dvb_desc_ts_info_transmission_type *t;
+		int r;
 
-	/*
-	 * If found, parses the NIT tables for the delivery systems
-	 * with the information provided on it. For some delivery systems,
-	 * there are some missing stuff.
-	 */
-	switch (nit_table->delivery_system) {
-	case SYS_ISDBT:
-		store_entry_prop(entry, DTV_GUARD_INTERVAL,
-				 nit_table->guard_interval);
-		store_entry_prop(entry, DTV_TRANSMISSION_MODE,
-				 nit_table->transmission_mode);
-		asprintf(&entry->location, "area %d", nit_table->area_code);
-		for (i = 0; i < nit_table->partial_reception_len; i++) {
-			int par, sid = entry->service_id;
-			par = (sid == nit_table->partial_reception[i]) ?
-			      1 : 0;
-			store_entry_prop(entry, DTV_ISDBT_PARTIAL_RECEPTION,
-					par);
-			break;
+		t = &d->transmission_type;
+
+		for (i = 0; i < t->num_of_service; i++) {
+			if (d->service_id[i] == service_id) {
+				r = asprintf(&buf, "%d.%d",
+					d->remote_control_key_id, i);
+				if (r < 0)
+					dvb_perror("asprintf");
+				return buf;
+			}
 		}
-		break;
-	case SYS_DVBS2:
-		store_entry_prop(entry, DTV_ROLLOFF,
-				 nit_table->rolloff);
-		/* fall through */
-	case SYS_DVBS:
-		if (nit_table->orbit)
-			entry->location = strdup(nit_table->orbit);
-		store_entry_prop(entry, DTV_FREQUENCY,
-				 nit_table->frequency[0]);
-		store_entry_prop(entry, DTV_MODULATION,
-				 nit_table->modulation);
-		store_entry_prop(entry, DTV_POLARIZATION,
-				 nit_table->pol);
-		store_entry_prop(entry, DTV_DELIVERY_SYSTEM,
-				 nit_table->delivery_system);
-		store_entry_prop(entry, DTV_SYMBOL_RATE,
-				 nit_table->symbol_rate);
-		store_entry_prop(entry, DTV_INNER_FEC,
-				 nit_table->fec_inner);
-		break;
-	case SYS_DVBC_ANNEX_A:
-		if (nit_table->network_name)
-			entry->location = strdup(nit_table->network_name);
-		store_entry_prop(entry, DTV_FREQUENCY,
-				 nit_table->frequency[0]);
-		store_entry_prop(entry, DTV_MODULATION,
-				 nit_table->modulation);
-		store_entry_prop(entry, DTV_SYMBOL_RATE,
-				 nit_table->symbol_rate);
-		store_entry_prop(entry, DTV_INNER_FEC,
-				 nit_table->fec_inner);
-		break;
-	case SYS_DVBT:
-		if (nit_table->network_name)
-			entry->location = strdup(nit_table->network_name);
-		store_entry_prop(entry, DTV_FREQUENCY,
-				 nit_table->frequency[0]);
-		store_entry_prop(entry, DTV_MODULATION,
-				 nit_table->modulation);
-		store_entry_prop(entry, DTV_BANDWIDTH_HZ,
-				 nit_table->bandwidth);
-		store_entry_prop(entry, DTV_CODE_RATE_HP,
-				 nit_table->code_rate_hp);
-		store_entry_prop(entry, DTV_CODE_RATE_LP,
-				 nit_table->code_rate_lp);
-		store_entry_prop(entry, DTV_GUARD_INTERVAL,
-				 nit_table->guard_interval);
-		store_entry_prop(entry, DTV_TRANSMISSION_MODE,
-				 nit_table->transmission_mode);
-		store_entry_prop(entry, DTV_HIERARCHY,
-				 nit_table->hierarchy);
-		break;
-	case SYS_DVBT2:
-		if (nit_table->network_name)
-			entry->location = strdup(nit_table->network_name);
-		store_entry_prop(entry, DTV_DVBT2_PLP_ID_LEGACY,
-				 nit_table->plp_id);
-		store_entry_prop(entry, DTV_BANDWIDTH_HZ,
-				 nit_table->bandwidth);
-		store_entry_prop(entry, DTV_GUARD_INTERVAL,
-				 nit_table->guard_interval);
-		store_entry_prop(entry, DTV_TRANSMISSION_MODE,
-				 nit_table->transmission_mode);
-		if (!nit_table->has_dvbt)
-			break;
-
-		/* Fill data from terrestrial descriptor */
-		store_entry_prop(entry, DTV_FREQUENCY,
-				 nit_table->frequency[0]);
-		store_entry_prop(entry, DTV_MODULATION,
-				 nit_table->modulation);
-		store_entry_prop(entry, DTV_CODE_RATE_HP,
-				 nit_table->code_rate_hp);
-		store_entry_prop(entry, DTV_CODE_RATE_LP,
-				 nit_table->code_rate_lp);
-		store_entry_prop(entry, DTV_HIERARCHY,
-				 nit_table->hierarchy);
 	}
+
+	return NULL;
 }
 
 static int sort_other_el_pid(const void *a_arg, const void *b_arg)
@@ -886,117 +870,272 @@ static int sort_other_el_pid(const void *a_arg, const void *b_arg)
 	return b->pid - a->pid;
 }
 
-int store_dvb_channel(struct dvb_file **dvb_file,
-		      struct dvb_v5_fe_parms *parms,
-		      struct dvb_v5_descriptors *dvb_desc,
-		      int get_detected, int get_nit)
+
+static void get_pmt_descriptors(struct dvb_entry *entry,
+				struct dvb_table_pmt *pmt)
+{
+	int has_ac3 = 0;
+	int video_len = 0, audio_len = 0, other_len = 0;
+
+	dvb_pmt_stream_foreach(stream, pmt) {
+		uint16_t  pid = stream->elementary_pid;
+
+		switch(stream->type) {
+		case 0x01: /* ISO/IEC 11172-2 Video */
+		case 0x02: /* H.262, ISO/IEC 13818-2 or ISO/IEC 11172-2 video */
+		case 0x1b: /* H.264 AVC */
+			entry->video_pid = realloc(entry->video_pid,
+						   sizeof(*entry->video_pid) *
+						   (video_len + 1));
+			entry->video_pid[video_len] = pid;
+			video_len++;
+			break;
+		case 0x03: /* ISO/IEC 11172-3 Audio */
+		case 0x04: /* ISO/IEC 13818-3 Audio */
+		case 0x0f: /* ISO/IEC 13818-7 Audio with ADTS (AAC) */
+		case 0x11: /* ISO/IEC 14496-3 Audio with the LATM */
+		case 0x81: /* user private - in general ATSC Dolby - AC-3 */
+			entry->audio_pid = realloc(entry->audio_pid,
+						   sizeof(*entry->audio_pid) *
+						   (audio_len + 1));
+			entry->audio_pid[audio_len] = pid;
+			audio_len++;
+			break;
+		case 0x05: /* private sections */
+		case 0x06: /* private data */
+			/*
+			* Those can be used by sub-titling, teletext and/or
+			* DVB AC-3. So, need to seek for the AC-3 descriptors
+			*/
+			dvb_desc_find(struct dvb_desc_service, desc, stream, AC_3_descriptor)
+				has_ac3 = 1;
+
+			dvb_desc_find(struct dvb_desc_service, desc, stream, enhanced_AC_3_descriptor)
+				has_ac3 = 1;
+
+			if (has_ac3) {
+				entry->audio_pid = realloc(entry->audio_pid,
+							   sizeof(*entry->audio_pid) *
+							   (audio_len + 1));
+				entry->audio_pid[audio_len] = pid;
+				audio_len++;
+			} else {
+				entry->other_el_pid = realloc(entry->other_el_pid,
+							   sizeof(*entry->other_el_pid) *
+							   (other_len + 1));
+				entry->other_el_pid[other_len].type = stream->type;
+				entry->other_el_pid[other_len].pid = pid;
+				other_len++;
+			}
+			break;
+		default:
+			entry->other_el_pid = realloc(entry->other_el_pid,
+						   sizeof(*entry->other_el_pid) *
+						   (other_len + 1));
+			entry->other_el_pid[other_len].type = stream->type;
+			entry->other_el_pid[other_len].pid = pid;
+			other_len++;
+			break;
+		}
+	}
+
+	entry->video_pid_len = video_len;
+	entry->audio_pid_len = audio_len;
+	entry->other_el_pid_len = other_len;
+
+	qsort(entry->other_el_pid, entry->other_el_pid_len,
+	      sizeof(*entry->other_el_pid), sort_other_el_pid);
+}
+
+static int get_program_and_store(struct dvb_v5_fe_parms *parms,
+				 struct dvb_file *dvb_file,
+				 struct dvb_v5_descriptors *dvb_scan_handler,
+				 const uint16_t service_id,
+				 char *channel,
+				 char *vchannel,
+				 int get_detected, int get_nit)
 {
 	struct dvb_entry *entry;
-	int i, j, has_detected = 1;
+	int i, j, found = 0;
+
+	/* Go to the last entry */
+
+	if (dvb_file->first_entry) {
+		entry = dvb_file->first_entry;
+		while (entry && entry->next)
+			entry = entry->next;
+	}
+
+	for (i = 0; i < dvb_scan_handler->num_program; i++) {
+		if (!dvb_scan_handler->program[i].pmt)
+			continue;
+
+		if (service_id == dvb_scan_handler->program[i].pat_pgm->service_id) {
+			found = 1;
+			break;
+		}
+	}
+
+	if (!found) {
+		dvb_logwarn("Service ID %d not found on PMT!", service_id);
+		return 0;
+	}
+
+	/* Create an entry to store the data */
+	if (!dvb_file->first_entry) {
+		dvb_file->first_entry = calloc(sizeof(*entry), 1);
+		entry = dvb_file->first_entry;
+	} else {
+		entry->next = calloc(sizeof(*entry), 1);
+		entry = entry->next;
+	}
+	if (!entry) {
+		dvb_logerr("Not enough memory");
+		return -1;
+	}
+
+	/* Initialize data */
+	entry->channel = channel;
+	entry->service_id = service_id;
+	entry->vchannel = vchannel;
+	entry->sat_number = parms->sat_number;
+	entry->freq_bpf = parms->freq_bpf;
+	entry->diseqc_wait = parms->diseqc_wait;
+	if (parms->lnb)
+		entry->lnb = strdup(parms->lnb->alias);
+
+	/* Get PIDs for each elementary inside the service ID */
+	get_pmt_descriptors(entry, dvb_scan_handler->program[i].pmt);
+
+	/* Copy data from parms */
+	if (get_detected) {
+		int rc;
+		do {
+			rc = dvb_fe_get_parms(parms);
+			if (rc == EAGAIN)
+				usleep(100000);
+		} while (rc == EAGAIN);
+		if (rc)
+			dvb_logerr("Couldn't get frontend props");
+	}
+	for (j = 0; j < parms->n_props; j++) {
+		entry->props[j].cmd = parms->dvb_prop[j].cmd;
+		entry->props[j].u.data = parms->dvb_prop[j].u.data;
+	}
+	entry->n_props = parms->n_props;
+
+	if (get_nit)
+		dvb_update_transponders(parms, dvb_scan_handler,
+					    dvb_file->first_entry,
+					    entry);
+
+	return 0;
+}
+
+/* Service type, according with EN 300 468 V1.3.1 (1998-02) */
+static char *sdt_services[256] = {
+	[0x00 ...0xff] = "reserved",
+	[0x01] = "digital television",
+	[0x02] = "digital radio",
+	[0x03] = "Teletext",
+	[0x04] = "NVOD reference",
+	[0x05] = "NVOD time-shifted",
+	[0x06] = "mosaic",
+	[0x07] = "PAL coded signal",
+	[0x08] = "SECAM coded signal",
+	[0x09] = "D/D2-MAC",
+	[0x0a] = "FM Radio",
+	[0x0b] = "NTSC coded signal",
+	[0x0c] = "data broadcast",
+	[0x80 ...0xfe] = "user defined",
+};
+
+int store_dvb_channel(struct dvb_file **dvb_file,
+		      struct dvb_v5_fe_parms *parms,
+		      struct dvb_v5_descriptors *dvb_scan_handler,
+		      int get_detected, int get_nit)
+{
+	int rc;
 
 	if (!*dvb_file) {
-		*dvb_file = calloc(sizeof(*dvb_file), 1);
+		*dvb_file = calloc(sizeof(**dvb_file), 1);
 		if (!*dvb_file) {
-			perror("Allocating memory for dvb_file");
+			dvb_perror("Allocating memory for dvb_file");
 			return -1;
 		}
 	}
 
-	/* Go to the last entry */
-	entry = (*dvb_file)->first_entry;
-	while (entry && entry->next)
-		entry = entry->next;
+	if (dvb_scan_handler->vct) {
+		atsc_vct_channel_foreach(d, dvb_scan_handler->vct) {
+			char *channel = NULL;
+			char *vchannel = NULL;
+			int r;
 
-	for (i = 0; i < dvb_desc->sdt_table.service_table_len; i++) {
-		struct service_table *service_table = &dvb_desc->sdt_table.service_table[i];
-		struct pat_table *pat_table = &dvb_desc->pat_table;
-		struct pid_table *pid_table = NULL;
+			channel = calloc(1, strlen(d->short_name) + 1);
+			strcpy(channel, d->short_name);
 
-		if (!entry) {
-			(*dvb_file)->first_entry = calloc(sizeof(*entry), 1);
-			entry = (*dvb_file)->first_entry;
-		} else {
-			entry->next = calloc(sizeof(*entry), 1);
-			entry = entry->next;
+			r = asprintf(&vchannel, "%d.%d",
+				d->major_channel_number,
+				d->minor_channel_number);
+			if (r < 0)
+				dvb_perror("asprintf");
+
+			if (parms->verbose)
+				dvb_log("Virtual channel %s, name = %s",
+					vchannel, channel);
+
+			rc = get_program_and_store(parms, *dvb_file, dvb_scan_handler,
+						d->program_number,
+						channel, vchannel,
+						get_detected, get_nit);
+			if (rc < 0) {
+				free(channel);
+				return rc;
+			}
 		}
-		if (!entry) {
-			fprintf(stderr, "Not enough memory\n");
-			return -1;
-		}
-		entry->sat_number = -1;
+		if (!dvb_scan_handler->sdt)
+			return 0;
+	}
 
-		if (service_table->service_name) {
-			entry->channel = calloc(strlen(service_table->service_name) + 1, 1);
-			strcpy(entry->channel, service_table->service_name);
-		} else {
-			asprintf(&entry->channel, "#%d",
-				 service_table->service_id);
-		}
-		entry->service_id = service_table->service_id;
 
-		entry->vchannel = dvb_vchannel(dvb_desc, i);
+	if (!dvb_scan_handler->sdt) {
+		dvb_logerr("no SDT table - can't store channels");
+		return -1;
+	}
+	dvb_sdt_service_foreach(service, dvb_scan_handler->sdt) {
+		char *channel = NULL;
+		char *vchannel = NULL;
+		int r;
 
-		/*entry->pol = parms->pol;*/
-		entry->sat_number = parms->sat_number;
-		entry->freq_bpf = parms->freq_bpf;
-		entry->diseqc_wait = parms->diseqc_wait;
-		if (parms->lnb)
-			entry->lnb = strdup(parms->lnb->alias);
-
-		for (j = 0; j < pat_table->pid_table_len; j++) {
-			pid_table = &pat_table->pid_table[j];
-			if (service_table->service_id == pid_table->service_id)
-				break;
-		}
-		if (j == pat_table->pid_table_len) {
-			fprintf(stderr, "Service ID %d not found on PMT!\n",
-			      service_table->service_id);
-			has_detected = 0;
-		} else has_detected = 1;
-
-		/*
-		 * Video/audio/other pid's can only be filled if the service
-		 * was found.
-		 */
-		if (has_detected) {
-			entry->video_pid = calloc(sizeof(*entry[i].video_pid),
-						pid_table->video_pid_len);
-			for (j = 0; j < pid_table->video_pid_len; j++)
-				entry->video_pid[j] = pid_table->video_pid[j];
-			entry->video_pid_len = pid_table->video_pid_len;
-
-			entry->audio_pid = calloc(sizeof(*entry[i].audio_pid),
-						pid_table->audio_pid_len);
-			for (j = 0; j < pid_table->audio_pid_len; j++)
-				entry->audio_pid[j] = pid_table->audio_pid[j];
-			entry->audio_pid_len = pid_table->audio_pid_len;
-
-			entry->other_el_pid = calloc(sizeof(*entry->other_el_pid),
-						pid_table->other_el_pid_len);
-			memcpy(entry->other_el_pid, pid_table->other_el_pid,
-			pid_table->other_el_pid_len * sizeof(*entry->other_el_pid));
-			entry->other_el_pid_len = pid_table->other_el_pid_len;
-			qsort(entry->other_el_pid, entry->other_el_pid_len,
-			sizeof(*entry->other_el_pid), sort_other_el_pid);
+		dvb_desc_find(struct dvb_desc_service, desc, service, service_descriptor) {
+			if (desc->name) {
+				channel = calloc(strlen(desc->name) + 1, 1);
+				strcpy(channel, desc->name);
+			}
+			dvb_log("Service %s, provider %s: %s",
+				desc->name, desc->provider,
+				sdt_services[desc->service_type]);
+			break;
 		}
 
-		/* Copy data from parms */
-		if (get_detected) {
-			int rc;
-			do {
-				rc = dvb_fe_get_parms(parms);
-				if (rc == EAGAIN)
-					usleep(100000);
-			} while (rc == EAGAIN);
+		if (!channel) {
+			r = asprintf(&channel, "#%d", service->service_id);
+			if (r < 0)
+				dvb_perror("asprintf");
 		}
-		for (j = 0; j < parms->n_props; j++) {
-			entry->props[j].cmd = parms->dvb_prop[j].cmd;
-			entry->props[j].u.data = parms->dvb_prop[j].u.data;
-		}
-		entry->n_props = parms->n_props;
 
-		if (get_nit)
-			handle_std_specific_parms(entry, dvb_desc);
+		if (parms->verbose)
+			dvb_log("Storing as channel %s", channel);
+		vchannel = dvb_vchannel(parms, dvb_scan_handler->nit, service->service_id);
+
+		rc = get_program_and_store(parms, *dvb_file, dvb_scan_handler,
+					   service->service_id,
+					   channel, vchannel,
+					   get_detected, get_nit);
+		if (rc < 0) {
+			free(channel);
+			return rc;
+		}
 	}
 
 	return 0;
@@ -1134,4 +1273,3 @@ int write_file_format(const char *fname,
 
 	return ret;
 }
-

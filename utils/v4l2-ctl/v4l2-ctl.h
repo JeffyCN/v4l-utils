@@ -1,6 +1,26 @@
 #ifndef _V4L2_CTL_H
 #define _V4L2_CTL_H
 
+#ifdef ANDROID
+#include <android-config.h>
+#else
+#include <config.h>
+#endif
+
+#include <string>
+
+#include <linux/videodev2.h>
+
+#ifndef NO_LIBV4L2
+#include <libv4l2.h>
+#else
+#define v4l2_open(file, oflag, ...) (-1)
+#define v4l2_close(fd) (-1)
+#define v4l2_ioctl(fd, request, ...) (-1)
+#define v4l2_mmap(start, length, prot, flags, fd, offset) (MAP_FAILED)
+#define v4l2_munmap(_start, length) (-1)
+#endif
+
 /* Available options.
 
    Please keep the first part (options < 128) in alphabetical order.
@@ -15,6 +35,7 @@ enum Option {
 	OptSetCtrl = 'c',
 	OptSetDevice = 'd',
 	OptGetDriverInfo = 'D',
+	OptSetOutDevice = 'e',
 	OptGetFreq = 'F',
 	OptSetFreq = 'f',
 	OptHelp = 'h',
@@ -37,43 +58,42 @@ enum Option {
 	OptSetVideoFormat = 'v',
 	OptUseWrapper = 'w',
 
-	OptGetVideoMplaneFormat = 128,
-	OptSetVideoMplaneFormat,
-	OptGetSlicedVbiOutFormat,
+	OptGetSlicedVbiOutFormat = 128,
 	OptGetOverlayFormat,
-	OptGetOutputOverlayFormat,
 	OptGetVbiFormat,
 	OptGetVbiOutFormat,
+	OptGetSdrFormat,
 	OptGetVideoOutFormat,
-	OptGetVideoOutMplaneFormat,
 	OptSetSlicedVbiOutFormat,
-	OptSetOutputOverlayFormat,
 	OptSetOverlayFormat,
-	//OptSetVbiFormat, TODO
-	//OptSetVbiOutFormat, TODO
+	OptSetVbiFormat,
+	OptSetVbiOutFormat,
+	OptSetSdrFormat,
 	OptSetVideoOutFormat,
-	OptSetVideoOutMplaneFormat,
 	OptTryVideoOutFormat,
-	OptTryVideoOutMplaneFormat,
 	OptTrySlicedVbiOutFormat,
 	OptTrySlicedVbiFormat,
 	OptTryVideoFormat,
-	OptTryVideoMplaneFormat,
-	OptTryOutputOverlayFormat,
 	OptTryOverlayFormat,
-	//OptTryVbiFormat, TODO
-	//OptTryVbiOutFormat, TODO
+	OptTryVbiFormat,
+	OptTryVbiOutFormat,
+	OptTrySdrFormat,
 	OptAll,
 	OptListStandards,
 	OptListFormats,
-	OptListMplaneFormats,
 	OptListFormatsExt,
-	OptListMplaneFormatsExt,
+	OptListFields,
 	OptListFrameSizes,
 	OptListFrameIntervals,
 	OptListOverlayFormats,
+	OptListSdrFormats,
 	OptListOutFormats,
-	OptListOutMplaneFormats,
+	OptListOutFields,
+	OptClearClips,
+	OptClearBitmap,
+	OptAddClip,
+	OptAddBitmap,
+	OptFindFb,
 	OptLogStatus,
 	OptVerbose,
 	OptSilent,
@@ -123,6 +143,9 @@ enum Option {
 	OptGetDvTimings,
 	OptSetDvBtTimings,
 	OptGetDvTimingsCap,
+	OptSetEdid,
+	OptClearEdid,
+	OptGetEdid,
 	OptFreqSeek,
 	OptEncoderCmd,
 	OptTryEncoderCmd,
@@ -135,6 +158,7 @@ enum Option {
 	OptListBuffersSlicedVbi,
 	OptListBuffersVbiOut,
 	OptListBuffersSlicedVbiOut,
+	OptListBuffersSdr,
 	OptStreamCount,
 	OptStreamSkip,
 	OptStreamLoop,
@@ -142,10 +166,12 @@ enum Option {
 	OptStreamTo,
 	OptStreamMmap,
 	OptStreamUser,
+	OptStreamDmaBuf,
 	OptStreamFrom,
 	OptStreamPattern,
 	OptStreamOutMmap,
 	OptStreamOutUser,
+	OptStreamOutDmaBuf,
 	OptHelpTuner,
 	OptHelpIO,
 	OptHelpStds,
@@ -153,15 +179,21 @@ enum Option {
 	OptHelpVidOut,
 	OptHelpOverlay,
 	OptHelpVbi,
+	OptHelpSdr,
 	OptHelpSelection,
 	OptHelpMisc,
 	OptHelpStreaming,
+	OptHelpEdid,
 	OptHelpAll,
 	OptLast = 256
 };
 
 extern char options[OptLast];
 extern unsigned capabilities;
+extern unsigned out_capabilities;
+extern bool is_multiplanar;
+extern __u32 vidcap_buftype;
+extern __u32 vidout_buftype;
 extern int verbose;
 
 typedef struct {
@@ -178,6 +210,8 @@ typedef struct {
 #define FmtLeft			(1L<<5)
 #define FmtTop			(1L<<6)
 #define FmtField		(1L<<7)
+#define FmtColorspace		(1L<<8)
+#define FmtBytesPerLine		(1L<<9)
 
 // v4l2-ctl.cpp
 int doioctl_name(int fd, unsigned long int request, void *parm, const char *name);
@@ -192,10 +226,12 @@ std::string colorspace2s(int val);
 std::string service2s(unsigned service);
 std::string field2s(int val);
 void print_v4lstd(v4l2_std_id std);
-int parse_fmt(char *optarg, __u32 &width, __u32 &height, __u32 &pixelformat);
+__u32 parse_field(const char *s);
+int parse_fmt(char *optarg, __u32 &width, __u32 &height, __u32 &pixelformat,
+	      __u32 &field, __u32 &colorspace, __u32 *bytesperline);
 __u32 find_pixel_format(int fd, unsigned index, bool output, bool mplane);
 void printfmt(const struct v4l2_format &vfmt);
-void print_video_formats(int fd, enum v4l2_buf_type type);
+void print_video_formats(int fd, __u32 type);
 
 #define doioctl(n, r, p) doioctl_name(n, r, p, #r)
 
@@ -257,6 +293,13 @@ void vbi_set(int fd);
 void vbi_get(int fd);
 void vbi_list(int fd);
 
+// v4l2-ctl-sdr.cpp
+void sdr_usage(void);
+void sdr_cmd(int ch, char *optarg);
+void sdr_set(int fd);
+void sdr_get(int fd);
+void sdr_list(int fd);
+
 // v4l2-ctl-selection.cpp
 void selection_usage(void);
 void selection_cmd(int ch, char *optarg);
@@ -274,11 +317,17 @@ void misc_get(int fd);
 // v4l2-ctl-streaming.cpp
 void streaming_usage(void);
 void streaming_cmd(int ch, char *optarg);
-void streaming_set(int fd);
-void streaming_list(int fd);
+void streaming_set(int fd, int out_fd);
+void streaming_list(int fd, int out_fd);
 
 // v4l2-ctl-test-patterns.cpp
 void fill_buffer(void *buffer, struct v4l2_pix_format *pix);
 bool precalculate_bars(__u32 pixfmt, unsigned pattern);
+
+// v4l2-ctl-edid.cpp
+void edid_usage(void);
+void edid_cmd(int ch, char *optarg);
+void edid_set(int fd);
+void edid_get(int fd);
 
 #endif

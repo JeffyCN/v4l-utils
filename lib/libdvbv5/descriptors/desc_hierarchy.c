@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 - Mauro Carvalho Chehab <mchehab@redhat.com>
+ * Copyright (c) 2011-2012 - Mauro Carvalho Chehab
  * Copyright (c) 2012 - Andre Roth <neolynx@gmail.com>
  *
  * This program is free software; you can redistribute it and/or
@@ -19,26 +19,25 @@
  *
  */
 
-#include "descriptors/desc_hierarchy.h"
-#include "descriptors.h"
-#include "dvb-fe.h"
+#include <libdvbv5/desc_hierarchy.h>
+#include <libdvbv5/dvb-fe.h>
 
-void dvb_desc_hierarchy_init(struct dvb_v5_fe_parms *parms, const uint8_t *buf, struct dvb_desc *desc)
+int dvb_desc_hierarchy_init(struct dvb_v5_fe_parms *parms, const uint8_t *buf, struct dvb_desc *desc)
 {
 	struct dvb_desc_hierarchy *hierarchy = (struct dvb_desc_hierarchy *) desc;
 	/* copy from .length */
 	memcpy(((uint8_t *) hierarchy ) + sizeof(hierarchy->type) + sizeof(hierarchy->length) + sizeof(hierarchy->next),
 		buf,
 		hierarchy->length);
+	return 0;
 }
 
 void dvb_desc_hierarchy_print(struct dvb_v5_fe_parms *parms, const struct dvb_desc *desc)
 {
 	const struct dvb_desc_hierarchy *hierarchy = (const struct dvb_desc_hierarchy *) desc;
-	dvb_log("|	Hierarchy");
-	dvb_log("|           type           %d", hierarchy->hierarchy_type);
-	dvb_log("|           layer          %d", hierarchy->layer);
-	dvb_log("|           embedded_layer %d", hierarchy->embedded_layer);
-	dvb_log("|           channel        %d", hierarchy->channel);
+	dvb_loginfo("|           type           %d", hierarchy->hierarchy_type);
+	dvb_loginfo("|           layer          %d", hierarchy->layer);
+	dvb_loginfo("|           embedded_layer %d", hierarchy->embedded_layer);
+	dvb_loginfo("|           channel        %d", hierarchy->channel);
 }
 

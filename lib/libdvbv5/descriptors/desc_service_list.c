@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 - Mauro Carvalho Chehab <mchehab@redhat.com>
+ * Copyright (c) 2011-2012 - Mauro Carvalho Chehab
  * Copyright (c) 2012 - Andre Roth <neolynx@gmail.com>
  *
  * This program is free software; you can redistribute it and/or
@@ -19,11 +19,12 @@
  *
  */
 
-#include "descriptors/desc_service_list.h"
-#include "descriptors.h"
-#include "dvb-fe.h"
+#include <libdvbv5/desc_service_list.h>
+#include <libdvbv5/dvb-fe.h>
 
-void dvb_desc_service_list_init(struct dvb_v5_fe_parms *parms, const uint8_t *buf, struct dvb_desc *desc)
+/* FIXME: implement */
+
+int dvb_desc_service_list_init(struct dvb_v5_fe_parms *parms, const uint8_t *buf, struct dvb_desc *desc)
 {
 	/*struct dvb_desc_service_list *slist = (struct dvb_desc_service_list *) desc;*/
 
@@ -38,7 +39,8 @@ void dvb_desc_service_list_init(struct dvb_v5_fe_parms *parms, const uint8_t *bu
 	/*}*/
 
 	/*return sizeof(struct dvb_desc_service_list) + slist->length + sizeof(struct dvb_desc_service_list_table);*/
-	//FIXME: make linked list
+	/* FIXME: make linked list */
+	return 0;
 }
 
 void dvb_desc_service_list_print(struct dvb_v5_fe_parms *parms, const struct dvb_desc *desc)
@@ -46,8 +48,8 @@ void dvb_desc_service_list_print(struct dvb_v5_fe_parms *parms, const struct dvb
 	/*const struct dvb_desc_service_list *slist = (const struct dvb_desc_service_list *) desc;*/
 	/*int i = 0;*/
 	/*while(slist->services[i].service_id != 0) {*/
-		/*dvb_log("|           service id   : '%d'", slist->services[i].service_id);*/
-		/*dvb_log("|           service type : '%d'", slist->services[i].service_type);*/
+		/*dvb_loginfo("|           service id   : '%d'", slist->services[i].service_id);*/
+		/*dvb_loginfo("|           service type : '%d'", slist->services[i].service_type);*/
 		/*++i;*/
 	/*}*/
 }

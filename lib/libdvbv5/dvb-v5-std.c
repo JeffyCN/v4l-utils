@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 - Mauro Carvalho Chehab <mchehab@redhat.com>
+ * Copyright (c) 2011-2012 - Mauro Carvalho Chehab
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -21,7 +21,7 @@
  */
 #include <stddef.h>
 
-#include "dvb-v5-std.h"
+#include <libdvbv5/dvb-v5-std.h>
 #include "dvb-v5.h"
 
 const unsigned int sys_dvbt_props[] = {

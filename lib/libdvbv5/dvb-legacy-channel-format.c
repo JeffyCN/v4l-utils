@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 - Mauro Carvalho Chehab <mchehab@redhat.com>
+ * Copyright (c) 2011-2012 - Mauro Carvalho Chehab
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -21,8 +21,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "dvb-file.h"
-#include "dvb-v5-std.h"
+#include <libdvbv5/dvb-file.h>
+#include <libdvbv5/dvb-v5-std.h>
 
 /*
  * Standard channel.conf format for DVB-T, DVB-C, DVB-S and ATSC

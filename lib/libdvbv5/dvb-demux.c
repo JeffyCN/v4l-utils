@@ -23,7 +23,7 @@
  *	Originally licensed as GPLv2 or upper
  *
  * All subsequent changes are under GPLv2 only and are:
- *	Copyright (c) 2011-2012 - Mauro Carvalho Chehab <mchehab@redhat.com>
+ *	Copyright (c) 2011-2012 - Mauro Carvalho Chehab
  *
  */
 
@@ -38,29 +38,35 @@
 #include <fcntl.h>
 #include <stdlib.h> /* free */
 
-#include "dvb-demux.h"
+#include <libdvbv5/dvb-demux.h>
 
 int dvb_dmx_open(int adapter, int demux)
 {
-  char* demux_name = NULL;
-  asprintf(&demux_name, "/dev/dvb/adapter%i/demux%i", adapter, demux );
-  int fd_demux = open( demux_name, O_RDWR | O_NONBLOCK );
-  free( demux_name );
-  return fd_demux;
+	char* demux_name = NULL;
+	int fd_demux;
+	int r;
+
+	r = asprintf(&demux_name, "/dev/dvb/adapter%i/demux%i", adapter, demux );
+	if (r < 0)
+		return -1;
+	fd_demux = open( demux_name, O_RDWR | O_NONBLOCK );
+	free(demux_name);
+	return fd_demux;
 }
 
 void dvb_dmx_close(int dmx_fd)
 {
-  (void) ioctl( dmx_fd, DMX_STOP);
-  close( dmx_fd);
+	(void) ioctl(dmx_fd, DMX_STOP);
+	close( dmx_fd);
 }
 
 void dvb_dmx_stop(int dmx_fd)
 {
-  (void) ioctl( dmx_fd, DMX_STOP);
+	(void) ioctl(dmx_fd, DMX_STOP);
 }
 
-int dvb_set_pesfilter(int dmxfd, int pid, dmx_pes_type_t type, dmx_output_t output, int buffersize)
+int dvb_set_pesfilter(int dmxfd, int pid, dmx_pes_type_t type,
+		      dmx_output_t output, int buffersize)
 {
 	struct dmx_pes_filter_params pesfilter;
 
@@ -68,6 +74,8 @@ int dvb_set_pesfilter(int dmxfd, int pid, dmx_pes_type_t type, dmx_output_t outp
 		if (ioctl(dmxfd, DMX_SET_BUFFER_SIZE, buffersize) == -1)
 			perror("DMX_SET_BUFFER_SIZE failed");
 	}
+
+	memset(&pesfilter, 0, sizeof(pesfilter));
 
 	pesfilter.pid = pid;
 	pesfilter.input = DMX_IN_FRONTEND;
@@ -78,6 +86,39 @@ int dvb_set_pesfilter(int dmxfd, int pid, dmx_pes_type_t type, dmx_output_t outp
 	if (ioctl(dmxfd, DMX_SET_PES_FILTER, &pesfilter) == -1) {
 		fprintf(stderr, "DMX_SET_PES_FILTER failed "
 		"(PID = 0x%04x): %d %m\n", pid, errno);
+		return -1;
+	}
+
+	return 0;
+}
+
+int dvb_set_section_filter(int dmxfd, int pid, unsigned filtsize,
+			   unsigned char *filter,
+			   unsigned char *mask,
+			   unsigned char *mode,
+			   unsigned int flags)
+{
+	struct dmx_sct_filter_params sctfilter;
+
+	if (filtsize > DMX_FILTER_SIZE)
+		filtsize = DMX_FILTER_SIZE;
+
+	memset(&sctfilter, 0, sizeof(sctfilter));
+
+	sctfilter.pid = pid;
+
+	if (filter)
+		memcpy(sctfilter.filter.filter, filter, filtsize);
+	if (mask)
+		memcpy(sctfilter.filter.mask, mask, filtsize);
+	if (mode)
+		memcpy(sctfilter.filter.mode, mode, filtsize);
+
+	sctfilter.flags = flags;
+
+	if (ioctl(dmxfd, DMX_SET_FILTER, &sctfilter) == -1) {
+		fprintf(stderr, "DMX_SET_FILTER failed (PID = 0x%04x): %d %m\n",
+			pid, errno);
 		return -1;
 	}
 
