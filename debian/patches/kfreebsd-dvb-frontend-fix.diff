@@ -1,7 +1,7 @@
 Author: Gregor Jasny <gjasny@googlemail.com>
 Description: kFreeBSD need a Linux type clean DVB frontend header
---- a/lib/include/dvb-frontend.h
-+++ b/lib/include/dvb-frontend.h
+--- a/lib/include/libdvbv5/dvb-frontend.h
++++ b/lib/include/libdvbv5/dvb-frontend.h
 @@ -22,6 +22,7 @@
   * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
   *
