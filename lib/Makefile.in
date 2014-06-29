@@ -77,6 +77,9 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
+@LINUX_OS_TRUE@am__append_1 = \
+@LINUX_OS_TRUE@	libdvbv5
+
 subdir = lib
 DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/Makefile.am
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
@@ -145,7 +148,8 @@ am__define_uniq_tagged_files = \
   done | $(am__uniquify_input)`
 ETAGS = etags
 CTAGS = ctags
-DIST_SUBDIRS = $(SUBDIRS)
+DIST_SUBDIRS = libv4lconvert libv4l2 libv4l1 libv4l2rds libv4l-mplane \
+	libdvbv5
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 am__relativize = \
   dir0=`pwd`; \
@@ -339,14 +343,8 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 udevrulesdir = @udevrulesdir@
-SUBDIRS = \
-	libv4lconvert \
-	libv4l2 \
-	libv4l1 \
-	libdvbv5 \
-	libv4l2rds \
-	libv4l-mplane
-
+SUBDIRS = libv4lconvert libv4l2 libv4l1 libv4l2rds libv4l-mplane \
+	$(am__append_1)
 all: all-recursive
 
 .SUFFIXES:
