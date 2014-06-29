@@ -1,3 +1,13 @@
+v4l-utils (1.2.1-1) unstable; urgency=medium
+
+  * Imported Upstream version 1.2.1
+  * Disable v4l-utils on kFreeBSD
+  * Drop DVB related kFreeBSD patches
+  * Use libudev by default on Linux
+  * Ship media-ctl within v4l-utils package
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Sun, 29 Jun 2014 13:52:45 +0200
+
 v4l-utils (1.2.0-2) unstable; urgency=medium
 
   * Require udev build dependencies only on Linux
