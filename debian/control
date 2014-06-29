@@ -105,7 +105,7 @@ Description: Collection of video4linux support libraries (development files)
 
 Package: v4l-utils
 Section: utils
-Architecture: linux-any kfreebsd-any
+Architecture: linux-any
 Depends: libv4l-0 (= ${binary:Version}),
          libv4l2rds0 (= ${binary:Version}),
          ${shlibs:Depends},
@@ -124,7 +124,7 @@ Description: Collection of command line video4linux utilities
 
 Package: dvb-tools
 Section: utils
-Architecture: linux-any kfreebsd-any
+Architecture: linux-any
 Depends: ${shlibs:Depends},
          ${misc:Depends}
 Description: Collection of command line DVB utilities
@@ -148,7 +148,7 @@ Description: Collection of command line DVB utilities
 
 Package: qv4l2
 Section: utils
-Architecture: linux-any kfreebsd-any
+Architecture: linux-any
 Depends: libv4l-0 (= ${binary:Version}),
          ${shlibs:Depends},
          ${misc:Depends}
@@ -158,7 +158,7 @@ Description: Graphical Qt v4l2 control panel
 
 Package: ir-keytable
 Section: utils
-Architecture: linux-any kfreebsd-any
+Architecture: linux-any
 Depends: ${shlibs:Depends},
          ${misc:Depends}
 Recommends: udev
