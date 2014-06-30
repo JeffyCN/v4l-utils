@@ -110,8 +110,8 @@ Depends: libv4l-0 (= ${binary:Version}),
          libv4l2rds0 (= ${binary:Version}),
          ${shlibs:Depends},
          ${misc:Depends}
-Replaces: ivtv-utils (<< 1.4.1-2)
-Breaks: ivtv-utils (<< 1.4.1-2)
+Replaces: ivtv-utils (<< 1.4.1-2), media-ctl
+Breaks: ivtv-utils (<< 1.4.1-2), media-ctl
 Description: Collection of command line video4linux utilities
  v4l-utils contains the following video4linux command line utilities:
  .
