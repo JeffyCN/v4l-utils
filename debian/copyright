@@ -8,6 +8,11 @@ Upstream Authors:
     Mauro Carvalho Chehab <mchehab@redhat.com>
     Gregor Jasny <gjasny@googlemail.com>
 
+Comment:
+ The general licensing for the libraries:
+ libv4l* libraries are licensed LGPL-2.1+
+ libdvbv5 is licensed GPL-2
+
 Files: contrib/cx231xx/parse_cx231xx.pl
 Copyright: 2010 Mauro Carvalho Chehab <mchehab@redhat.com>
 License: GPL-2
