@@ -138,7 +138,7 @@ Description: Libraries to control, scan and zap on Digital TV channels
  .
  This package contains the shared libraries.
 
-Package: libdvbv5-0-dev
+Package: libdvbv5-dev
 Section: libdevel
 Architecture: linux-any
 Depends: libdvbv5-0 (= ${binary:Version}),
