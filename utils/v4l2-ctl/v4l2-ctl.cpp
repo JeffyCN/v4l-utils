@@ -54,6 +54,8 @@ int verbose;
 
 unsigned capabilities;
 unsigned out_capabilities;
+unsigned priv_magic;
+unsigned out_priv_magic;
 bool is_multiplanar;
 __u32 vidcap_buftype;
 __u32 vidout_buftype;
@@ -115,6 +117,7 @@ static struct option long_options[] = {
 	{"add-clip", required_argument, 0, OptAddClip},
 	{"add-bitmap", required_argument, 0, OptAddBitmap},
 	{"find-fb", no_argument, 0, OptFindFb},
+	{"subset", required_argument, 0, OptSubset},
 	{"get-standard", no_argument, 0, OptGetStandard},
 	{"set-standard", required_argument, 0, OptSetStandard},
 	{"get-detected-standard", no_argument, 0, OptQueryStandard},
@@ -212,10 +215,23 @@ static struct option long_options[] = {
 	{"stream-user", optional_argument, 0, OptStreamUser},
 	{"stream-dmabuf", no_argument, 0, OptStreamDmaBuf},
 	{"stream-from", required_argument, 0, OptStreamFrom},
-	{"stream-pattern", required_argument, 0, OptStreamPattern},
+	{"stream-out-pattern", required_argument, 0, OptStreamOutPattern},
+	{"stream-out-square", no_argument, 0, OptStreamOutSquare},
+	{"stream-out-border", no_argument, 0, OptStreamOutBorder},
+	{"stream-out-sav", no_argument, 0, OptStreamOutInsertSAV},
+	{"stream-out-eav", no_argument, 0, OptStreamOutInsertEAV},
+	{"stream-out-pixel-aspect", required_argument, 0, OptStreamOutPixelAspect},
+	{"stream-out-video-aspect", required_argument, 0, OptStreamOutVideoAspect},
+	{"stream-out-alpha", required_argument, 0, OptStreamOutAlphaComponent},
+	{"stream-out-alpha-red-only", no_argument, 0, OptStreamOutAlphaRedOnly},
+	{"stream-out-rgb-lim-range", required_argument, 0, OptStreamOutRGBLimitedRange},
+	{"stream-out-hor-speed", required_argument, 0, OptStreamOutHorSpeed},
+	{"stream-out-vert-speed", required_argument, 0, OptStreamOutVertSpeed},
+	{"stream-out-perc-fill", required_argument, 0, OptStreamOutPercFill},
 	{"stream-out-mmap", optional_argument, 0, OptStreamOutMmap},
 	{"stream-out-user", optional_argument, 0, OptStreamOutUser},
 	{"stream-out-dmabuf", no_argument, 0, OptStreamOutDmaBuf},
+	{"list-patterns", no_argument, 0, OptListPatterns},
 	{0, 0, 0, 0}
 };
 
@@ -389,6 +405,16 @@ std::string flags2s(unsigned val, const flag_def *def)
 }
 
 
+static const flag_def pixflags_def[] = {
+	{ V4L2_PIX_FMT_FLAG_PREMUL_ALPHA,  "premultiplied-alpha" },
+	{ 0, NULL }
+};
+
+std::string pixflags2s(unsigned flags)
+{
+	return flags2s(flags, pixflags_def);
+}
+
 static const flag_def service_def[] = {
 	{ V4L2_SLICED_TELETEXT_B,  "teletext" },
 	{ V4L2_SLICED_VPS,         "vps" },
@@ -420,8 +446,8 @@ void printfmt(const struct v4l2_format &vfmt)
 		printf("\tBytes per Line: %u\n", vfmt.fmt.pix.bytesperline);
 		printf("\tSize Image    : %u\n", vfmt.fmt.pix.sizeimage);
 		printf("\tColorspace    : %s\n", colorspace2s(vfmt.fmt.pix.colorspace).c_str());
-		if (vfmt.fmt.pix.priv)
-			printf("\tCustom Info   : %08x\n", vfmt.fmt.pix.priv);
+		if (vfmt.fmt.pix.priv == V4L2_PIX_FMT_PRIV_MAGIC)
+			printf("\tFlags         : %s\n", pixflags2s(vfmt.fmt.pix.flags).c_str());
 		break;
 	case V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE:
 	case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
@@ -429,6 +455,7 @@ void printfmt(const struct v4l2_format &vfmt)
 		printf("\tPixel Format      : '%s'\n", fcc2s(vfmt.fmt.pix_mp.pixelformat).c_str());
 		printf("\tField             : %s\n", field2s(vfmt.fmt.pix_mp.field).c_str());
 		printf("\tNumber of planes  : %u\n", vfmt.fmt.pix_mp.num_planes);
+		printf("\tFlags             : %s\n", pixflags2s(vfmt.fmt.pix_mp.flags).c_str());
 		printf("\tColorspace        : %s\n", colorspace2s(vfmt.fmt.pix_mp.colorspace).c_str());
 		for (int i = 0; i < vfmt.fmt.pix_mp.num_planes && i < VIDEO_MAX_PLANES; i++) {
 			printf("\tPlane %d           :\n", i);
@@ -495,6 +522,7 @@ void printfmt(const struct v4l2_format &vfmt)
 		break;
 	case V4L2_BUF_TYPE_SDR_CAPTURE:
 		printf("\tSample Format   : %s\n", fcc2s(vfmt.fmt.sdr.pixelformat).c_str());
+		printf("\tBuffer Size     : %u\n", vfmt.fmt.sdr.buffersize);
 		break;
 	}
 }
@@ -557,14 +585,16 @@ static std::string cap2s(unsigned cap)
 		s += "\t\tSliced VBI Capture\n";
 	if (cap & V4L2_CAP_SLICED_VBI_OUTPUT)
 		s += "\t\tSliced VBI Output\n";
-	if (cap & V4L2_CAP_SDR_CAPTURE)
-		s += "\t\tSDR Capture\n";
 	if (cap & V4L2_CAP_RDS_CAPTURE)
 		s += "\t\tRDS Capture\n";
 	if (cap & V4L2_CAP_RDS_OUTPUT)
 		s += "\t\tRDS Output\n";
+	if (cap & V4L2_CAP_SDR_CAPTURE)
+		s += "\t\tSDR Capture\n";
 	if (cap & V4L2_CAP_TUNER)
 		s += "\t\tTuner\n";
+	if (cap & V4L2_CAP_HW_FREQ_SEEK)
+		s += "\t\tHW Frequency Seek\n";
 	if (cap & V4L2_CAP_MODULATOR)
 		s += "\t\tModulator\n";
 	if (cap & V4L2_CAP_AUDIO)
@@ -577,6 +607,8 @@ static std::string cap2s(unsigned cap)
 		s += "\t\tAsync I/O\n";
 	if (cap & V4L2_CAP_STREAMING)
 		s += "\t\tStreaming\n";
+	if (cap & V4L2_CAP_EXT_PIX_FORMAT)
+		s += "\t\tExtended Pix Format\n";
 	if (cap & V4L2_CAP_DEVICE_CAPS)
 		s += "\t\tDevice Capabilities\n";
 	return s;
@@ -692,7 +724,6 @@ static __u32 parse_colorspace(const char *s)
 	if (!strcmp(s, "smpte170m")) return V4L2_COLORSPACE_SMPTE170M;
 	if (!strcmp(s, "smpte240m")) return V4L2_COLORSPACE_SMPTE240M;
 	if (!strcmp(s, "rec709")) return V4L2_COLORSPACE_REC709;
-	if (!strcmp(s, "bt878")) return V4L2_COLORSPACE_BT878;
 	if (!strcmp(s, "470m")) return V4L2_COLORSPACE_470_SYSTEM_M;
 	if (!strcmp(s, "470bg")) return V4L2_COLORSPACE_470_SYSTEM_BG;
 	if (!strcmp(s, "jpeg")) return V4L2_COLORSPACE_JPEG;
@@ -787,6 +818,14 @@ static void print_event(const struct v4l2_event *ev)
 	case V4L2_EVENT_SOURCE_CHANGE:
 		printf("source_change: pad/input=%d changes: %x\n", ev->id, ev->u.src_change.changes);
 		break;
+	case V4L2_EVENT_MOTION_DET:
+		if (ev->u.motion_det.flags & V4L2_EVENT_MD_FL_HAVE_FRAME_SEQ)
+			printf("motion_det frame %d, regions 0x%x\n",
+					ev->u.motion_det.frame_sequence,
+					ev->u.motion_det.region_mask);
+		else
+			printf("motion_det regions 0x%x\n", ev->u.motion_det.region_mask);
+		break;
 	default:
 		if (ev->type >= V4L2_EVENT_PRIVATE_START)
 			printf("unknown private event (%08x)\n", ev->type);
@@ -809,6 +848,8 @@ static __u32 parse_event(const char *e, const char **name)
 		event = V4L2_EVENT_VSYNC;
 	else if (!strcmp(e, "frame_sync"))
 		event = V4L2_EVENT_FRAME_SYNC;
+	else if (!strcmp(e, "motion_det"))
+		event = V4L2_EVENT_MOTION_DET;
 	else if (!strncmp(e, "ctrl=", 5)) {
 		event = V4L2_EVENT_CTRL;
 		*name = e + 5;
@@ -1014,6 +1055,8 @@ int main(int argc, char **argv)
 	if (capabilities & V4L2_CAP_DEVICE_CAPS)
 		capabilities = vcap.device_caps;
 
+	priv_magic = (capabilities & V4L2_CAP_EXT_PIX_FORMAT) ?
+			V4L2_PIX_FMT_PRIV_MAGIC : 0;
 	is_multiplanar = capabilities & (V4L2_CAP_VIDEO_CAPTURE_MPLANE |
 					 V4L2_CAP_VIDEO_M2M_MPLANE |
 					 V4L2_CAP_VIDEO_OUTPUT_MPLANE);
@@ -1036,6 +1079,8 @@ int main(int argc, char **argv)
 		out_capabilities = vcap.capabilities;
 		if (out_capabilities & V4L2_CAP_DEVICE_CAPS)
 			out_capabilities = vcap.device_caps;
+		out_priv_magic = (out_capabilities & V4L2_CAP_EXT_PIX_FORMAT) ?
+				V4L2_PIX_FMT_PRIV_MAGIC : 0;
 	}
 
 	common_process_controls(fd);

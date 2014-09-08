@@ -25,12 +25,20 @@
 #include <map>
 #include <algorithm>
 
+struct ctrl_subset {
+	unsigned offset[V4L2_CTRL_MAX_DIMS];
+	unsigned size[V4L2_CTRL_MAX_DIMS];
+};
+
 typedef std::map<unsigned, std::vector<struct v4l2_ext_control> > class2ctrls_map;
 
-typedef std::map<std::string, struct v4l2_queryctrl> ctrl_qmap;
+typedef std::map<std::string, struct v4l2_query_ext_ctrl> ctrl_qmap;
 static ctrl_qmap ctrl_str2q;
 typedef std::map<unsigned, std::string> ctrl_idmap;
 static ctrl_idmap ctrl_id2str;
+
+typedef std::map<std::string, ctrl_subset> ctrl_subset_map;
+static ctrl_subset_map ctrl_subsets;
 
 typedef std::list<std::string> ctrl_get_list;
 static ctrl_get_list get_ctrls;
@@ -75,6 +83,9 @@ void common_usage(void)
 	       "  -l, --list-ctrls   display all controls and their values [VIDIOC_QUERYCTRL]\n"
 	       "  -L, --list-ctrls-menus\n"
 	       "		     display all controls and their menus [VIDIOC_QUERYMENU]\n"
+	       "  -r, --subset=<ctrl>[,<offset>,<size>]+\n"
+	       "                     the subset of the N-dimensional array to get/set for control <ctrl>,\n"
+	       "                     for every dimension an (<offset>, <size>) tuple is given.\n"
 #ifndef NO_LIBV4L2
 	       "  -w, --wrapper      use the libv4l2 wrapper library.\n"
 #endif
@@ -194,7 +205,7 @@ static void list_devices()
 	}
 }
 
-static std::string name2var(unsigned char *name)
+static std::string name2var(char *name)
 {
 	std::string s;
 	int add_underscore = 0;
@@ -260,63 +271,105 @@ static std::string ctrlflags2s(__u32 flags)
 		{ V4L2_CTRL_FLAG_SLIDER,     "slider" },
 		{ V4L2_CTRL_FLAG_WRITE_ONLY, "write-only" },
 		{ V4L2_CTRL_FLAG_VOLATILE,   "volatile" },
+		{ V4L2_CTRL_FLAG_HAS_PAYLOAD,"has-payload" },
 		{ 0, NULL }
 	};
 	return flags2s(flags, def);
 }
 
-static void print_qctrl(int fd, struct v4l2_queryctrl *queryctrl,
+static void print_qctrl(int fd, struct v4l2_query_ext_ctrl *queryctrl,
 		struct v4l2_ext_control *ctrl, int show_menus)
 {
 	struct v4l2_querymenu qmenu;
 	std::string s = name2var(queryctrl->name);
-	int i;
+	unsigned i;
 
 	memset(&qmenu, 0, sizeof(qmenu));
 	qmenu.id = queryctrl->id;
 	switch (queryctrl->type) {
 	case V4L2_CTRL_TYPE_INTEGER:
-		printf("%31s (int)    : min=%d max=%d step=%d default=%d value=%d",
+		printf("%31s (int)    : min=%lld max=%lld step=%lld default=%lld",
 				s.c_str(),
 				queryctrl->minimum, queryctrl->maximum,
-				queryctrl->step, queryctrl->default_value,
-				ctrl->value);
+				queryctrl->step, queryctrl->default_value);
 		break;
 	case V4L2_CTRL_TYPE_INTEGER64:
-		printf("%31s (int64)  : value=%lld", s.c_str(), ctrl->value64);
+		printf("%31s (int64)  : min=%lld max=%lld step=%lld default=%lld",
+				s.c_str(),
+				queryctrl->minimum, queryctrl->maximum,
+				queryctrl->step, queryctrl->default_value);
 		break;
 	case V4L2_CTRL_TYPE_STRING:
-		printf("%31s (str)    : min=%d max=%d step=%d value='%s'",
+		printf("%31s (str)    : min=%lld max=%lld step=%lld",
 				s.c_str(),
 				queryctrl->minimum, queryctrl->maximum,
-				queryctrl->step, safename(ctrl->string).c_str());
+				queryctrl->step);
 		break;
 	case V4L2_CTRL_TYPE_BOOLEAN:
-		printf("%31s (bool)   : default=%d value=%d",
-				s.c_str(),
-				queryctrl->default_value, ctrl->value);
+		printf("%31s (bool)   : default=%lld",
+				s.c_str(), queryctrl->default_value);
 		break;
 	case V4L2_CTRL_TYPE_MENU:
-		printf("%31s (menu)   : min=%d max=%d default=%d value=%d",
+		printf("%31s (menu)   : min=%lld max=%lld default=%lld",
 				s.c_str(),
 				queryctrl->minimum, queryctrl->maximum,
-				queryctrl->default_value, ctrl->value);
+				queryctrl->default_value);
 		break;
 	case V4L2_CTRL_TYPE_INTEGER_MENU:
-		printf("%31s (intmenu): min=%d max=%d default=%d value=%d",
+		printf("%31s (intmenu): min=%lld max=%lld default=%lld",
 				s.c_str(),
 				queryctrl->minimum, queryctrl->maximum,
-				queryctrl->default_value, ctrl->value);
+				queryctrl->default_value);
 		break;
 	case V4L2_CTRL_TYPE_BUTTON:
 		printf("%31s (button) :", s.c_str());
 		break;
 	case V4L2_CTRL_TYPE_BITMASK:
-		printf("%31s (bitmask): max=0x%08x default=0x%08x value=0x%08x",
+		printf("%31s (bitmask): max=0x%08llx default=0x%08llx",
 				s.c_str(), queryctrl->maximum,
-				queryctrl->default_value, ctrl->value);
+				queryctrl->default_value);
 		break;
-	default: break;
+	case V4L2_CTRL_TYPE_U8:
+		printf("%31s (u8)     : min=%lld max=%lld step=%lld default=%lld",
+				s.c_str(),
+				queryctrl->minimum, queryctrl->maximum,
+				queryctrl->step, queryctrl->default_value);
+		break;
+	case V4L2_CTRL_TYPE_U16:
+		printf("%31s (u16)    : min=%lld max=%lld step=%lld default=%lld",
+				s.c_str(),
+				queryctrl->minimum, queryctrl->maximum,
+				queryctrl->step, queryctrl->default_value);
+		break;
+	default:
+		printf("%31s (unknown): type=%x", s.c_str(), queryctrl->type);
+		break;
+	}
+	if (queryctrl->nr_of_dims == 0) {
+		switch (queryctrl->type) {
+		case V4L2_CTRL_TYPE_INTEGER:
+		case V4L2_CTRL_TYPE_BOOLEAN:
+		case V4L2_CTRL_TYPE_MENU:
+		case V4L2_CTRL_TYPE_INTEGER_MENU:
+			printf(" value=%d", ctrl->value);
+			break;
+		case V4L2_CTRL_TYPE_BITMASK:
+			printf(" value=0x%08x", ctrl->value);
+			break;
+		case V4L2_CTRL_TYPE_INTEGER64:
+			printf(" value=%lld", ctrl->value64);
+			break;
+		case V4L2_CTRL_TYPE_STRING:
+			printf(" value='%s'", safename(ctrl->string).c_str());
+			break;
+		default:
+			break;
+		}
+	}
+	if (queryctrl->nr_of_dims) {
+		printf(" ");
+		for (i = 0; i < queryctrl->nr_of_dims; i++)
+			printf("[%u]", queryctrl->dims[i]);
 	}
 	if (queryctrl->flags)
 		printf(" flags=%s", ctrlflags2s(queryctrl->flags).c_str());
@@ -335,7 +388,7 @@ static void print_qctrl(int fd, struct v4l2_queryctrl *queryctrl,
 	}
 }
 
-static int print_control(int fd, struct v4l2_queryctrl &qctrl, int show_menus)
+static int print_control(int fd, struct v4l2_query_ext_ctrl &qctrl, int show_menus)
 {
 	struct v4l2_control ctrl;
 	struct v4l2_ext_control ext_ctrl;
@@ -354,6 +407,10 @@ static int print_control(int fd, struct v4l2_queryctrl &qctrl, int show_menus)
 	if ((qctrl.flags & V4L2_CTRL_FLAG_WRITE_ONLY) ||
 	    qctrl.type == V4L2_CTRL_TYPE_BUTTON) {
 		print_qctrl(fd, &qctrl, &ext_ctrl, show_menus);
+		return 1;
+	}
+	if (qctrl.type >= V4L2_CTRL_COMPOUND_TYPES) {
+		print_qctrl(fd, &qctrl, NULL, show_menus);
 		return 1;
 	}
 	ctrls.ctrl_class = V4L2_CTRL_ID2CLASS(qctrl.id);
@@ -389,57 +446,97 @@ static int print_control(int fd, struct v4l2_queryctrl &qctrl, int show_menus)
 	return 1;
 }
 
+static int query_ext_ctrl_ioctl(int fd, struct v4l2_query_ext_ctrl &qctrl)
+{
+	struct v4l2_queryctrl qc;
+	int rc;
+
+	rc = test_ioctl(fd, VIDIOC_QUERY_EXT_CTRL, &qctrl);
+	if (errno != ENOTTY)
+		return rc;
+	qc.id = qctrl.id;
+	rc = test_ioctl(fd, VIDIOC_QUERYCTRL, &qc);
+	if (rc == 0) {
+		qctrl.type = qc.type;
+		memcpy(qctrl.name, qc.name, sizeof(qctrl.name));
+		qctrl.minimum = qc.minimum;
+		qctrl.maximum = qc.maximum;
+		qctrl.step = qc.step;
+		qctrl.default_value = qc.default_value;
+		qctrl.flags = qc.flags;
+		qctrl.elems = 1;
+		qctrl.nr_of_dims = 0;
+		memset(qctrl.dims, 0, sizeof(qctrl.dims));
+		switch (qctrl.type) {
+		case V4L2_CTRL_TYPE_INTEGER64:
+			qctrl.elem_size = sizeof(__s64);
+			break;
+		case V4L2_CTRL_TYPE_STRING:
+			qctrl.elem_size = qc.maximum + 1;
+			break;
+		default:
+			qctrl.elem_size = sizeof(__s32);
+			break;
+		}
+		memset(qctrl.reserved, 0, sizeof(qctrl.reserved));
+	}
+	qctrl.id = qc.id;
+	return rc;
+}
+
 static void list_controls(int fd, int show_menus)
 {
-	struct v4l2_queryctrl qctrl;
+	const unsigned next_fl = V4L2_CTRL_FLAG_NEXT_CTRL | V4L2_CTRL_FLAG_NEXT_COMPOUND;
+	struct v4l2_query_ext_ctrl qctrl;
 	int id;
 
 	memset(&qctrl, 0, sizeof(qctrl));
-	qctrl.id = V4L2_CTRL_FLAG_NEXT_CTRL;
-	while (test_ioctl(fd, VIDIOC_QUERYCTRL, &qctrl) == 0) {
-			print_control(fd, qctrl, show_menus);
-		qctrl.id |= V4L2_CTRL_FLAG_NEXT_CTRL;
+	qctrl.id = next_fl;
+	while (query_ext_ctrl_ioctl(fd, qctrl) == 0) {
+		print_control(fd, qctrl, show_menus);
+		qctrl.id |= next_fl;
 	}
-	if (qctrl.id != V4L2_CTRL_FLAG_NEXT_CTRL)
+	if (!(qctrl.id & next_fl))
 		return;
 	for (id = V4L2_CID_USER_BASE; id < V4L2_CID_LASTP1; id++) {
 		qctrl.id = id;
-		if (test_ioctl(fd, VIDIOC_QUERYCTRL, &qctrl) == 0)
+		if (query_ext_ctrl_ioctl(fd, qctrl) == 0)
 			print_control(fd, qctrl, show_menus);
 	}
 	for (qctrl.id = V4L2_CID_PRIVATE_BASE;
-			test_ioctl(fd, VIDIOC_QUERYCTRL, &qctrl) == 0; qctrl.id++) {
+			query_ext_ctrl_ioctl(fd, qctrl) == 0; qctrl.id++) {
 		print_control(fd, qctrl, show_menus);
 	}
 }
 
 static void find_controls(int fd)
 {
-	struct v4l2_queryctrl qctrl;
+	const unsigned next_fl = V4L2_CTRL_FLAG_NEXT_CTRL | V4L2_CTRL_FLAG_NEXT_COMPOUND;
+	struct v4l2_query_ext_ctrl qctrl;
 	int id;
 
 	memset(&qctrl, 0, sizeof(qctrl));
-	qctrl.id = V4L2_CTRL_FLAG_NEXT_CTRL;
-	while (test_ioctl(fd, VIDIOC_QUERYCTRL, &qctrl) == 0) {
+	qctrl.id = next_fl;
+	while (query_ext_ctrl_ioctl(fd, qctrl) == 0) {
 		if (qctrl.type != V4L2_CTRL_TYPE_CTRL_CLASS &&
 		    !(qctrl.flags & V4L2_CTRL_FLAG_DISABLED)) {
 			ctrl_str2q[name2var(qctrl.name)] = qctrl;
 			ctrl_id2str[qctrl.id] = name2var(qctrl.name);
 		}
-		qctrl.id |= V4L2_CTRL_FLAG_NEXT_CTRL;
+		qctrl.id |= next_fl;
 	}
-	if (qctrl.id != V4L2_CTRL_FLAG_NEXT_CTRL)
+	if (!(qctrl.id & next_fl))
 		return;
 	for (id = V4L2_CID_USER_BASE; id < V4L2_CID_LASTP1; id++) {
 		qctrl.id = id;
-		if (test_ioctl(fd, VIDIOC_QUERYCTRL, &qctrl) == 0 &&
+		if (query_ext_ctrl_ioctl(fd, qctrl) == 0 &&
 		    !(qctrl.flags & V4L2_CTRL_FLAG_DISABLED)) {
 			ctrl_str2q[name2var(qctrl.name)] = qctrl;
 			ctrl_id2str[qctrl.id] = name2var(qctrl.name);
 		}
 	}
 	for (qctrl.id = V4L2_CID_PRIVATE_BASE;
-			test_ioctl(fd, VIDIOC_QUERYCTRL, &qctrl) == 0; qctrl.id++) {
+			query_ext_ctrl_ioctl(fd, qctrl) == 0; qctrl.id++) {
 		if (!(qctrl.flags & V4L2_CTRL_FLAG_DISABLED)) {
 			ctrl_str2q[name2var(qctrl.name)] = qctrl;
 			ctrl_id2str[qctrl.id] = name2var(qctrl.name);
@@ -488,6 +585,57 @@ void common_control_event(const struct v4l2_event *ev)
 	if (ctrl->changes & V4L2_EVENT_CTRL_CH_RANGE)
 		printf("\trange: min=%d max=%d step=%d default=%d\n",
 			ctrl->minimum, ctrl->maximum, ctrl->step, ctrl->default_value);
+}
+
+static bool parse_subset(char *optarg)
+{
+	struct ctrl_subset subset;
+	std::string ctrl_name;
+	unsigned idx = 0;
+	char *p;
+
+	memset(&subset, 0, sizeof(subset));
+	while (*optarg) {
+		p = strchr(optarg, ',');
+		if (p)
+			*p = 0;
+		if (optarg[0] == 0) {
+			fprintf(stderr, "empty string\n");
+			return true;
+		}
+		if (idx == 0) {
+			ctrl_name = optarg;
+		} else {
+			if (idx > V4L2_CTRL_MAX_DIMS * 2) {
+				fprintf(stderr, "too many dimensions\n");
+				return true;
+			}
+			if (idx & 1)
+				subset.offset[idx / 2] = strtoul(optarg, 0, 0);
+			else {
+				subset.size[idx / 2 - 1] = strtoul(optarg, 0, 0);
+				if (subset.size[idx / 2 - 1] == 0) {
+					fprintf(stderr, "<size> cannot be 0\n");
+					return true;
+				}
+			}
+		}
+		idx++;
+		if (p == NULL)
+			break;
+		optarg = p + 1;
+	}
+	if (idx == 1) {
+		fprintf(stderr, "no <offset>, <size> tuples given\n");
+		return true;
+	}
+	if ((idx & 1) == 0) {
+		fprintf(stderr, "<offset> without <size>\n");
+		return true;
+	}
+	ctrl_subsets[ctrl_name] = subset;
+
+	return false;
 }
 
 static bool parse_next_subopt(char **subs, char **value)
@@ -542,6 +690,12 @@ void common_cmd(int ch, char *optarg)
 			}
 		}
 		break;
+	case OptSubset:
+		if (parse_subset(optarg)) {
+			common_usage();
+			exit(1);
+		}
+		break;
 	case OptSetPriority:
 		prio = (enum v4l2_priority)strtoul(optarg, 0L, 0);
 		break;
@@ -549,6 +703,50 @@ void common_cmd(int ch, char *optarg)
 		list_devices();
 		break;
 	}
+}
+
+static bool fill_subset(const struct v4l2_query_ext_ctrl &qc, ctrl_subset &subset)
+{
+	unsigned d;
+
+	if (qc.nr_of_dims == 0)
+		return false;
+
+	for (d = 0; d < qc.nr_of_dims; d++) {
+		subset.offset[d] = 0;
+		subset.size[d] = qc.dims[d];
+	}
+
+	if (ctrl_subsets.find(qc.name) != ctrl_subsets.end()) {
+		unsigned ss_dims;
+
+		subset = ctrl_subsets[qc.name];
+		for (ss_dims = 0; ss_dims < V4L2_CTRL_MAX_DIMS && subset.size[ss_dims]; ss_dims++) ;
+		if (ss_dims != qc.nr_of_dims) {
+			fprintf(stderr, "expected %d dimensions but --subset specified %d\n",
+					qc.nr_of_dims, ss_dims);
+			return true;
+		}
+		for (d = 0; d < qc.nr_of_dims; d++) {
+			if (subset.offset[d] + subset.size[d] > qc.dims[d]) {
+				fprintf(stderr, "the subset offset+size for dimension %d is out of range\n", d);
+				return true;
+			}
+		}
+	}
+	return false;
+}
+
+static bool idx_in_subset(const struct v4l2_query_ext_ctrl &qc, const ctrl_subset &subset,
+			  const unsigned *divide, unsigned idx)
+{
+	for (unsigned d = 0; d < qc.nr_of_dims; d++) {
+		unsigned i = (idx / divide[d]) % qc.dims[d];
+
+		if (i < subset.offset[d] || i >= subset.offset[d] + subset.size[d])
+			return false;
+	}
+	return true;
 }
 
 void common_set(int fd)
@@ -568,24 +766,57 @@ void common_set(int fd)
 		for (ctrl_set_map::iterator iter = set_ctrls.begin();
 				iter != set_ctrls.end(); ++iter) {
 			struct v4l2_ext_control ctrl;
+			struct v4l2_query_ext_ctrl &qc = ctrl_str2q[iter->first];
 
 			memset(&ctrl, 0, sizeof(ctrl));
-			ctrl.id = ctrl_str2q[iter->first].id;
-			if (ctrl_str2q[iter->first].type == V4L2_CTRL_TYPE_INTEGER64)
+			ctrl.id = qc.id;
+			if (qc.type == V4L2_CTRL_TYPE_INTEGER64)
 				use_ext_ctrls = true;
-			if (ctrl_str2q[iter->first].type == V4L2_CTRL_TYPE_STRING) {
-				unsigned len = iter->second.length();
-				unsigned maxlen = ctrl_str2q[iter->first].maximum;
+			if (qc.flags & V4L2_CTRL_FLAG_HAS_PAYLOAD) {
+				struct v4l2_ext_controls ctrls = { 0, 1 };
+				unsigned divide[V4L2_CTRL_MAX_DIMS] = { 0 };
+				ctrl_subset subset;
+				long long v;
+				unsigned d, i;
 
 				use_ext_ctrls = true;
-				ctrl.size = maxlen + 1;
-				ctrl.string = (char *)malloc(ctrl.size);
-				if (len > maxlen) {
-					memcpy(ctrl.string, iter->second.c_str(), maxlen);
-					ctrl.string[maxlen] = 0;
+				ctrl.size = qc.elems * qc.elem_size;
+				ctrl.ptr = malloc(ctrl.size);
+
+				ctrls.controls = &ctrl;
+				ioctl(fd, VIDIOC_G_EXT_CTRLS, &ctrls);
+
+				if (fill_subset(qc, subset))
+					return;
+
+				for (d = 0; d < qc.nr_of_dims; d++) {
+					divide[d] = qc.dims[d];
+					for (i = 0; i < d; i++)
+						divide[i] *= divide[d];
 				}
-				else {
-					strcpy(ctrl.string, iter->second.c_str());
+
+
+				switch (qc.type) {
+				case V4L2_CTRL_TYPE_U8:
+					v = strtoul(iter->second.c_str(), NULL, 0);
+					for (i = 0; i < qc.elems; i++)
+						if (idx_in_subset(qc, subset, divide, i))
+							ctrl.p_u8[i] = v;
+					break;
+				case V4L2_CTRL_TYPE_U16:
+					v = strtoul(iter->second.c_str(), NULL, 0);
+					for (i = 0; i < qc.elems; i++)
+						if (idx_in_subset(qc, subset, divide, i))
+							ctrl.p_u16[i] = v;
+					break;
+				case V4L2_CTRL_TYPE_STRING:
+					strncpy(ctrl.string, iter->second.c_str(), qc.maximum);
+					ctrl.string[qc.maximum] = 0;
+					break;
+				default:
+					fprintf(stderr, "%s: unsupported payload type\n",
+							qc.name);
+					break;
 				}
 			} else {
 				if (V4L2_CTRL_DRIVER_PRIV(ctrl.id))
@@ -618,7 +849,7 @@ void common_set(int fd)
 				ctrls.controls = &iter->second[0];
 				if (doioctl(fd, VIDIOC_S_EXT_CTRLS, &ctrls)) {
 					if (ctrls.error_idx >= ctrls.count) {
-						fprintf(stderr, "Error setting MPEG controls: %s\n",
+						fprintf(stderr, "Error setting controls: %s\n",
 								strerror(errno));
 					}
 					else {
@@ -628,6 +859,60 @@ void common_set(int fd)
 					}
 				}
 			}
+		}
+	}
+}
+
+static void print_array(const struct v4l2_query_ext_ctrl &qc, void *p)
+{
+	ctrl_subset subset;
+	unsigned divide[V4L2_CTRL_MAX_DIMS] = { 0 };
+	unsigned from, to;
+	unsigned d, i;
+
+	if (fill_subset(qc, subset))
+		return;
+
+	for (d = 0; d < qc.nr_of_dims; d++) {
+		divide[d] = qc.dims[d];
+		for (i = 0; i < d; i++)
+			divide[i] *= divide[d];
+	}
+
+	from = subset.offset[qc.nr_of_dims - 1];
+	to = subset.offset[qc.nr_of_dims - 1] + subset.size[qc.nr_of_dims - 1] - 1;
+
+	for (unsigned idx = 0; idx < qc.elems / qc.dims[qc.nr_of_dims - 1]; idx++) {
+		for (d = 0; d < qc.nr_of_dims - 1; d++) {
+			unsigned i = (idx / divide[d]) % qc.dims[d];
+
+			if (i < subset.offset[d] || i >= subset.offset[d] + subset.size[d])
+				break;
+		}
+		if (d < qc.nr_of_dims - 1)
+			continue;
+
+		printf("%s", qc.name);
+		for (d = 0; d < qc.nr_of_dims - 1; d++)
+			printf("[%u]", (idx / divide[d]) % qc.dims[d]);
+		printf(": ");
+		switch (qc.type) {
+		case V4L2_CTRL_TYPE_U8:
+			for (i = from; i <= to; i++) {
+				printf("%4d", ((__u8 *)p)[idx + i]);
+				if (i < to)
+					printf(", ");
+			}
+			printf("\n");
+			break;
+		case V4L2_CTRL_TYPE_U16:
+			for (i = from; i <= to; i++) {
+				printf("%6d", ((__u16 *)p)[idx + i]);
+				if (i < to)
+					printf(", ");
+			}
+			printf("\n");
+			break;
 		}
 	}
 }
@@ -643,16 +928,16 @@ void common_get(int fd)
 		for (ctrl_get_list::iterator iter = get_ctrls.begin();
 				iter != get_ctrls.end(); ++iter) {
 			struct v4l2_ext_control ctrl;
+			struct v4l2_query_ext_ctrl &qc = ctrl_str2q[*iter];
 
 			memset(&ctrl, 0, sizeof(ctrl));
-			ctrl.id = ctrl_str2q[*iter].id;
-			if (ctrl_str2q[*iter].type == V4L2_CTRL_TYPE_INTEGER64)
+			ctrl.id = qc.id;
+			if (qc.type == V4L2_CTRL_TYPE_INTEGER64)
 				use_ext_ctrls = true;
-			if (ctrl_str2q[*iter].type == V4L2_CTRL_TYPE_STRING) {
+			if (qc.flags & V4L2_CTRL_FLAG_HAS_PAYLOAD) {
 				use_ext_ctrls = true;
-				ctrl.size = ctrl_str2q[*iter].maximum + 1;
-				ctrl.string = (char *)malloc(ctrl.size);
-				ctrl.string[0] = 0;
+				ctrl.size = qc.elems * qc.elem_size;
+				ctrl.ptr = calloc(1, ctrl.size);
 			}
 			if (V4L2_CTRL_DRIVER_PRIV(ctrl.id))
 				use_ext_ctrls = true;
@@ -679,12 +964,26 @@ void common_get(int fd)
 				doioctl(fd, VIDIOC_G_EXT_CTRLS, &ctrls);
 				for (unsigned i = 0; i < iter->second.size(); i++) {
 					struct v4l2_ext_control ctrl = iter->second[i];
+					std::string &name = ctrl_id2str[ctrl.id];
+					struct v4l2_query_ext_ctrl &qc = ctrl_str2q[name];
 
-					if (ctrl_str2q[ctrl_id2str[ctrl.id]].type == V4L2_CTRL_TYPE_STRING)
-						printf("%s: '%s'\n", ctrl_id2str[ctrl.id].c_str(),
-							       safename(ctrl.string).c_str());
-					else
-						printf("%s: %d\n", ctrl_id2str[ctrl.id].c_str(), ctrl.value);
+					if (qc.flags & V4L2_CTRL_FLAG_HAS_PAYLOAD) {
+						switch (qc.type) {
+						case V4L2_CTRL_TYPE_U8:
+						case V4L2_CTRL_TYPE_U16:
+							print_array(qc, ctrl.ptr);
+							break;
+						case V4L2_CTRL_TYPE_STRING:
+							printf("%s: '%s'\n", name.c_str(),
+								safename(ctrl.string).c_str());
+							break;
+						default:
+							fprintf(stderr, "%s: unsupported payload type\n",
+									qc.name);
+							break;
+						}
+					} else
+						printf("%s: %d\n", name.c_str(), ctrl.value);
 				}
 			}
 		}

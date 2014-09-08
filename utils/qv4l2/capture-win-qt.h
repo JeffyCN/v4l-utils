@@ -27,42 +27,35 @@
 #include <QImage>
 #include <QResizeEvent>
 
-struct CropInfo {
-	int cropH;
-	int cropW;
-	int height;
-	int width;
-	int offset;
-	int bytes;
-};
-
 class CaptureWinQt : public CaptureWin
 {
 public:
-	CaptureWinQt();
+	CaptureWinQt(ApplicationWindow *aw);
 	~CaptureWinQt();
-
-	void setFrame(int width, int height, __u32 format,
-		      unsigned char *data, unsigned char *data2, const QString &info);
 
 	void stop();
 	bool hasNativeFormat(__u32 format);
 	static bool isSupported() { return true; }
+	void setColorspace(unsigned colorspace) {}
+	void setField(unsigned field) {}
+	void setDisplayColorspace(unsigned colorspace) {}
+	void setBlending(bool enable) {}
+	void setLinearFilter(bool enable) {}
 
 protected:
 	void resizeEvent(QResizeEvent *event);
+	void setRenderFrame();
 
 private:
 	bool findNativeFormat(__u32 format, QImage::Format &dstFmt);
 	void paintFrame();
-	void resizeScaleCrop();
 
-	QImage *m_frame;
-	struct CropInfo m_crop;
+	QImage *m_image;
 	unsigned char *m_data;
-	QLabel m_videoSurface;
-	QSize m_scaledSize;
+	QLabel *m_videoSurface;
 	bool m_supportedFormat;
 	bool m_filled;
+	int m_cropBytes;
+	int m_cropOffset;
 };
 #endif

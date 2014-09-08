@@ -32,8 +32,10 @@
 #include <QComboBox>
 #include <QCheckBox>
 #include <QPushButton>
+#include <QToolButton>
 #include <QToolTip>
 
+#include <math.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <errno.h>
@@ -58,6 +60,10 @@ static bool is_valid_type(__u32 type)
 
 void ApplicationWindow::addWidget(QGridLayout *grid, QWidget *w, Qt::Alignment align)
 {
+	if (m_col % 2 && !qobject_cast<QToolButton*>(w))
+		w->setMinimumWidth(m_minWidth);
+	if (w->sizeHint().width() > m_maxw[m_col])
+		m_maxw[m_col] = w->sizeHint().width();
 	grid->addWidget(w, m_row, m_col, align | Qt::AlignVCenter);
 	m_col++;
 	if (m_col == m_cols) {
@@ -66,61 +72,37 @@ void ApplicationWindow::addWidget(QGridLayout *grid, QWidget *w, Qt::Alignment a
 	}
 }
 
-void ApplicationWindow::addTabs()
+void ApplicationWindow::addTabs(int m_winWidth)
 {
-	v4l2_queryctrl qctrl;
+	v4l2_query_ext_ctrl qec = { 0 };
 	unsigned ctrl_class;
 	unsigned i;
 	int id;
 
-	memset(&qctrl, 0, sizeof(qctrl));
-	qctrl.id = V4L2_CTRL_FLAG_NEXT_CTRL;
-	while (queryctrl(qctrl)) {
-		if (is_valid_type(qctrl.type) &&
-		    (qctrl.flags & V4L2_CTRL_FLAG_DISABLED) == 0) {
-			m_ctrlMap[qctrl.id] = qctrl;
-			if (qctrl.type != V4L2_CTRL_TYPE_CTRL_CLASS)
-				m_classMap[V4L2_CTRL_ID2CLASS(qctrl.id)].push_back(qctrl.id);
-		}
-		qctrl.id |= V4L2_CTRL_FLAG_NEXT_CTRL;
-	}
-	if (qctrl.id == V4L2_CTRL_FLAG_NEXT_CTRL) {
-		strcpy((char *)qctrl.name, "User Controls");
-		qctrl.id = V4L2_CTRL_CLASS_USER | 1;
-		qctrl.type = V4L2_CTRL_TYPE_CTRL_CLASS;
-		m_ctrlMap[qctrl.id] = qctrl;
-		for (id = V4L2_CID_USER_BASE; id < V4L2_CID_LASTP1; id++) {
-			qctrl.id = id;
-			if (!queryctrl(qctrl))
-				continue;
-			if (!is_valid_type(qctrl.type))
-				continue;
-			if (qctrl.flags & V4L2_CTRL_FLAG_DISABLED)
-				continue;
-			m_ctrlMap[qctrl.id] = qctrl;
-			m_classMap[V4L2_CTRL_CLASS_USER].push_back(qctrl.id);
-		}
-		for (qctrl.id = V4L2_CID_PRIVATE_BASE;
-				queryctrl(qctrl); qctrl.id++) {
-			if (!is_valid_type(qctrl.type))
-				continue;
-			if (qctrl.flags & V4L2_CTRL_FLAG_DISABLED)
-				continue;
-			m_ctrlMap[qctrl.id] = qctrl;
-			m_classMap[V4L2_CTRL_CLASS_USER].push_back(qctrl.id);
+	while (query_ext_ctrl(qec, true) == 0) {
+		if (is_valid_type(qec.type) &&
+		    (qec.flags & V4L2_CTRL_FLAG_DISABLED) == 0) {
+			m_ctrlMap[qec.id] = qec;
+			if (qec.type != V4L2_CTRL_TYPE_CTRL_CLASS)
+				m_classMap[V4L2_CTRL_ID2CLASS(qec.id)].push_back(qec.id);
 		}
 	}
-	
-	m_haveExtendedUserCtrls = false;
-	for (unsigned i = 0; i < m_classMap[V4L2_CTRL_CLASS_USER].size(); i++) {
-		unsigned id = m_classMap[V4L2_CTRL_CLASS_USER][i];
-
-		if (m_ctrlMap[id].type == V4L2_CTRL_TYPE_INTEGER64 ||
-		    m_ctrlMap[id].type == V4L2_CTRL_TYPE_STRING ||
-		    V4L2_CTRL_DRIVER_PRIV(id)) {
-			m_haveExtendedUserCtrls = true;
-			break;
-		}
+	if (m_classMap.find(V4L2_CTRL_CLASS_USER) != m_classMap.end() &&
+	    m_ctrlMap.find(V4L2_CID_USER_CLASS) == m_ctrlMap.end()) {
+		memset(&qec, 0, sizeof(qec));
+		qec.id = V4L2_CID_USER_CLASS;
+		strcpy(qec.name, "User Controls");
+		qec.type = V4L2_CTRL_TYPE_CTRL_CLASS;
+		m_ctrlMap[qec.id] = qec;
+	}
+	if (m_classMap.find(V4L2_CTRL_CLASS_CAMERA) != m_classMap.end() &&
+	    m_ctrlMap.find(V4L2_CID_CAMERA_CLASS) == m_ctrlMap.end()) {
+		// UVC still doesn't provide this :-(
+		memset(&qec, 0, sizeof(qec));
+		qec.id = V4L2_CID_CAMERA_CLASS;
+		strcpy(qec.name, "Camera Controls");
+		qec.type = V4L2_CTRL_TYPE_CTRL_CLASS;
+		m_ctrlMap[qec.id] = qec;
 	}
 
 	for (ClassMap::iterator iter = m_classMap.begin(); iter != m_classMap.end(); ++iter) {
@@ -130,8 +112,11 @@ void ApplicationWindow::addTabs()
 		id = ctrl_class | 1;
 		m_col = m_row = 0;
 		m_cols = 4;
+		for (int j = 0; j < m_cols; j++) {
+			m_maxw[j] = 0;
+		}
 
-		const v4l2_queryctrl &qctrl = m_ctrlMap[id];
+		const v4l2_query_ext_ctrl &qec = m_ctrlMap[id];
 		QWidget *t = new QWidget(m_tabs);
 		QVBoxLayout *vbox = new QVBoxLayout(t);
 		QWidget *w = new QWidget(t);
@@ -139,9 +124,24 @@ void ApplicationWindow::addTabs()
 		vbox->addWidget(w);
 
 		QGridLayout *grid = new QGridLayout(w);
+		QString tabName(qec.name);
 
-		grid->setSpacing(3);
-		m_tabs->addTab(t, (char *)qctrl.name);
+		if (tabName.length()) {
+			QLabel *title_tab = new QLabel(tabName, parentWidget());
+			QFont f = title_tab->font();
+			f.setBold(true);
+			title_tab->setFont(f);
+			grid->addWidget(title_tab, m_row, m_col, 1, m_cols, Qt::AlignLeft);
+			grid->setRowMinimumHeight(m_row, 25);
+			m_row++;
+
+			QFrame *m_line = new QFrame(grid->parentWidget());
+			m_line->setFrameShape(QFrame::HLine);
+			m_line->setFrameShadow(QFrame::Sunken);
+			grid->addWidget(m_line, m_row, m_col, 1, m_cols, Qt::AlignVCenter);
+			m_row++;
+		}
+		m_tabs->addTab(t, tabName);
 		for (i = 0; i < iter->second.size(); i++) {
 			if (i & 1)
 				id = iter->second[(1+iter->second.size()) / 2 + i / 2];
@@ -153,8 +153,43 @@ void ApplicationWindow::addTabs()
 		grid->setRowStretch(grid->rowCount() - 1, 1);
 		w = new QWidget(t);
 		vbox->addWidget(w);
+		fixWidth(grid);
+
+		int totalw = 0;
+		int diff = 0;
+		for (int i = 0; i < m_cols; i++) {
+			totalw += m_maxw[i] + m_pxw;
+		}
+		if (totalw > m_winWidth)
+			m_winWidth = totalw;
+		else {
+		  diff = m_winWidth - totalw;
+		  grid->setHorizontalSpacing(diff/5);
+		}
 		grid = new QGridLayout(w);
 		finishGrid(grid, ctrl_class);
+	}
+}
+
+void ApplicationWindow::fixWidth(QGridLayout *grid)
+{
+	grid->setContentsMargins(m_vMargin, m_hMargin, m_vMargin, m_hMargin);
+	grid->setColumnStretch(3, 1);
+	QList<QWidget *> list = grid->parentWidget()->parentWidget()->findChildren<QWidget *>();
+	QList<QWidget *>::iterator it;
+
+	for (it = list.begin(); it != list.end(); ++it)	{
+		if (((*it)->sizeHint().width()) > m_minWidth) {
+			m_increment = (int) ceil(((*it)->sizeHint().width() - m_minWidth) / m_pxw);
+			(*it)->setMinimumWidth(m_minWidth + m_increment * m_pxw); // for stepsize expantion of widgets
+		}
+	}
+
+	for (int j = 0; j < m_cols; j++) {
+		if (j % 2) // only add possible expansion for odd columns
+			grid->setColumnMinimumWidth(j, m_maxw[j] + m_pxw);
+		else
+			grid->setColumnMinimumWidth(j, m_maxw[j]);
 	}
 }
 
@@ -169,6 +204,9 @@ void ApplicationWindow::finishGrid(QGridLayout *grid, unsigned ctrl_class)
 	m_col = 0;
 	m_row = grid->rowCount();
 
+	QWidget *m_w = new QWidget();
+	QHBoxLayout *m_boxLayoutBottom = new QHBoxLayout(m_w);
+
 	QCheckBox *cbox = new QCheckBox("Update on change", w);
 	m_widgetMap[ctrl_class | CTRL_UPDATE_ON_CHANGE] = cbox;
 	addWidget(grid, cbox);
@@ -179,85 +217,91 @@ void ApplicationWindow::finishGrid(QGridLayout *grid, unsigned ctrl_class)
 
 	QPushButton *defBut = new QPushButton("Set Defaults", w);
 	m_widgetMap[ctrl_class | CTRL_DEFAULTS] = defBut;
-	addWidget(grid, defBut);
+	m_boxLayoutBottom->addWidget(defBut);
 	connect(defBut, SIGNAL(clicked()), m_sigMapper, SLOT(map()));
 	m_sigMapper->setMapping(defBut, ctrl_class | CTRL_DEFAULTS);
 
 	QPushButton *refreshBut = new QPushButton("Refresh", w);
 	m_widgetMap[ctrl_class | CTRL_REFRESH] = refreshBut;
-	addWidget(grid, refreshBut);
+	m_boxLayoutBottom->addWidget(refreshBut);
 	connect(refreshBut, SIGNAL(clicked()), m_sigMapper, SLOT(map()));
 	m_sigMapper->setMapping(refreshBut, ctrl_class | CTRL_REFRESH);
 
 	QPushButton *button = new QPushButton("Update", w);
 	m_widgetMap[ctrl_class | CTRL_UPDATE] = button;
-	addWidget(grid, button);
+	m_boxLayoutBottom->addWidget(button);
 	connect(button, SIGNAL(clicked()), m_sigMapper, SLOT(map()));
 	m_sigMapper->setMapping(button, ctrl_class | CTRL_UPDATE);
 	connect(cbox, SIGNAL(toggled(bool)), button, SLOT(setDisabled(bool)));
 
+	grid->addWidget(m_w, m_row, 3, Qt::AlignRight);
 	cbox->setChecked(true);
 
 	refresh(ctrl_class);
 }
 
-void ApplicationWindow::addCtrl(QGridLayout *grid, const v4l2_queryctrl &qctrl)
+void ApplicationWindow::addCtrl(QGridLayout *grid, const v4l2_query_ext_ctrl &qec)
 {
 	QWidget *p = grid->parentWidget();
 	QIntValidator *val;
 	QLineEdit *edit;
-	QString name((char *)qctrl.name);
+	QString name(qec.name);
 	QComboBox *combo;
 	QSpinBox *spin;
 	QSlider *slider;
 	struct v4l2_querymenu qmenu;
+	QWidget *wContainer = new QWidget();
+	QHBoxLayout *m_boxLayout = new QHBoxLayout(wContainer);
+	m_boxLayout->setMargin(0);
+	__u64 dif;
 
-	switch (qctrl.type) {
+	switch (qec.type) {
 	case V4L2_CTRL_TYPE_INTEGER:
 		addLabel(grid, name);
-		if (qctrl.flags & V4L2_CTRL_FLAG_SLIDER) {
-			m_widgetMap[qctrl.id] = slider = new QSlider(Qt::Horizontal, p);
+		dif = qec.maximum - qec.minimum;
+		if (dif <= 0xffffU || (qec.flags & V4L2_CTRL_FLAG_SLIDER)) {
+			m_sliderMap[qec.id] = slider = new QSlider(Qt::Horizontal, p);
 			slider->setSizePolicy(QSizePolicy::MinimumExpanding, QSizePolicy::Minimum);
-			slider->setMinimum(qctrl.minimum);
-			slider->setMaximum(qctrl.maximum);
-			slider->setSingleStep(qctrl.step);
-			slider->setSliderPosition(qctrl.default_value);
-			addWidget(grid, m_widgetMap[qctrl.id]);
-			connect(m_widgetMap[qctrl.id], SIGNAL(valueChanged(int)),
+			slider->setMinimum(qec.minimum);
+			slider->setMaximum(qec.maximum);
+			slider->setSingleStep(qec.step);
+			slider->setSliderPosition(qec.default_value);
+
+			m_widgetMap[qec.id] = spin = new QSpinBox(p);
+			spin->setRange(qec.minimum, qec.maximum);
+			spin->setSingleStep(qec.step);
+
+			m_boxLayout->addWidget(slider);
+			m_boxLayout->addWidget(spin);
+			wContainer->setSizePolicy(QSizePolicy::Minimum, QSizePolicy::Minimum);
+			addWidget(grid, wContainer);
+
+			connect(spin, SIGNAL(valueChanged(int)), slider, SLOT(setValue(int)));
+			connect(slider, SIGNAL(valueChanged(int)), spin, SLOT(setValue(int)));
+			connect(m_widgetMap[qec.id], SIGNAL(valueChanged(int)),
 				m_sigMapper, SLOT(map()));
 			break;
 		}
 
-		if (qctrl.maximum - qctrl.minimum <= 255) {
-			m_widgetMap[qctrl.id] = spin = new QSpinBox(p);
-			spin->setMinimum(qctrl.minimum);
-			spin->setMaximum(qctrl.maximum);
-			spin->setSingleStep(qctrl.step);
-			addWidget(grid, m_widgetMap[qctrl.id]);
-			connect(m_widgetMap[qctrl.id], SIGNAL(valueChanged(int)),
-				m_sigMapper, SLOT(map()));
-			break;
-		}
-
-		val = new QIntValidator(qctrl.minimum, qctrl.maximum, p);
+		val = new QIntValidator(qec.minimum, qec.maximum, p);
 		edit = new QLineEdit(p);
 		edit->setValidator(val);
 		addWidget(grid, edit);
-		m_widgetMap[qctrl.id] = edit;
-		connect(m_widgetMap[qctrl.id], SIGNAL(lostFocus()),
+		m_widgetMap[qec.id] = edit;
+		connect(m_widgetMap[qec.id], SIGNAL(lostFocus()),
 				m_sigMapper, SLOT(map()));
-		connect(m_widgetMap[qctrl.id], SIGNAL(returnPressed()),
+		connect(m_widgetMap[qec.id], SIGNAL(returnPressed()),
 				m_sigMapper, SLOT(map()));
 		break;
 
 	case V4L2_CTRL_TYPE_INTEGER64:
 		addLabel(grid, name);
 		edit = new QLineEdit(p);
-		m_widgetMap[qctrl.id] = edit;
+		m_widgetMap[qec.id] = edit;
 		addWidget(grid, edit);
-		connect(m_widgetMap[qctrl.id], SIGNAL(lostFocus()),
+		connect(m_widgetMap[qec.id], SIGNAL(lostFocus()),
 				m_sigMapper, SLOT(map()));
-		connect(m_widgetMap[qctrl.id], SIGNAL(returnPressed()),
+		connect(m_widgetMap[qec.id], SIGNAL(returnPressed()),
 				m_sigMapper, SLOT(map()));
 		break;
 
@@ -266,38 +310,40 @@ void ApplicationWindow::addCtrl(QGridLayout *grid, const v4l2_queryctrl &qctrl)
 		edit = new QLineEdit(p);
 		edit->setInputMask("HHHHHHHH");
 		addWidget(grid, edit);
-		m_widgetMap[qctrl.id] = edit;
-		connect(m_widgetMap[qctrl.id], SIGNAL(lostFocus()),
+		m_widgetMap[qec.id] = edit;
+		connect(m_widgetMap[qec.id], SIGNAL(lostFocus()),
 				m_sigMapper, SLOT(map()));
-		connect(m_widgetMap[qctrl.id], SIGNAL(returnPressed()),
+		connect(m_widgetMap[qec.id], SIGNAL(returnPressed()),
 				m_sigMapper, SLOT(map()));
 		break;
 
 	case V4L2_CTRL_TYPE_STRING:
 		addLabel(grid, name);
 		edit = new QLineEdit(p);
-		m_widgetMap[qctrl.id] = edit;
-		edit->setMaxLength(qctrl.maximum);
+		m_widgetMap[qec.id] = edit;
+		edit->setMaxLength(qec.maximum);
 		addWidget(grid, edit);
-		connect(m_widgetMap[qctrl.id], SIGNAL(lostFocus()),
+		connect(m_widgetMap[qec.id], SIGNAL(lostFocus()),
 				m_sigMapper, SLOT(map()));
-		connect(m_widgetMap[qctrl.id], SIGNAL(returnPressed()),
+		connect(m_widgetMap[qec.id], SIGNAL(returnPressed()),
 				m_sigMapper, SLOT(map()));
 		break;
 
 	case V4L2_CTRL_TYPE_BOOLEAN:
 		addLabel(grid, name);
-		m_widgetMap[qctrl.id] = new QCheckBox(p);
-		addWidget(grid, m_widgetMap[qctrl.id]);
-		connect(m_widgetMap[qctrl.id], SIGNAL(clicked()),
+		m_widgetMap[qec.id] = new QCheckBox(p);
+		addWidget(grid, m_widgetMap[qec.id]);
+		connect(m_widgetMap[qec.id], SIGNAL(clicked()),
 				m_sigMapper, SLOT(map()));
 		break;
 
 	case V4L2_CTRL_TYPE_BUTTON:
-		addLabel(grid, "");
-		m_widgetMap[qctrl.id] = new QPushButton((char *)qctrl.name, p);
-		addWidget(grid, m_widgetMap[qctrl.id]);
-		connect(m_widgetMap[qctrl.id], SIGNAL(clicked()),
+		addLabel(grid, (char *)qec.name);
+		QToolButton *button;
+		m_widgetMap[qec.id] = button = new QToolButton(p);
+		button->setIcon(QIcon(":/enterbutt.png"));
+		addWidget(grid, m_widgetMap[qec.id]);
+		connect(m_widgetMap[qec.id], SIGNAL(clicked()),
 				m_sigMapper, SLOT(map()));
 		break;
 
@@ -305,34 +351,35 @@ void ApplicationWindow::addCtrl(QGridLayout *grid, const v4l2_queryctrl &qctrl)
 	case V4L2_CTRL_TYPE_INTEGER_MENU:
 		addLabel(grid, name);
 		combo = new QComboBox(p);
-		m_widgetMap[qctrl.id] = combo;
-		for (int i = qctrl.minimum; i <= qctrl.maximum; i++) {
-			qmenu.id = qctrl.id;
+		m_widgetMap[qec.id] = combo;
+		for (int i = (int)qec.minimum; i <= (int)qec.maximum; i++) {
+			qmenu.id = qec.id;
 			qmenu.index = i;
-			if (!querymenu(qmenu))
+			if (querymenu(qmenu))
 				continue;
-			if (qctrl.type == V4L2_CTRL_TYPE_MENU)
+			if (qec.type == V4L2_CTRL_TYPE_MENU)
 				combo->addItem((char *)qmenu.name);
 			else
 				combo->addItem(QString("%1").arg(qmenu.value));
 		}
-		addWidget(grid, m_widgetMap[qctrl.id]);
-		connect(m_widgetMap[qctrl.id], SIGNAL(activated(int)),
+		addWidget(grid, m_widgetMap[qec.id]);
+		connect(m_widgetMap[qec.id], SIGNAL(activated(int)),
 				m_sigMapper, SLOT(map()));
 		break;
 
 	default:
 		return;
 	}
-	struct v4l2_event_subscription sub;
-	memset(&sub, 0, sizeof(sub));
-	sub.type = V4L2_EVENT_CTRL;
-	sub.id = qctrl.id;
-	subscribe_event(sub);
 
-	m_sigMapper->setMapping(m_widgetMap[qctrl.id], qctrl.id);
-	if (qctrl.flags & CTRL_FLAG_DISABLED)
-		m_widgetMap[qctrl.id]->setDisabled(true);
+	m_sigMapper->setMapping(m_widgetMap[qec.id], qec.id);
+	if (qec.flags & CTRL_FLAG_DISABLED) {
+		if (qobject_cast<QLineEdit *>(m_widgetMap[qec.id]))
+			static_cast<QLineEdit *>(m_widgetMap[qec.id])->setReadOnly(true);
+		else
+			m_widgetMap[qec.id]->setDisabled(true);
+		if (m_sliderMap.find(qec.id) != m_sliderMap.end())
+			m_sliderMap[qec.id]->setDisabled(true);
+	}
 }
 
 void ApplicationWindow::ctrlAction(int id)
@@ -353,24 +400,8 @@ void ApplicationWindow::ctrlAction(int id)
 		refresh(ctrl_class);
 		return;
 	}
-	if (m_ctrlMap[id].type == V4L2_CTRL_TYPE_INTEGER &&
-	    (m_ctrlMap[id].flags & V4L2_CTRL_FLAG_SLIDER)) {
-		QWidget *w = m_widgetMap[id];
-		int v = static_cast<QSlider *>(w)->value();
-		info(QString("Value: %1").arg(v));
-	}
 	if (!update && !all && m_ctrlMap[id].type != V4L2_CTRL_TYPE_BUTTON)
 		return;
-	if (!m_haveExtendedUserCtrls && ctrl_class == V4L2_CTRL_CLASS_USER) {
-		if (!all) {
-			updateCtrl(id);
-			return;
-		}
-		for (unsigned i = 0; i < m_classMap[ctrl_class].size(); i++) {
-			updateCtrl(m_classMap[ctrl_class][i]);
-		}
-		return;
-	}
 	if (!all) {
 		updateCtrl(id);
 		return;
@@ -402,7 +433,7 @@ void ApplicationWindow::ctrlAction(int id)
 	ctrls.count = idx;
 	ctrls.ctrl_class = ctrl_class;
 	ctrls.controls = c;
-	if (ioctl(VIDIOC_S_EXT_CTRLS, &ctrls)) {
+	if (s_ext_ctrls(ctrls)) {
 		if (ctrls.error_idx >= ctrls.count) {
 			error(errno);
 		}
@@ -420,28 +451,32 @@ void ApplicationWindow::ctrlAction(int id)
 
 QString ApplicationWindow::getString(unsigned id)
 {
-	const v4l2_queryctrl &qctrl = m_ctrlMap[id];
-	QWidget *w = m_widgetMap[qctrl.id];
+	const v4l2_query_ext_ctrl &qec = m_ctrlMap[id];
+	QWidget *w = m_widgetMap[qec.id];
 	QString v;
+	int mod;
 
-	switch (qctrl.type) {
+	switch (qec.type) {
 	case V4L2_CTRL_TYPE_STRING:
 		v = static_cast<QLineEdit *>(w)->text();
+		mod = v.length() % qec.step;
+		if (mod)
+			v += QString(qec.step - mod, ' ');
 		break;
 	default:
 		break;
 	}
-	setWhat(w, id, v);
+	setWhat(w, id, QString("'") + v + "'");
 	return v;
 }
 
 long long ApplicationWindow::getVal64(unsigned id)
 {
-	const v4l2_queryctrl &qctrl = m_ctrlMap[id];
-	QWidget *w = m_widgetMap[qctrl.id];
+	const v4l2_query_ext_ctrl &qec = m_ctrlMap[id];
+	QWidget *w = m_widgetMap[qec.id];
 	long long v = 0;
 
-	switch (qctrl.type) {
+	switch (qec.type) {
 	case V4L2_CTRL_TYPE_INTEGER64:
 		v = static_cast<QLineEdit *>(w)->text().toLongLong();
 		break;
@@ -454,20 +489,17 @@ long long ApplicationWindow::getVal64(unsigned id)
 
 int ApplicationWindow::getVal(unsigned id)
 {
-	const v4l2_queryctrl &qctrl = m_ctrlMap[id];
-	QWidget *w = m_widgetMap[qctrl.id];
+	const v4l2_query_ext_ctrl &qec = m_ctrlMap[id];
+	QWidget *w = m_widgetMap[qec.id];
 	v4l2_querymenu qmenu;
 	int i, idx;
 	int v = 0;
+	unsigned dif;
 
-	switch (qctrl.type) {
+	switch (qec.type) {
 	case V4L2_CTRL_TYPE_INTEGER:
-		if (qctrl.flags & V4L2_CTRL_FLAG_SLIDER) {
-			v = static_cast<QSlider *>(w)->value();
-			break;
-		}
-
-		if (qctrl.maximum - qctrl.minimum <= 255) {
+		dif = qec.maximum - qec.minimum;
+		if (dif <= 0xffffU || (qec.flags & V4L2_CTRL_FLAG_SLIDER)) {
 			v = static_cast<QSpinBox *>(w)->value();
 			break;
 		}
@@ -484,10 +516,10 @@ int ApplicationWindow::getVal(unsigned id)
 	case V4L2_CTRL_TYPE_MENU:
 	case V4L2_CTRL_TYPE_INTEGER_MENU:
 		idx = static_cast<QComboBox *>(w)->currentIndex();
-		for (i = qctrl.minimum; i <= qctrl.maximum; i++) {
-			qmenu.id = qctrl.id;
+		for (i = qec.minimum; i <= qec.maximum; i++) {
+			qmenu.id = qec.id;
 			qmenu.index = i;
-			if (!querymenu(qmenu))
+			if (querymenu(qmenu))
 				continue;
 			if (idx-- == 0)
 				break;
@@ -511,18 +543,6 @@ void ApplicationWindow::updateCtrl(unsigned id)
 	if (m_ctrlMap[id].flags & CTRL_FLAG_DISABLED)
 		return;
 
-	if (!m_haveExtendedUserCtrls && ctrl_class == V4L2_CTRL_CLASS_USER) {
-		struct v4l2_control c;
-
-		c.id = id;
-		c.value = getVal(id);
-		if (ioctl(VIDIOC_S_CTRL, &c)) {
-			errorCtrl(id, errno, c.value);
-		}
-		else if (m_ctrlMap[id].flags & V4L2_CTRL_FLAG_UPDATE)
-			refresh(ctrl_class);
-		return;
-	}
 	struct v4l2_ext_control c;
 	struct v4l2_ext_controls ctrls;
 
@@ -541,7 +561,7 @@ void ApplicationWindow::updateCtrl(unsigned id)
 	ctrls.count = 1;
 	ctrls.ctrl_class = ctrl_class;
 	ctrls.controls = &c;
-	if (ioctl(VIDIOC_S_EXT_CTRLS, &ctrls)) {
+	if (s_ext_ctrls(ctrls)) {
 		errorCtrl(id, errno, c.value);
 	}
 	else if (m_ctrlMap[id].flags & V4L2_CTRL_FLAG_UPDATE)
@@ -558,27 +578,60 @@ void ApplicationWindow::updateCtrl(unsigned id)
 	}
 }
 
+void ApplicationWindow::updateCtrlRange(unsigned id, __s32 new_val)
+{
+	const v4l2_query_ext_ctrl &qec = m_ctrlMap[id];
+	QLineEdit *edit;
+	QIntValidator *val;
+	unsigned dif;
+
+	switch (qec.type) {
+	case V4L2_CTRL_TYPE_INTEGER:
+		dif = qec.maximum - qec.minimum;
+		if (dif <= 0xffffU || (qec.flags & V4L2_CTRL_FLAG_SLIDER)) {
+			QSlider *slider = static_cast<QSlider *>(m_sliderMap[id]);
+			slider->setMinimum(qec.minimum);
+			slider->setMaximum(qec.maximum);
+			slider->setSingleStep(qec.step);
+			slider->setSliderPosition(new_val);
+
+			QSpinBox *spin = static_cast<QSpinBox *>(m_widgetMap[id]);
+			spin->setRange(qec.minimum, qec.maximum);
+			spin->setSingleStep(qec.step);
+			spin->setValue(new_val);
+			break;
+		}
+
+		edit = static_cast<QLineEdit *>(m_widgetMap[id]);
+		val = new QIntValidator(qec.minimum, qec.maximum, edit->parent());
+		// FIXME: will this delete the old validator?
+		edit->setValidator(val);
+		break;
+
+	case V4L2_CTRL_TYPE_STRING:
+		QLineEdit *edit = static_cast<QLineEdit *>(m_widgetMap[id]);
+		edit->setMaxLength(qec.maximum);
+		break;
+	}
+}
+
+void ApplicationWindow::subscribeCtrlEvents()
+{
+	for (ClassMap::iterator iter = m_classMap.begin(); iter != m_classMap.end(); ++iter) {
+		for (unsigned i = 0; i < m_classMap[iter->first].size(); i++) {
+			unsigned id = m_classMap[iter->first][i];
+			struct v4l2_event_subscription sub;
+
+			memset(&sub, 0, sizeof(sub));
+			sub.type = V4L2_EVENT_CTRL;
+			sub.id = id;
+			subscribe_event(sub);
+		}
+	}
+}
+
 void ApplicationWindow::refresh(unsigned ctrl_class)
 {
-	if (!m_haveExtendedUserCtrls && ctrl_class == V4L2_CTRL_CLASS_USER) {
-		for (unsigned i = 0; i < m_classMap[ctrl_class].size(); i++) {
-			unsigned id = m_classMap[ctrl_class][i];
-			v4l2_control c;
-
-			queryctrl(m_ctrlMap[id]);
-			if (m_ctrlMap[id].type == V4L2_CTRL_TYPE_BUTTON)
-				continue;
-			if (m_ctrlMap[id].flags & V4L2_CTRL_FLAG_WRITE_ONLY)
-				continue;
-			c.id = id;
-			if (ioctl(VIDIOC_G_CTRL, &c)) {
-				errorCtrl(id, errno);
-			}
-			setVal(id, c.value);
-			m_widgetMap[id]->setDisabled(m_ctrlMap[id].flags & CTRL_FLAG_DISABLED);
-		}
-		return;
-	}
 	unsigned count = m_classMap[ctrl_class].size();
 	unsigned cnt = 0;
 	struct v4l2_ext_control *c = new v4l2_ext_control[count];
@@ -587,6 +640,8 @@ void ApplicationWindow::refresh(unsigned ctrl_class)
 	for (unsigned i = 0; i < count; i++) {
 		unsigned id = c[cnt].id = m_classMap[ctrl_class][i];
 		
+		c[cnt].size = 0;
+		c[cnt].reserved2[0] = 0;
 		if (m_ctrlMap[id].type == V4L2_CTRL_TYPE_BUTTON)
 			continue;
 		if (m_ctrlMap[id].flags & V4L2_CTRL_FLAG_WRITE_ONLY)
@@ -601,7 +656,7 @@ void ApplicationWindow::refresh(unsigned ctrl_class)
 	ctrls.count = cnt;
 	ctrls.ctrl_class = ctrl_class;
 	ctrls.controls = c;
-	if (ioctl(VIDIOC_G_EXT_CTRLS, &ctrls)) {
+	if (g_ext_ctrls(ctrls)) {
 		if (ctrls.error_idx >= ctrls.count) {
 			error(errno);
 		}
@@ -613,7 +668,7 @@ void ApplicationWindow::refresh(unsigned ctrl_class)
 		for (unsigned i = 0; i < ctrls.count; i++) {
 			unsigned id = c[i].id;
 			
-			queryctrl(m_ctrlMap[id]);
+			query_ext_ctrl(m_ctrlMap[id]);
 			if (m_ctrlMap[id].type == V4L2_CTRL_TYPE_INTEGER64)
 				setVal64(id, c[i].value64);
 			else if (m_ctrlMap[id].type == V4L2_CTRL_TYPE_STRING) {
@@ -622,7 +677,15 @@ void ApplicationWindow::refresh(unsigned ctrl_class)
 			}
 			else
 				setVal(id, c[i].value);
-			m_widgetMap[id]->setDisabled(m_ctrlMap[id].flags & CTRL_FLAG_DISABLED);
+
+			bool disabled = m_ctrlMap[id].flags & CTRL_FLAG_DISABLED;
+
+			if (qobject_cast<QLineEdit *>(m_widgetMap[id]))
+				static_cast<QLineEdit *>(m_widgetMap[id])->setReadOnly(disabled);
+			else
+				m_widgetMap[id]->setDisabled(disabled);
+			if (m_sliderMap.find(id) != m_sliderMap.end())
+				m_sliderMap[id]->setDisabled(disabled);
 		}
 	}
 	delete [] c;
@@ -636,18 +699,18 @@ void ApplicationWindow::refresh()
 
 void ApplicationWindow::setWhat(QWidget *w, unsigned id, const QString &v)
 {
-	const v4l2_queryctrl &qctrl = m_ctrlMap[id];
+	const v4l2_query_ext_ctrl &qec = m_ctrlMap[id];
 	QString what;
-	QString flags = getCtrlFlags(qctrl.flags);
+	QString flags = getCtrlFlags(qec.flags);
 
-	switch (qctrl.type) {
+	switch (qec.type) {
 	case V4L2_CTRL_TYPE_STRING:
 		w->setWhatsThis(QString("Type: String\n"
 					"Minimum: %1\n"
 					"Maximum: %2\n"
 					"Step: %3\n"
 					"Current: %4")
-			.arg(qctrl.minimum).arg(qctrl.maximum).arg(qctrl.step).arg(v) + flags);
+			.arg(qec.minimum).arg(qec.maximum).arg(qec.step).arg(v) + flags);
 		w->setStatusTip(w->whatsThis());
 		break;
 	default:
@@ -657,11 +720,11 @@ void ApplicationWindow::setWhat(QWidget *w, unsigned id, const QString &v)
 
 void ApplicationWindow::setWhat(QWidget *w, unsigned id, long long v)
 {
-	const v4l2_queryctrl &qctrl = m_ctrlMap[id];
+	const v4l2_query_ext_ctrl &qec = m_ctrlMap[id];
 	QString what;
-	QString flags = getCtrlFlags(qctrl.flags);
+	QString flags = getCtrlFlags(qec.flags);
 
-	switch (qctrl.type) {
+	switch (qec.type) {
 	case V4L2_CTRL_TYPE_INTEGER:
 		w->setWhatsThis(QString("Type: Integer\n"
 					"Minimum: %1\n"
@@ -669,13 +732,18 @@ void ApplicationWindow::setWhat(QWidget *w, unsigned id, long long v)
 					"Step: %3\n"
 					"Current: %4\n"
 					"Default: %5")
-			.arg(qctrl.minimum).arg(qctrl.maximum).arg(qctrl.step).arg(v).arg(qctrl.default_value) + flags);
+			.arg(qec.minimum).arg(qec.maximum).arg(qec.step).arg(v).arg(qec.default_value) + flags);
 		w->setStatusTip(w->whatsThis());
 		break;
 
 	case V4L2_CTRL_TYPE_INTEGER64:
 		w->setWhatsThis(QString("Type: Integer64\n"
-					"Current: %1").arg(v) + flags);
+					"Minimum: %1\n"
+					"Maximum: %2\n"
+					"Step: %3\n"
+					"Current: %4\n"
+					"Default: %5")
+			.arg(qec.minimum).arg(qec.maximum).arg(qec.step).arg(v).arg(qec.default_value) + flags);
 		w->setStatusTip(w->whatsThis());
 		break;
 
@@ -684,8 +752,8 @@ void ApplicationWindow::setWhat(QWidget *w, unsigned id, long long v)
 					"Maximum: %1\n"
 					"Current: %2\n"
 					"Default: %3")
-			.arg((unsigned)qctrl.maximum, 0, 16).arg((unsigned)v, 0, 16)
-			.arg((unsigned)qctrl.default_value, 0, 16) + flags);
+			.arg((unsigned)qec.maximum, 0, 16).arg((unsigned)v, 0, 16)
+			.arg((unsigned)qec.default_value, 0, 16) + flags);
 		w->setStatusTip(w->whatsThis());
 		break;
 
@@ -698,7 +766,7 @@ void ApplicationWindow::setWhat(QWidget *w, unsigned id, long long v)
 		w->setWhatsThis(QString("Type: Boolean\n"
 					"Current: %1\n"
 					"Default: %2")
-			.arg(v).arg(qctrl.default_value) + flags);
+			.arg(v).arg(qec.default_value) + flags);
 		w->setStatusTip(w->whatsThis());
 		break;
 
@@ -708,7 +776,7 @@ void ApplicationWindow::setWhat(QWidget *w, unsigned id, long long v)
 					"Maximum: %2\n"
 					"Current: %3\n"
 					"Default: %4")
-			.arg(qctrl.minimum).arg(qctrl.maximum).arg(v).arg(qctrl.default_value) + flags);
+			.arg(qec.minimum).arg(qec.maximum).arg(v).arg(qec.default_value) + flags);
 		w->setStatusTip(w->whatsThis());
 		break;
 
@@ -718,7 +786,7 @@ void ApplicationWindow::setWhat(QWidget *w, unsigned id, long long v)
 					"Maximum: %2\n"
 					"Current: %3\n"
 					"Default: %4")
-			.arg(qctrl.minimum).arg(qctrl.maximum).arg(v).arg(qctrl.default_value) + flags);
+			.arg(qec.minimum).arg(qec.maximum).arg(v).arg(qec.default_value) + flags);
 		w->setStatusTip(w->whatsThis());
 		break;
 	default:
@@ -728,16 +796,16 @@ void ApplicationWindow::setWhat(QWidget *w, unsigned id, long long v)
 
 void ApplicationWindow::setVal(unsigned id, int v)
 {
-	const v4l2_queryctrl &qctrl = m_ctrlMap[id];
+	const v4l2_query_ext_ctrl &qec = m_ctrlMap[id];
 	v4l2_querymenu qmenu;
-	QWidget *w = m_widgetMap[qctrl.id];
+	QWidget *w = m_widgetMap[qec.id];
 	int i, idx;
+	unsigned dif;
 
-	switch (qctrl.type) {
+	switch (qec.type) {
 	case V4L2_CTRL_TYPE_INTEGER:
-		if (qctrl.flags & V4L2_CTRL_FLAG_SLIDER)
-			static_cast<QSlider *>(w)->setValue(v);
-		else if (qctrl.maximum - qctrl.minimum <= 255)
+		dif = qec.maximum - qec.minimum;
+		if (dif <= 0xffffU || (qec.flags & V4L2_CTRL_FLAG_SLIDER))
 			static_cast<QSpinBox *>(w)->setValue(v);
 		else
 			static_cast<QLineEdit *>(w)->setText(QString::number(v));
@@ -754,10 +822,10 @@ void ApplicationWindow::setVal(unsigned id, int v)
 	case V4L2_CTRL_TYPE_MENU:
 	case V4L2_CTRL_TYPE_INTEGER_MENU:
 		idx = 0;
-		for (i = qctrl.minimum; i <= v; i++) {
+		for (i = qec.minimum; i <= v; i++) {
 			qmenu.id = id;
 			qmenu.index = i;
-			if (!querymenu(qmenu))
+			if (querymenu(qmenu))
 				continue;
 			idx++;
 		}
@@ -771,10 +839,10 @@ void ApplicationWindow::setVal(unsigned id, int v)
 
 void ApplicationWindow::setVal64(unsigned id, long long v)
 {
-	const v4l2_queryctrl &qctrl = m_ctrlMap[id];
-	QWidget *w = m_widgetMap[qctrl.id];
+	const v4l2_query_ext_ctrl &qec = m_ctrlMap[id];
+	QWidget *w = m_widgetMap[qec.id];
 
-	switch (qctrl.type) {
+	switch (qec.type) {
 	case V4L2_CTRL_TYPE_INTEGER64:
 		static_cast<QLineEdit *>(w)->setText(QString::number(v));
 		break;
@@ -786,17 +854,17 @@ void ApplicationWindow::setVal64(unsigned id, long long v)
 
 void ApplicationWindow::setString(unsigned id, const QString &v)
 {
-	const v4l2_queryctrl &qctrl = m_ctrlMap[id];
-	QWidget *w = m_widgetMap[qctrl.id];
+	const v4l2_query_ext_ctrl &qec = m_ctrlMap[id];
+	QWidget *w = m_widgetMap[qec.id];
 
-	switch (qctrl.type) {
+	switch (qec.type) {
 	case V4L2_CTRL_TYPE_STRING:
 		static_cast<QLineEdit *>(w)->setText(v);
 		break;
 	default:
 		break;
 	}
-	setWhat(w, id, v);
+	setWhat(w, id, QString("'") + v + "'");
 }
 
 void ApplicationWindow::setDefaults(unsigned ctrl_class)

@@ -25,7 +25,6 @@
 #include <libdvbv5/descriptors.h>
 #include <libdvbv5/dvb-fe.h>
 #include <libdvbv5/dvb-scan.h>
-#include "parse_string.h"
 #include <libdvbv5/dvb-frontend.h>
 #include <libdvbv5/dvb-v5-std.h>
 #include <libdvbv5/dvb-log.h>
@@ -74,9 +73,13 @@ static int dvb_desc_default_init(struct dvb_v5_fe_parms *parms, const uint8_t *b
 
 static void dvb_desc_default_print(struct dvb_v5_fe_parms *parms, const struct dvb_desc *desc)
 {
-	if (!parms)
+	if (!parms) {
 		parms = dvb_fe_dummy();
-	hexdump(parms, "|           ", desc->data, desc->length);
+		dvb_hexdump(parms, "|           ", desc->data, desc->length);
+		free(parms);
+		return;
+	}
+	dvb_hexdump(parms, "|           ", desc->data, desc->length);
 }
 
 #define TABLE_INIT(_x) (dvb_table_init_func) _x##_init
@@ -95,9 +98,6 @@ const dvb_table_init_func dvb_table_initializers[256] = {
 	[ATSC_TABLE_TVCT]        = TABLE_INIT(atsc_table_vct),
 	[ATSC_TABLE_CVCT]        = TABLE_INIT(atsc_table_vct),
 };
-
-char *default_charset = "iso-8859-1";
-char *output_charset = "utf-8";
 
 int dvb_desc_parse(struct dvb_v5_fe_parms *parms, const uint8_t *buf,
 			   uint16_t buflen, struct dvb_desc **head_desc)
@@ -138,7 +138,7 @@ int dvb_desc_parse(struct dvb_v5_fe_parms *parms, const uint8_t *buf,
 			dvb_log("%sdescriptor %s type 0x%02x, size %d",
 				dvb_descriptors[desc_type].init ? "" : "Not handled ",
 				dvb_descriptors[desc_type].name, desc_type, desc_len);
-			hexdump(parms, "content: ", ptr + 2, desc_len);
+			dvb_hexdump(parms, "content: ", ptr + 2, desc_len);
 		}
 
 		dvb_desc_init_func init = dvb_descriptors[desc_type].init;
@@ -894,9 +894,9 @@ const struct dvb_descriptor dvb_descriptors[] = {
 	},
 	[extension_descriptor] = {
 		.name  = "extension_descriptor",
-		.init  = extension_descriptor_init,
-		.print = extension_descriptor_print,
-		.free  = extension_descriptor_free,
+		.init  = dvb_extension_descriptor_init,
+		.print = dvb_extension_descriptor_print,
+		.free  = dvb_extension_descriptor_free,
 		.size  = sizeof(struct dvb_extension_descriptor),
 	},
 
@@ -1311,7 +1311,7 @@ const struct dvb_descriptor dvb_descriptors[] = {
 	},
 };
 
-uint32_t bcd(uint32_t bcd)
+uint32_t dvb_bcd(uint32_t bcd)
 {
 	uint32_t ret = 0, mult = 1;
 	while (bcd) {
@@ -1322,26 +1322,7 @@ uint32_t bcd(uint32_t bcd)
 	return ret;
 }
 
-int bcd_to_int(const unsigned char *bcd, int bits)
-{
-	int nibble = 0;
-	int ret = 0;
-
-	while (bits) {
-		ret *= 10;
-		if (!nibble)
-			ret += *bcd >> 4;
-		else
-			ret += *bcd & 0x0f;
-		bits -= 4;
-		nibble = !nibble;
-		if (!nibble)
-			bcd++;
-	}
-	return ret;
-}
-
-void hexdump(struct dvb_v5_fe_parms *parms, const char *prefix, const unsigned char *data, int length)
+void dvb_hexdump(struct dvb_v5_fe_parms *parms, const char *prefix, const unsigned char *data, int length)
 {
 	char ascii[17];
 	char hex[50];
@@ -1371,9 +1352,9 @@ void hexdump(struct dvb_v5_fe_parms *parms, const char *prefix, const unsigned c
 	}
 	if (j > 0 && j < 16) {
 		char spaces[50];
-		spaces[0] = '\0';
-		for (i = strlen(hex); i < 49; i++)
-			strncat(spaces, " ", sizeof(spaces));
+		for (i = 0; i < sizeof(spaces) - 1 - strlen(hex); i++)
+			spaces[i] = ' ';
+		spaces[i] = '\0';
 		ascii[j] = '\0';
 		dvb_loginfo("%s%s %s %s", prefix, hex, spaces, ascii);
 	}

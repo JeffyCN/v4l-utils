@@ -79,6 +79,8 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 bin_PROGRAMS = qv4l2$(EXEEXT)
+@WITH_QTGL_TRUE@am__append_1 = $(QTGL_CFLAGS)
+@WITH_QTGL_FALSE@am__append_2 = $(QT_CFLAGS)
 subdir = utils/qv4l2
 DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/Makefile.am \
 	$(top_srcdir)/build-aux/depcomp
@@ -87,7 +89,7 @@ am__aclocal_m4_deps = $(top_srcdir)/m4/ac_define_dir.m4 \
 	$(top_srcdir)/m4/libtool.m4 $(top_srcdir)/m4/ltoptions.m4 \
 	$(top_srcdir)/m4/ltsugar.m4 $(top_srcdir)/m4/ltversion.m4 \
 	$(top_srcdir)/m4/lt~obsolete.m4 $(top_srcdir)/m4/mode_t.m4 \
-	$(top_srcdir)/configure.ac
+	$(top_srcdir)/acinclude.m4 $(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 mkinstalldirs = $(install_sh) -d
@@ -96,11 +98,14 @@ CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)" "$(DESTDIR)$(man1dir)"
 PROGRAMS = $(bin_PROGRAMS)
+am__dirstamp = $(am__leading_dot)dirstamp
 am_qv4l2_OBJECTS = qv4l2-qv4l2.$(OBJEXT) qv4l2-general-tab.$(OBJEXT) \
 	qv4l2-ctrl-tab.$(OBJEXT) qv4l2-vbi-tab.$(OBJEXT) \
-	qv4l2-v4l2-api.$(OBJEXT) qv4l2-capture-win.$(OBJEXT) \
+	qv4l2-capture-win.$(OBJEXT) qv4l2-tpg-tab.$(OBJEXT) \
 	qv4l2-capture-win-qt.$(OBJEXT) qv4l2-capture-win-gl.$(OBJEXT) \
-	qv4l2-alsa_stream.$(OBJEXT) qv4l2-raw2sliced.$(OBJEXT)
+	qv4l2-alsa_stream.$(OBJEXT) qv4l2-raw2sliced.$(OBJEXT) \
+	../v4l2-ctl/qv4l2-vivid-tpg.$(OBJEXT) \
+	../v4l2-ctl/qv4l2-vivid-tpg-colors.$(OBJEXT)
 nodist_qv4l2_OBJECTS = qv4l2-moc_qv4l2.$(OBJEXT) \
 	qv4l2-moc_general-tab.$(OBJEXT) \
 	qv4l2-moc_capture-win.$(OBJEXT) qv4l2-moc_vbi-tab.$(OBJEXT) \
@@ -251,8 +256,33 @@ DEFS = @DEFS@
 DEPDIR = @DEPDIR@
 DLLTOOL = @DLLTOOL@
 DLOPEN_LIBS = @DLOPEN_LIBS@
+DOXYGEN_PAPER_SIZE = @DOXYGEN_PAPER_SIZE@
 DSYMUTIL = @DSYMUTIL@
 DUMPBIN = @DUMPBIN@
+DX_CONFIG = @DX_CONFIG@
+DX_DOCDIR = @DX_DOCDIR@
+DX_DOT = @DX_DOT@
+DX_DOXYGEN = @DX_DOXYGEN@
+DX_DVIPS = @DX_DVIPS@
+DX_EGREP = @DX_EGREP@
+DX_ENV = @DX_ENV@
+DX_FLAG_DX_CURRENT_FEATURE = @DX_FLAG_DX_CURRENT_FEATURE@
+DX_FLAG_chi = @DX_FLAG_chi@
+DX_FLAG_chm = @DX_FLAG_chm@
+DX_FLAG_doc = @DX_FLAG_doc@
+DX_FLAG_dot = @DX_FLAG_dot@
+DX_FLAG_html = @DX_FLAG_html@
+DX_FLAG_man = @DX_FLAG_man@
+DX_FLAG_pdf = @DX_FLAG_pdf@
+DX_FLAG_ps = @DX_FLAG_ps@
+DX_FLAG_rtf = @DX_FLAG_rtf@
+DX_FLAG_xml = @DX_FLAG_xml@
+DX_HHC = @DX_HHC@
+DX_LATEX = @DX_LATEX@
+DX_MAKEINDEX = @DX_MAKEINDEX@
+DX_PDFLATEX = @DX_PDFLATEX@
+DX_PERL = @DX_PERL@
+DX_PROJECT = @DX_PROJECT@
 ECHO_C = @ECHO_C@
 ECHO_N = @ECHO_N@
 ECHO_T = @ECHO_T@
@@ -393,21 +423,22 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 udevrulesdir = @udevrulesdir@
 man_MANS = qv4l2.1
-qv4l2_SOURCES = qv4l2.cpp general-tab.cpp ctrl-tab.cpp vbi-tab.cpp v4l2-api.cpp capture-win.cpp \
+qv4l2_SOURCES = qv4l2.cpp general-tab.cpp ctrl-tab.cpp vbi-tab.cpp capture-win.cpp tpg-tab.cpp \
   capture-win-qt.cpp capture-win-qt.h capture-win-gl.cpp capture-win-gl.h alsa_stream.c alsa_stream.h \
-  raw2sliced.cpp qv4l2.h capture-win.h general-tab.h vbi-tab.h v4l2-api.h raw2sliced.h
+  raw2sliced.cpp qv4l2.h capture-win.h general-tab.h vbi-tab.h raw2sliced.h \
+  ../v4l2-ctl/vivid-tpg.c ../v4l2-ctl/vivid-tpg.h ../v4l2-ctl/vivid-tpg-colors.c ../v4l2-ctl/vivid-tpg-colors.h
 
 nodist_qv4l2_SOURCES = moc_qv4l2.cpp moc_general-tab.cpp moc_capture-win.cpp moc_vbi-tab.cpp qrc_qv4l2.cpp
 qv4l2_LDADD = ../../lib/libv4l2/libv4l2.la ../../lib/libv4lconvert/libv4lconvert.la ../libv4l2util/libv4l2util.la \
   ../libmedia_dev/libmedia_dev.la
 
-@WITH_QTGL_FALSE@qv4l2_CPPFLAGS = $(QT_CFLAGS) $(ALSA_CFLAGS)
-@WITH_QTGL_TRUE@qv4l2_CPPFLAGS = $(QTGL_CFLAGS) $(ALSA_CFLAGS)
+qv4l2_CPPFLAGS = -I../v4l2-compliance -I../v4l2-ctl $(am__append_1) \
+	$(am__append_2) $(ALSA_CFLAGS)
 @WITH_QTGL_FALSE@qv4l2_LDFLAGS = $(QT_LIBS) $(ALSA_LIBS) -pthread
 @WITH_QTGL_TRUE@qv4l2_LDFLAGS = $(QTGL_LIBS) $(ALSA_LIBS) -pthread
-EXTRA_DIST = exit.png fileopen.png qv4l2_24x24.png qv4l2_64x64.png qv4l2.png qv4l2.svg snapshot.png \
-  video-television.png fileclose.png qv4l2_16x16.png qv4l2_32x32.png qv4l2.desktop qv4l2.qrc record.png \
-  saveraw.png qv4l2.pro qv4l2.1
+EXTRA_DIST = enterbutt.png exit.png fileopen.png qv4l2_24x24.png qv4l2_64x64.png qv4l2.png qv4l2.svg \
+  snapshot.png video-television.png fileclose.png qv4l2_16x16.png qv4l2_32x32.png qv4l2.desktop \
+  qv4l2.qrc saveraw.png qv4l2.pro qv4l2.1 fullscreenexit.png fullscreen.png start.png
 
 all: all-am
 
@@ -492,6 +523,17 @@ clean-binPROGRAMS:
 	list=`for p in $$list; do echo "$$p"; done | sed 's/$(EXEEXT)$$//'`; \
 	echo " rm -f" $$list; \
 	rm -f $$list
+../v4l2-ctl/$(am__dirstamp):
+	@$(MKDIR_P) ../v4l2-ctl
+	@: > ../v4l2-ctl/$(am__dirstamp)
+../v4l2-ctl/$(DEPDIR)/$(am__dirstamp):
+	@$(MKDIR_P) ../v4l2-ctl/$(DEPDIR)
+	@: > ../v4l2-ctl/$(DEPDIR)/$(am__dirstamp)
+../v4l2-ctl/qv4l2-vivid-tpg.$(OBJEXT): ../v4l2-ctl/$(am__dirstamp) \
+	../v4l2-ctl/$(DEPDIR)/$(am__dirstamp)
+../v4l2-ctl/qv4l2-vivid-tpg-colors.$(OBJEXT):  \
+	../v4l2-ctl/$(am__dirstamp) \
+	../v4l2-ctl/$(DEPDIR)/$(am__dirstamp)
 
 qv4l2$(EXEEXT): $(qv4l2_OBJECTS) $(qv4l2_DEPENDENCIES) $(EXTRA_qv4l2_DEPENDENCIES) 
 	@rm -f qv4l2$(EXEEXT)
@@ -499,10 +541,13 @@ qv4l2$(EXEEXT): $(qv4l2_OBJECTS) $(qv4l2_DEPENDENCIES) $(EXTRA_qv4l2_DEPENDENCIE
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
+	-rm -f ../v4l2-ctl/*.$(OBJEXT)
 
 distclean-compile:
 	-rm -f *.tab.c
 
+@AMDEP_TRUE@@am__include@ @am__quote@../v4l2-ctl/$(DEPDIR)/qv4l2-vivid-tpg-colors.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@../v4l2-ctl/$(DEPDIR)/qv4l2-vivid-tpg.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/qv4l2-alsa_stream.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/qv4l2-capture-win-gl.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/qv4l2-capture-win-qt.Po@am__quote@
@@ -516,7 +561,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/qv4l2-qrc_qv4l2.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/qv4l2-qv4l2.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/qv4l2-raw2sliced.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/qv4l2-v4l2-api.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/qv4l2-tpg-tab.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/qv4l2-vbi-tab.Po@am__quote@
 
 .c.o:
@@ -556,6 +601,34 @@ qv4l2-alsa_stream.obj: alsa_stream.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='alsa_stream.c' object='qv4l2-alsa_stream.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(qv4l2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o qv4l2-alsa_stream.obj `if test -f 'alsa_stream.c'; then $(CYGPATH_W) 'alsa_stream.c'; else $(CYGPATH_W) '$(srcdir)/alsa_stream.c'; fi`
+
+../v4l2-ctl/qv4l2-vivid-tpg.o: ../v4l2-ctl/vivid-tpg.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(qv4l2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT ../v4l2-ctl/qv4l2-vivid-tpg.o -MD -MP -MF ../v4l2-ctl/$(DEPDIR)/qv4l2-vivid-tpg.Tpo -c -o ../v4l2-ctl/qv4l2-vivid-tpg.o `test -f '../v4l2-ctl/vivid-tpg.c' || echo '$(srcdir)/'`../v4l2-ctl/vivid-tpg.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) ../v4l2-ctl/$(DEPDIR)/qv4l2-vivid-tpg.Tpo ../v4l2-ctl/$(DEPDIR)/qv4l2-vivid-tpg.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='../v4l2-ctl/vivid-tpg.c' object='../v4l2-ctl/qv4l2-vivid-tpg.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(qv4l2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o ../v4l2-ctl/qv4l2-vivid-tpg.o `test -f '../v4l2-ctl/vivid-tpg.c' || echo '$(srcdir)/'`../v4l2-ctl/vivid-tpg.c
+
+../v4l2-ctl/qv4l2-vivid-tpg.obj: ../v4l2-ctl/vivid-tpg.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(qv4l2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT ../v4l2-ctl/qv4l2-vivid-tpg.obj -MD -MP -MF ../v4l2-ctl/$(DEPDIR)/qv4l2-vivid-tpg.Tpo -c -o ../v4l2-ctl/qv4l2-vivid-tpg.obj `if test -f '../v4l2-ctl/vivid-tpg.c'; then $(CYGPATH_W) '../v4l2-ctl/vivid-tpg.c'; else $(CYGPATH_W) '$(srcdir)/../v4l2-ctl/vivid-tpg.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) ../v4l2-ctl/$(DEPDIR)/qv4l2-vivid-tpg.Tpo ../v4l2-ctl/$(DEPDIR)/qv4l2-vivid-tpg.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='../v4l2-ctl/vivid-tpg.c' object='../v4l2-ctl/qv4l2-vivid-tpg.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(qv4l2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o ../v4l2-ctl/qv4l2-vivid-tpg.obj `if test -f '../v4l2-ctl/vivid-tpg.c'; then $(CYGPATH_W) '../v4l2-ctl/vivid-tpg.c'; else $(CYGPATH_W) '$(srcdir)/../v4l2-ctl/vivid-tpg.c'; fi`
+
+../v4l2-ctl/qv4l2-vivid-tpg-colors.o: ../v4l2-ctl/vivid-tpg-colors.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(qv4l2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT ../v4l2-ctl/qv4l2-vivid-tpg-colors.o -MD -MP -MF ../v4l2-ctl/$(DEPDIR)/qv4l2-vivid-tpg-colors.Tpo -c -o ../v4l2-ctl/qv4l2-vivid-tpg-colors.o `test -f '../v4l2-ctl/vivid-tpg-colors.c' || echo '$(srcdir)/'`../v4l2-ctl/vivid-tpg-colors.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) ../v4l2-ctl/$(DEPDIR)/qv4l2-vivid-tpg-colors.Tpo ../v4l2-ctl/$(DEPDIR)/qv4l2-vivid-tpg-colors.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='../v4l2-ctl/vivid-tpg-colors.c' object='../v4l2-ctl/qv4l2-vivid-tpg-colors.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(qv4l2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o ../v4l2-ctl/qv4l2-vivid-tpg-colors.o `test -f '../v4l2-ctl/vivid-tpg-colors.c' || echo '$(srcdir)/'`../v4l2-ctl/vivid-tpg-colors.c
+
+../v4l2-ctl/qv4l2-vivid-tpg-colors.obj: ../v4l2-ctl/vivid-tpg-colors.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(qv4l2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT ../v4l2-ctl/qv4l2-vivid-tpg-colors.obj -MD -MP -MF ../v4l2-ctl/$(DEPDIR)/qv4l2-vivid-tpg-colors.Tpo -c -o ../v4l2-ctl/qv4l2-vivid-tpg-colors.obj `if test -f '../v4l2-ctl/vivid-tpg-colors.c'; then $(CYGPATH_W) '../v4l2-ctl/vivid-tpg-colors.c'; else $(CYGPATH_W) '$(srcdir)/../v4l2-ctl/vivid-tpg-colors.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) ../v4l2-ctl/$(DEPDIR)/qv4l2-vivid-tpg-colors.Tpo ../v4l2-ctl/$(DEPDIR)/qv4l2-vivid-tpg-colors.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='../v4l2-ctl/vivid-tpg-colors.c' object='../v4l2-ctl/qv4l2-vivid-tpg-colors.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(qv4l2_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o ../v4l2-ctl/qv4l2-vivid-tpg-colors.obj `if test -f '../v4l2-ctl/vivid-tpg-colors.c'; then $(CYGPATH_W) '../v4l2-ctl/vivid-tpg-colors.c'; else $(CYGPATH_W) '$(srcdir)/../v4l2-ctl/vivid-tpg-colors.c'; fi`
 
 .cpp.o:
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.o$$||'`;\
@@ -637,20 +710,6 @@ qv4l2-vbi-tab.obj: vbi-tab.cpp
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(qv4l2_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o qv4l2-vbi-tab.obj `if test -f 'vbi-tab.cpp'; then $(CYGPATH_W) 'vbi-tab.cpp'; else $(CYGPATH_W) '$(srcdir)/vbi-tab.cpp'; fi`
 
-qv4l2-v4l2-api.o: v4l2-api.cpp
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(qv4l2_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT qv4l2-v4l2-api.o -MD -MP -MF $(DEPDIR)/qv4l2-v4l2-api.Tpo -c -o qv4l2-v4l2-api.o `test -f 'v4l2-api.cpp' || echo '$(srcdir)/'`v4l2-api.cpp
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/qv4l2-v4l2-api.Tpo $(DEPDIR)/qv4l2-v4l2-api.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-api.cpp' object='qv4l2-v4l2-api.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(qv4l2_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o qv4l2-v4l2-api.o `test -f 'v4l2-api.cpp' || echo '$(srcdir)/'`v4l2-api.cpp
-
-qv4l2-v4l2-api.obj: v4l2-api.cpp
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(qv4l2_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT qv4l2-v4l2-api.obj -MD -MP -MF $(DEPDIR)/qv4l2-v4l2-api.Tpo -c -o qv4l2-v4l2-api.obj `if test -f 'v4l2-api.cpp'; then $(CYGPATH_W) 'v4l2-api.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-api.cpp'; fi`
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/qv4l2-v4l2-api.Tpo $(DEPDIR)/qv4l2-v4l2-api.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-api.cpp' object='qv4l2-v4l2-api.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(qv4l2_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o qv4l2-v4l2-api.obj `if test -f 'v4l2-api.cpp'; then $(CYGPATH_W) 'v4l2-api.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-api.cpp'; fi`
-
 qv4l2-capture-win.o: capture-win.cpp
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(qv4l2_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT qv4l2-capture-win.o -MD -MP -MF $(DEPDIR)/qv4l2-capture-win.Tpo -c -o qv4l2-capture-win.o `test -f 'capture-win.cpp' || echo '$(srcdir)/'`capture-win.cpp
 @am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/qv4l2-capture-win.Tpo $(DEPDIR)/qv4l2-capture-win.Po
@@ -664,6 +723,20 @@ qv4l2-capture-win.obj: capture-win.cpp
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='capture-win.cpp' object='qv4l2-capture-win.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(qv4l2_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o qv4l2-capture-win.obj `if test -f 'capture-win.cpp'; then $(CYGPATH_W) 'capture-win.cpp'; else $(CYGPATH_W) '$(srcdir)/capture-win.cpp'; fi`
+
+qv4l2-tpg-tab.o: tpg-tab.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(qv4l2_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT qv4l2-tpg-tab.o -MD -MP -MF $(DEPDIR)/qv4l2-tpg-tab.Tpo -c -o qv4l2-tpg-tab.o `test -f 'tpg-tab.cpp' || echo '$(srcdir)/'`tpg-tab.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/qv4l2-tpg-tab.Tpo $(DEPDIR)/qv4l2-tpg-tab.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='tpg-tab.cpp' object='qv4l2-tpg-tab.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(qv4l2_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o qv4l2-tpg-tab.o `test -f 'tpg-tab.cpp' || echo '$(srcdir)/'`tpg-tab.cpp
+
+qv4l2-tpg-tab.obj: tpg-tab.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(qv4l2_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT qv4l2-tpg-tab.obj -MD -MP -MF $(DEPDIR)/qv4l2-tpg-tab.Tpo -c -o qv4l2-tpg-tab.obj `if test -f 'tpg-tab.cpp'; then $(CYGPATH_W) 'tpg-tab.cpp'; else $(CYGPATH_W) '$(srcdir)/tpg-tab.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/qv4l2-tpg-tab.Tpo $(DEPDIR)/qv4l2-tpg-tab.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='tpg-tab.cpp' object='qv4l2-tpg-tab.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(qv4l2_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o qv4l2-tpg-tab.obj `if test -f 'tpg-tab.cpp'; then $(CYGPATH_W) 'tpg-tab.cpp'; else $(CYGPATH_W) '$(srcdir)/tpg-tab.cpp'; fi`
 
 qv4l2-capture-win-qt.o: capture-win-qt.cpp
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(qv4l2_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT qv4l2-capture-win-qt.o -MD -MP -MF $(DEPDIR)/qv4l2-capture-win-qt.Tpo -c -o qv4l2-capture-win-qt.o `test -f 'capture-win-qt.cpp' || echo '$(srcdir)/'`capture-win-qt.cpp
@@ -941,6 +1014,8 @@ clean-generic:
 distclean-generic:
 	-test -z "$(CONFIG_CLEAN_FILES)" || rm -f $(CONFIG_CLEAN_FILES)
 	-test . = "$(srcdir)" || test -z "$(CONFIG_CLEAN_VPATH_FILES)" || rm -f $(CONFIG_CLEAN_VPATH_FILES)
+	-rm -f ../v4l2-ctl/$(DEPDIR)/$(am__dirstamp)
+	-rm -f ../v4l2-ctl/$(am__dirstamp)
 
 maintainer-clean-generic:
 	@echo "This command is intended for maintainers to use"
@@ -951,7 +1026,7 @@ clean-am: clean-binPROGRAMS clean-generic clean-libtool clean-local \
 	mostlyclean-am
 
 distclean: distclean-am
-	-rm -rf ./$(DEPDIR)
+	-rm -rf ../v4l2-ctl/$(DEPDIR) ./$(DEPDIR)
 	-rm -f Makefile
 distclean-am: clean-am distclean-compile distclean-generic \
 	distclean-tags
@@ -997,7 +1072,7 @@ install-ps-am:
 installcheck-am:
 
 maintainer-clean: maintainer-clean-am
-	-rm -rf ./$(DEPDIR)
+	-rm -rf ../v4l2-ctl/$(DEPDIR) ./$(DEPDIR)
 	-rm -f Makefile
 maintainer-clean-am: distclean-am maintainer-clean-generic
 

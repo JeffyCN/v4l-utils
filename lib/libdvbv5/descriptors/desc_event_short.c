@@ -29,7 +29,7 @@ int dvb_desc_event_short_init(struct dvb_v5_fe_parms *parms, const uint8_t *buf,
 	uint8_t len;        /* the length of the string in the input data */
 	uint8_t len1, len2; /* the lenght of the output strings */
 
-	/*hexdump(parms, "event short desc: ", buf - 2, desc->length + 2);*/
+	/*dvb_hexdump(parms, "event short desc: ", buf - 2, desc->length + 2);*/
 
 	event->language[0] = buf[0];
 	event->language[1] = buf[1];
@@ -42,7 +42,7 @@ int dvb_desc_event_short_init(struct dvb_v5_fe_parms *parms, const uint8_t *buf,
 	len = buf[0];
 	buf++;
 	len1 = len;
-	parse_string(parms, &event->name, &event->name_emph, buf, len1, default_charset, output_charset);
+	dvb_parse_string(parms, &event->name, &event->name_emph, buf, len1);
 	buf += len;
 
 	event->text = NULL;
@@ -50,7 +50,7 @@ int dvb_desc_event_short_init(struct dvb_v5_fe_parms *parms, const uint8_t *buf,
 	len = buf[0];
 	len2 = len;
 	buf++;
-	parse_string(parms, &event->text, &event->text_emph, buf, len2, default_charset, output_charset);
+	dvb_parse_string(parms, &event->text, &event->text_emph, buf, len2);
 	buf += len;
 	return 0;
 }

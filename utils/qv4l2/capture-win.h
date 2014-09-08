@@ -25,6 +25,8 @@
 #include <QWidget>
 #include <QShortcut>
 #include <QLabel>
+#include <QPushButton>
+#include <QMenu>
 
 enum CropMethod {
 	// Crop Height
@@ -39,18 +41,43 @@ enum CropMethod {
 	QV4L2_CROP_P43,
 };
 
+struct frame {
+	__u32 format;
+	QSize size;        // int   frameHeight; int   frameWidth;
+	unsigned char *planeData[2];
+	bool updated;
+};
+
+struct crop {              // cropInfo
+	QSize delta;       // int cropH; int cropW;
+	QSize size;        // int height; int width;
+	bool updated;
+};
+
+class ApplicationWindow;
+
 class CaptureWin : public QWidget
 {
 	Q_OBJECT
 
 public:
-	CaptureWin();
+	CaptureWin(ApplicationWindow *aw);
 	~CaptureWin();
 
-	void resize(int minw, int minh);
+	void setWindowSize(QSize size);
 	void enableScaling(bool enable);
 	void setPixelAspectRatio(double ratio);
+	float getHorScaleFactor();
+	float getVertScaleFactor();
+	virtual void setColorspace(unsigned colorspace) = 0;
+	virtual void setField(unsigned field) = 0;
+	virtual void setDisplayColorspace(unsigned colorspace) = 0;
+	virtual void setBlending(bool enable) = 0;
+	virtual void setLinearFilter(bool enable) = 0;
 	void setCropMethod(CropMethod crop);
+	void makeFullScreen(bool);
+	QAction *m_exitFullScreen;
+	QAction *m_enterFullScreen;
 
 	/**
 	 * @brief Set a frame into the capture window.
@@ -64,8 +91,8 @@ public:
 	 * @param data The frame data.
 	 * @param info A string containing capture information.
 	 */
-	virtual void setFrame(int width, int height, __u32 format,
-			      unsigned char *data, unsigned char *data2, const QString &info) = 0;
+	void setFrame(int width, int height, __u32 format,
+		      unsigned char *data, unsigned char *data2);
 
 	/**
 	 * @brief Called when the capture stream is stopped.
@@ -103,43 +130,35 @@ public:
 	static QSize scaleFrameSize(QSize window, QSize frame);
 
 	/**
-	 * @brief Get the number of pixels to crop.
+	 * @brief Crop size
 	 *
-	 * When cropping is applied this gives the number of pixels to
-	 * remove from top and bottom. To get total multiply the return
-	 * value by 2.
+	 * Reduces size width or height according to m_cropMethod
 	 *
-	 * @param width Frame width
-	 * @param height Frame height
-	 * @return The pixels to remove when cropping height
+	 * @param size Input size
+	 * @return Cropped size
 	 *
-	 * @note The width and height must be original frame size
-	 *       to ensure that the cropping is done correctly.
 	 */
-	static int cropHeight(int width, int height);
-	static int cropWidth(int width, int height);
+	static QSize cropSize(QSize size);
 
 	/**
-	 * @brief Get the frame width when aspect ratio is applied if ratio > 1.
+	 * @brief Get the frame size when aspect ratio is applied and increases size.
 	 *
-	 * @param width The original frame width.
-	 * @return The width with aspect ratio correction (scaling must be enabled).
+	 * @param size The original frame size.
+	 * @return The new size with aspect ratio correction (scaling must be enabled).
 	 */
-	static int actualFrameWidth(int width);
-
-	/**
-	 * @brief Get the frame height when aspect ratio is applied if ratio < 1.
-	 *
-	 * @param width The original frame width.
-	 * @return The width with aspect ratio correction (scaling must be enabled).
-	 */
-	static int actualFrameHeight(int height);
+	static QSize pixelAspectFrameSize(QSize size);
 
 public slots:
 	void resetSize();
+	void customMenuRequested(QPoint pos);
+
+private slots:
+	void escape();
+	void fullScreen();
 
 protected:
 	void closeEvent(QCloseEvent *event);
+	void mouseDoubleClickEvent(QMouseEvent *e);
 
 	/**
 	 * @brief Get the amount of space outside the video frame.
@@ -160,11 +179,28 @@ protected:
 	void buildWindow(QWidget *videoSurface);
 
 	/**
-	 * @brief A label that can is used to display capture information.
+	 * @brief Calculate source size after pixel aspect scaling and cropping
 	 *
-	 * @note This must be set in the derived class' setFrame() function.
 	 */
-	QLabel m_information;
+	void updateSize();
+
+	/**
+	 * @brief Frame information.
+	 *
+	 * @note Set and accessed from derived render dependent classes.
+	 */
+	struct frame m_frame;
+	struct crop  m_crop;
+	QSize m_origFrameSize;  // int m_sourceWinWidth; int m_sourceWinHeight;
+	QSize m_windowSize;     // int m_curWinWidth; int m_curWinHeight;
+	QSize m_scaledSize;
+
+	/**
+	 * @brief Update frame information to renderer.
+	 *
+	 * @note Must be implemented by derived render dependent classes.
+	 */
+	virtual void setRenderFrame() = 0;
 
 	/**
 	 * @brief Determines if scaling is to be applied to video frame.
@@ -175,11 +211,14 @@ signals:
 	void close();
 
 private:
+	ApplicationWindow *m_appWin;
 	static double m_pixelAspectRatio;
 	static CropMethod m_cropMethod;
 	QShortcut *m_hotkeyClose;
 	QShortcut *m_hotkeyScaleReset;
-	int m_curWidth;
-	int m_curHeight;
+	QShortcut *m_hotkeyExitFullscreen;
+	QShortcut *m_hotkeyToggleFullscreen;
+	QVBoxLayout *m_vboxLayout;
+	unsigned m_vboxSpacing;
 };
 #endif

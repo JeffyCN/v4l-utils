@@ -299,14 +299,10 @@ static std::string cap2s(unsigned cap)
 		s += "\t\tTuner\n";
 	if (cap & V4L2_CAP_MODULATOR)
 		s += "\t\tModulator\n";
-	if (cap & V4L2_CAP_AUDIO)
-		s += "\t\tAudio\n";
 	if (cap & V4L2_CAP_RADIO)
 		s += "\t\tRadio\n";
 	if (cap & V4L2_CAP_READWRITE)
 		s += "\t\tRead/Write\n";
-	if (cap & V4L2_CAP_ASYNCIO)
-		s += "\t\tAsync I/O\n";
 	if (cap & V4L2_CAP_STREAMING)
 		s += "\t\tStreaming\n";
 	if (cap & V4L2_CAP_DEVICE_CAPS)
@@ -614,6 +610,37 @@ static void print_rds_eon(const struct v4l2_rds_eon_set *eon_set)
 
 static void print_rds_pi(const struct v4l2_rds *handle)
 {
+	uint16_t pi = handle->pi;
+
+	if (handle->is_rbds) {
+		char callsign[5] = { 0 };
+		uint8_t nibble = handle->pi >> 12;
+
+		if (pi >= 0xafa1 && pi <= 0xafa9)
+			pi = (pi & 0xf) << 12;
+		else if (pi > 0xaf11 && pi <= 0xaf1f)
+			pi = (pi & 0xff) << 8;
+		else if (pi > 0xaf21 && pi <= 0xafaf)
+			pi = (pi & 0xff) << 8;
+
+		if (pi > 0xa100 && pi <= 0xa9ff)
+			pi -= 0x9100;
+		if (pi > 0x1000 && pi <= 0x54a7) {
+			pi -= 4096;
+			callsign[0] = 'K';
+		} else if (pi >= 0x54a8 && pi <= 0x994f) {
+			pi -= 21672;
+			callsign[0] = 'W';
+		}
+		if (callsign[0]) {
+			callsign[1] = 'A' + pi / 676;
+			callsign[2] = 'A' + (pi / 26) % 26;
+			callsign[3] = 'A' + pi % 26;
+			printf("\nCall Sign: %s", callsign);
+		}
+		if (nibble != 0x0b && nibble != 0x0d && nibble != 0x0e)
+			return;
+	}
 	printf("\nArea Coverage: %s", v4l2_rds_get_coverage_str(handle));
 }
 
@@ -634,7 +661,7 @@ static void print_rds_data(const struct v4l2_rds *handle, uint32_t updated_field
 	}
 
 	if (updated_fields & V4L2_RDS_PTY && handle->valid_fields & V4L2_RDS_PTY)
-		printf("\nPTY: %0u -> %s",handle->pty, v4l2_rds_get_pty_str(handle));
+		printf("\nPTY: %0u -> %s", handle->pty, v4l2_rds_get_pty_str(handle));
 
 	if (updated_fields & V4L2_RDS_PTYN && handle->valid_fields & V4L2_RDS_PTYN) {
 		printf("\nPTYN: %s", handle->ptyn);
@@ -647,11 +674,12 @@ static void print_rds_data(const struct v4l2_rds *handle, uint32_t updated_field
 		printf("\nRT: %s", handle->rt);
 	}
 
-	if (updated_fields & V4L2_RDS_TP && handle->valid_fields & V4L2_RDS_TP)
-		printf("\nTP: %s  TA: %s", (handle->tp)? "yes":"no",
-			handle->ta? "yes":"no");
+	if ((updated_fields & (V4L2_RDS_TP | V4L2_RDS_TA)) &&
+	    (handle->valid_fields & (V4L2_RDS_TP | V4L2_RDS_TA)))
+		printf("\nTP: %s  TA: %s", (handle->tp) ? "yes" : "no",
+			handle->ta ? "yes" : "no");
 	if (updated_fields & V4L2_RDS_MS && handle->valid_fields & V4L2_RDS_MS)
-		printf("\nMS Flag: %s", (handle->ms)? "Music" : "Speech");
+		printf("\nMS Flag: %s", (handle->ms) ? "Music" : "Speech");
 	if (updated_fields & V4L2_RDS_ECC && handle->valid_fields & V4L2_RDS_ECC)
 		printf("\nECC: %X%x, Country: %u -> %s",
 		handle->ecc >> 4, handle->ecc & 0x0f, handle->pi >> 12,
@@ -664,7 +692,7 @@ static void print_rds_data(const struct v4l2_rds *handle, uint32_t updated_field
 	if (updated_fields & V4L2_RDS_ODA &&
 			handle->decode_information & V4L2_RDS_ODA) {
 		for (int i = 0; i < handle->rds_oda.size; ++i)
-			printf("\nODA Group: %02u%c, AID: %08x",handle->rds_oda.oda[i].group_id,
+			printf("\nODA Group: %02u%c, AID: %08x", handle->rds_oda.oda[i].group_id,
 			handle->rds_oda.oda[i].group_version, handle->rds_oda.oda[i].aid);
 	}
 	if (updated_fields & V4L2_RDS_AF && handle->valid_fields & V4L2_RDS_AF)

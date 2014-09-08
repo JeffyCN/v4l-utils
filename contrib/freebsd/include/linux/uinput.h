@@ -31,8 +31,8 @@
  *	0.1	20/06/2002
  *		- first public version
  */
-#ifndef _UAPI__UINPUT_H_
-#define _UAPI__UINPUT_H_
+#ifndef __UINPUT_H_
+#define __UINPUT_H_
 
 #include <linux/input.h>
 
@@ -82,6 +82,15 @@ struct uinput_ff_erase {
  * Usually, it is in the form "inputN"
  */
 #define UI_GET_SYSNAME(len)	_IOC(_IOC_READ, UINPUT_IOCTL_BASE, 300, len)
+
+/**
+ * UI_GET_VERSION - Return version of uinput protocol
+ *
+ * This writes uinput protocol version implemented by the kernel into
+ * the integer pointed to by the ioctl argument. The protocol version
+ * is hard-coded in the kernel and is independent of the uinput device.
+ */
+#define UI_GET_VERSION		_IOR(UINPUT_IOCTL_BASE, 301, unsigned int)
 
 /*
  * To write a force-feedback-capable driver, the upload_effect
@@ -144,4 +153,4 @@ struct uinput_user_dev {
 	int32_t absfuzz[ABS_CNT];
 	int32_t absflat[ABS_CNT];
 };
-#endif /* _UAPI__UINPUT_H_ */
+#endif /* __UINPUT_H_ */

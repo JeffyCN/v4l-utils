@@ -2,108 +2,220 @@
 #define _V4L_HELPERS_H_
 
 #include <linux/videodev2.h>
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h>
+#include <stdarg.h>
+#include <time.h>
+#include <unistd.h>
 #include <sys/ioctl.h>
+#include <sys/fcntl.h>
 #include <sys/mman.h>
 #include <errno.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif /* __cplusplus */
+
 struct v4l_fd {
 	int fd;
-	int (*ioctl)(int fd, unsigned long cmd, ...);
+	struct v4l2_capability cap;
+	char devname[128];
+	__u32 type;
+	__u32 caps;
+	bool trace;
+	bool direct;
+	bool have_query_ext_ctrl;
+	bool have_ext_ctrls;
+	bool have_next_ctrl;
+	bool have_selection;
+
+	int (*open)(struct v4l_fd *f, const char *file, int oflag, ...);
+	int (*close)(struct v4l_fd *f);
+	int (*ioctl)(struct v4l_fd *f, unsigned long cmd, ...);
+	ssize_t (*read)(struct v4l_fd *f, void *buffer, size_t n);
+	ssize_t (*write)(struct v4l_fd *f, const void *buffer, size_t n);
 	void *(*mmap)(void *addr, size_t length, int prot, int flags,
-		      int fd, int64_t offset);
-	int (*munmap)(void *addr, size_t length);
+		      struct v4l_fd *f, off_t offset);
+	int (*munmap)(struct v4l_fd *f, void *addr, size_t length);
 };
 
-/*
- * mmap has a different prototype compared to v4l2_mmap. Because of
- * this we have to make a wrapper for it.
- */
-static inline void *v4l_fd_mmap(void *addr, size_t length, int prot, int flags,
-		                      int fd, int64_t offset)
+#ifdef __LIBV4L2_H
+
+static inline int v4l_wrap_open(struct v4l_fd *f, const char *file, int oflag, ...)
 {
-	return mmap(addr, length, prot, flags, fd, offset);
+ 	return f->direct ? open(file, oflag) : v4l2_open(file, oflag);
 }
 
-static inline void v4l_fd_init(struct v4l_fd *f, int fd)
+static inline int v4l_wrap_close(struct v4l_fd *f)
 {
-	f->fd = fd;
-	f->ioctl = ioctl;
-	f->mmap = v4l_fd_mmap;
-	f->munmap = munmap;
+	return f->direct ? close(f->fd) : v4l2_close(f->fd);
 }
 
-#define v4l_fd_libv4l2_init(f, fd)		\
-	do {					\
-		(f)->fd = fd;			\
-		(f)->ioctl = v4l2_ioctl;	\
-		(f)->mmap = v4l2_mmap;		\
-		(f)->munmap = v4l2_munmap;	\
-	} while (0)
-
-static inline int v4l_ioctl(struct v4l_fd *f, unsigned long cmd, void *arg)
+static inline ssize_t v4l_wrap_read(struct v4l_fd *f, void *buffer, size_t n)
 {
-	return f->ioctl(f->fd, cmd, arg) ? errno : 0;
+	return f->direct ? read(f->fd, buffer, n) : v4l2_read(f->fd, buffer, n);
 }
+
+static inline ssize_t v4l_wrap_write(struct v4l_fd *f, const void *buffer, size_t n)
+{
+	return f->direct ? write(f->fd, buffer, n) : v4l2_write(f->fd, buffer, n);
+}
+
+static inline int v4l_wrap_ioctl(struct v4l_fd *f, unsigned long cmd, ...)
+{
+	void *arg;
+	va_list ap;
+
+	va_start(ap, cmd);
+	arg = va_arg(ap, void *);
+	va_end(ap);
+	return f->direct ? ioctl(f->fd, cmd, arg) : v4l2_ioctl(f->fd, cmd, arg);
+}
+
+static inline void *v4l_wrap_mmap(void *start, size_t length, int prot, int flags,
+		struct v4l_fd *f, off_t offset)
+{
+ 	return f->direct ? mmap(start, length, prot, flags, f->fd, offset) :
+		v4l2_mmap(start, length, prot, flags, f->fd, offset);
+}
+
+static inline int v4l_wrap_munmap(struct v4l_fd *f, void *start, size_t length)
+{
+ 	return f->direct ? munmap(start, length) : v4l2_munmap(start, length);
+}
+
+static inline bool v4l_fd_g_direct(const struct v4l_fd *f)
+{
+	return f->direct;
+}
+
+static inline void v4l_fd_s_direct(struct v4l_fd *f, bool direct)
+{
+	f->direct = direct;
+}
+
+#else
+
+static inline int v4l_wrap_open(struct v4l_fd *f, const char *file, int oflag, ...)
+{
+ 	return open(file, oflag);
+}
+
+static inline int v4l_wrap_close(struct v4l_fd *f)
+{
+	return close(f->fd);
+}
+
+static inline ssize_t v4l_wrap_read(struct v4l_fd *f, void *buffer, size_t n)
+{
+	return read(f->fd, buffer, n);
+}
+
+static inline ssize_t v4l_wrap_write(struct v4l_fd *f, const void *buffer, size_t n)
+{
+	return write(f->fd, buffer, n);
+}
+
+static inline int v4l_wrap_ioctl(struct v4l_fd *f, unsigned long cmd, ...)
+{
+	void *arg;
+	va_list ap;
+
+	va_start(ap, cmd);
+	arg = va_arg(ap, void *);
+	va_end(ap);
+	return ioctl(f->fd, cmd, arg);
+}
+
+static inline void *v4l_wrap_mmap(void *start, size_t length, int prot, int flags,
+		struct v4l_fd *f, off_t offset)
+{
+ 	return mmap(start, length, prot, flags, f->fd, offset);
+}
+
+static inline int v4l_wrap_munmap(struct v4l_fd *f, void *start, size_t length)
+{
+ 	return munmap(start, length);
+}
+
+static inline bool v4l_fd_g_direct(const struct v4l_fd *f)
+{
+	return true;
+}
+
+static inline void v4l_fd_s_direct(struct v4l_fd *f, bool direct)
+{
+}
+
+#endif
+
+static inline void v4l_fd_init(struct v4l_fd *f)
+{
+	memset(f, 0, sizeof(*f));
+	f->fd = -1;
+	f->open = v4l_wrap_open;
+	f->close = v4l_wrap_close;
+	f->ioctl = v4l_wrap_ioctl;
+	f->read = v4l_wrap_read;
+	f->write = v4l_wrap_write;
+	f->mmap = v4l_wrap_mmap;
+	f->munmap = v4l_wrap_munmap;
+}
+
+static inline bool v4l_fd_g_trace(const struct v4l_fd *f)
+{
+	return f->trace;
+}
+
+static inline void v4l_fd_s_trace(struct v4l_fd *f, bool trace)
+{
+	f->trace = trace;
+}
+
+static inline int v4l_named_ioctl(struct v4l_fd *f,
+		const char *cmd_name, unsigned long cmd, void *arg)
+{
+	int retval;
+	int e;
+
+	retval = f->ioctl(f, cmd, arg);
+	e = retval == 0 ? 0 : errno;
+	if (f->trace)
+		fprintf(stderr, "\t\t%s returned %d (%s)\n",
+				cmd_name, retval, strerror(e));
+	return retval == -1 ? e : (retval ? -1 : 0);
+}
+
+#define v4l_ioctl(f, cmd, arg) v4l_named_ioctl(f, #cmd, cmd, arg)
 
 static inline void *v4l_mmap(struct v4l_fd *f, size_t length, off_t offset)
 {
-	return f->mmap(NULL, length, PROT_READ | PROT_WRITE, MAP_SHARED, f->fd, offset);
+	return f->mmap(NULL, length, PROT_READ | PROT_WRITE, MAP_SHARED, f, offset);
 }
 
 static inline int v4l_munmap(struct v4l_fd *f, void *start, size_t length)
 {
-	return f->munmap(start, length) ? errno : 0;
+	return f->munmap(f, start, length);
 }
 
-static inline bool v4l_buf_type_is_planar(unsigned type)
+static inline ssize_t v4l_read(struct v4l_fd *f, void *buffer, size_t n)
 {
-	return V4L2_TYPE_IS_MULTIPLANAR(type);
+	return f->read(f, buffer, n);
 }
 
-static inline bool v4l_buf_type_is_output(unsigned type)
+static inline ssize_t v4l_write(struct v4l_fd *f, const void *buffer, size_t n)
 {
-	return V4L2_TYPE_IS_OUTPUT(type);
+	return f->write(f, buffer, n);
 }
 
-static inline bool v4l_buf_type_is_capture(unsigned type)
+static inline int v4l_close(struct v4l_fd *f)
 {
-	return !v4l_buf_type_is_output(type);
-}
+	int res = f->close(f);
 
-static inline bool v4l_buf_type_is_video(unsigned type)
-{
-	switch (type) {
-	case V4L2_BUF_TYPE_VIDEO_CAPTURE:
-	case V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE:
-	case V4L2_BUF_TYPE_VIDEO_OUTPUT:
-	case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
-		return true;
-	default:
-		return false;
-	}
-}
-
-static inline bool v4l_buf_type_is_vbi(unsigned type)
-{
-	return type == V4L2_BUF_TYPE_VBI_CAPTURE ||
-	       type == V4L2_BUF_TYPE_VBI_OUTPUT;
-}
-
-static inline bool v4l_buf_type_is_sliced_vbi(unsigned type)
-{
-	return type == V4L2_BUF_TYPE_SLICED_VBI_CAPTURE ||
-	       type == V4L2_BUF_TYPE_SLICED_VBI_OUTPUT;
-}
-
-static inline bool v4l_buf_type_is_overlay(unsigned type)
-{
-	return type == V4L2_BUF_TYPE_VIDEO_OVERLAY ||
-	       type == V4L2_BUF_TYPE_VIDEO_OUTPUT_OVERLAY;
-}
-
-static inline bool v4l_buf_type_is_sdr(unsigned type)
-{
-	return type == V4L2_BUF_TYPE_SDR_CAPTURE;
+	f->caps = f->type = 0;
+	f->fd = -1;
+	return res;
 }
 
 static inline int v4l_querycap(struct v4l_fd *f, struct v4l2_capability *cap)
@@ -117,33 +229,211 @@ static inline __u32 v4l_capability_g_caps(const struct v4l2_capability *cap)
 			cap->device_caps : cap->capabilities;
 }
 
-static inline __u32 v4l_querycap_g_caps(struct v4l_fd *f)
+static inline __u32 v4l_g_type(const struct v4l_fd *f)
 {
-	struct v4l2_capability cap;
-
-	return v4l_querycap(f, &cap) ? 0 : v4l_capability_g_caps(&cap);
+	return f->type;
 }
 
-static inline int v4l_g_fmt(struct v4l_fd *f, struct v4l2_format *fmt, unsigned type)
+static inline void v4l_s_type(struct v4l_fd *f, __u32 type)
 {
-	fmt->type = type;
-	return v4l_ioctl(f, VIDIOC_G_FMT, fmt);
+	f->type = type;
 }
 
-static inline int v4l_try_fmt(struct v4l_fd *f, struct v4l2_format *fmt)
+static inline __u32 v4l_g_selection_type(const struct v4l_fd *f)
 {
-	return v4l_ioctl(f, VIDIOC_TRY_FMT, fmt);
+	if (f->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE)
+		return V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	if (f->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE)
+		return V4L2_BUF_TYPE_VIDEO_OUTPUT;
+	return f->type;
 }
 
-static inline int v4l_s_fmt(struct v4l_fd *f, struct v4l2_format *fmt)
+static inline __u32 v4l_g_caps(const struct v4l_fd *f)
 {
-	return v4l_ioctl(f, VIDIOC_S_FMT, fmt);
+	return f->caps;
+}
+
+static inline bool v4l_has_vid_cap(const struct v4l_fd *f)
+{
+	return v4l_g_caps(f) & (V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_VIDEO_CAPTURE_MPLANE);
+}
+
+static inline bool v4l_has_vid_out(const struct v4l_fd *f)
+{
+	return v4l_g_caps(f) & (V4L2_CAP_VIDEO_OUTPUT | V4L2_CAP_VIDEO_OUTPUT_MPLANE);
+}
+
+static inline bool v4l_has_vid_m2m(const struct v4l_fd *f)
+{
+	return v4l_g_caps(f) & (V4L2_CAP_VIDEO_M2M | V4L2_CAP_VIDEO_M2M_MPLANE);
+}
+
+static inline bool v4l_has_vid_mplane(const struct v4l_fd *f)
+{
+	return v4l_g_caps(f) & (V4L2_CAP_VIDEO_CAPTURE_MPLANE |
+				V4L2_CAP_VIDEO_OUTPUT_MPLANE |
+				V4L2_CAP_VIDEO_M2M_MPLANE);
+}
+
+static inline bool v4l_has_overlay_cap(const struct v4l_fd *f)
+{
+	return v4l_g_caps(f) & V4L2_CAP_VIDEO_OVERLAY;
+}
+
+static inline bool v4l_has_overlay_out(const struct v4l_fd *f)
+{
+	return v4l_g_caps(f) & V4L2_CAP_VIDEO_OUTPUT_OVERLAY;
+}
+
+static inline bool v4l_has_raw_vbi_cap(const struct v4l_fd *f)
+{
+	return v4l_g_caps(f) & V4L2_CAP_VBI_CAPTURE;
+}
+
+static inline bool v4l_has_sliced_vbi_cap(const struct v4l_fd *f)
+{
+	return v4l_g_caps(f) & V4L2_CAP_SLICED_VBI_CAPTURE;
+}
+
+static inline bool v4l_has_vbi_cap(const struct v4l_fd *f)
+{
+	return v4l_has_raw_vbi_cap(f) || v4l_has_sliced_vbi_cap(f);
+}
+
+static inline bool v4l_has_raw_vbi_out(const struct v4l_fd *f)
+{
+	return v4l_g_caps(f) & V4L2_CAP_VBI_OUTPUT;
+}
+
+static inline bool v4l_has_sliced_vbi_out(const struct v4l_fd *f)
+{
+	return v4l_g_caps(f) & V4L2_CAP_SLICED_VBI_OUTPUT;
+}
+
+static inline bool v4l_has_vbi_out(const struct v4l_fd *f)
+{
+	return v4l_has_raw_vbi_out(f) || v4l_has_sliced_vbi_out(f);
+}
+
+static inline bool v4l_has_vbi(const struct v4l_fd *f)
+{
+	return v4l_has_vbi_cap(f) || v4l_has_vbi_out(f);
+}
+
+static inline bool v4l_has_radio_rx(const struct v4l_fd *f)
+{
+	return (v4l_g_caps(f) & V4L2_CAP_RADIO) &&
+	       (v4l_g_caps(f) & V4L2_CAP_TUNER);
+}
+
+static inline bool v4l_has_radio_tx(const struct v4l_fd *f)
+{
+	return v4l_g_caps(f) & V4L2_CAP_MODULATOR;
+}
+
+static inline bool v4l_has_rds_cap(const struct v4l_fd *f)
+{
+	return v4l_g_caps(f) & V4L2_CAP_RDS_CAPTURE;
+}
+
+static inline bool v4l_has_rds_out(const struct v4l_fd *f)
+{
+	return v4l_g_caps(f) & V4L2_CAP_RDS_OUTPUT;
+}
+
+static inline bool v4l_has_sdr_cap(const struct v4l_fd *f)
+{
+	return v4l_g_caps(f) & V4L2_CAP_SDR_CAPTURE;
+}
+
+static inline bool v4l_has_hwseek(const struct v4l_fd *f)
+{
+	return v4l_g_caps(f) & V4L2_CAP_HW_FREQ_SEEK;
+}
+
+static inline bool v4l_has_rw(const struct v4l_fd *f)
+{
+	return v4l_g_caps(f) & V4L2_CAP_READWRITE;
+}
+
+static inline bool v4l_has_streaming(const struct v4l_fd *f)
+{
+	return v4l_g_caps(f) & V4L2_CAP_STREAMING;
+}
+
+static inline bool v4l_has_ext_pix_format(const struct v4l_fd *f)
+{
+	return v4l_g_caps(f) & V4L2_CAP_EXT_PIX_FORMAT;
+}
+
+static inline __u32 v4l_determine_type(const struct v4l_fd *f)
+{
+	if (v4l_has_vid_mplane(f))
+		return v4l_has_vid_cap(f) ? V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE :
+					    V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
+	if (v4l_has_vid_cap(f))
+		return V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	if (v4l_has_vid_out(f))
+		return V4L2_BUF_TYPE_VIDEO_OUTPUT;
+	if (v4l_has_raw_vbi_cap(f))
+		return V4L2_BUF_TYPE_VBI_CAPTURE;
+	if (v4l_has_sliced_vbi_cap(f))
+		return V4L2_BUF_TYPE_SLICED_VBI_CAPTURE;
+	if (v4l_has_raw_vbi_out(f))
+		return V4L2_BUF_TYPE_VBI_OUTPUT;
+	if (v4l_has_sliced_vbi_out(f))
+		return V4L2_BUF_TYPE_SLICED_VBI_OUTPUT;
+	if (v4l_has_sdr_cap(f))
+		return V4L2_BUF_TYPE_SDR_CAPTURE;
+	return 0;
+}
+
+static inline int v4l_open(struct v4l_fd *f, const char *devname, bool non_blocking)
+{
+	struct v4l2_query_ext_ctrl qec = { V4L2_CTRL_FLAG_NEXT_CTRL };
+	struct v4l2_ext_controls ec = { 0, 0 };
+	struct v4l2_queryctrl qc = { V4L2_CTRL_FLAG_NEXT_CTRL };
+	struct v4l2_selection sel = { 0 };
+
+	f->fd = f->open(f, devname, O_RDWR | (non_blocking ? O_NONBLOCK : 0));
+
+	if (f->fd < 0)
+		return f->fd;
+	if (f->devname != devname) {
+		strncpy(f->devname, devname, sizeof(f->devname));
+		f->devname[sizeof(f->devname) - 1] = '\0';
+	}
+	if (v4l_querycap(f, &f->cap)) {
+		v4l_close(f);
+		return -1;
+	}
+	f->caps = v4l_capability_g_caps(&f->cap);
+	f->type = v4l_determine_type(f);
+
+	f->have_query_ext_ctrl = v4l_ioctl(f, VIDIOC_QUERY_EXT_CTRL, &qec) != ENOTTY;
+	f->have_ext_ctrls = v4l_ioctl(f, VIDIOC_TRY_EXT_CTRLS, &ec) != ENOTTY;
+	f->have_next_ctrl = v4l_ioctl(f, VIDIOC_QUERYCTRL, &qc) != ENOTTY;
+	sel.type = v4l_g_selection_type(f);
+	sel.target = sel.type == V4L2_BUF_TYPE_VIDEO_CAPTURE ?
+			V4L2_SEL_TGT_CROP : V4L2_SEL_TGT_COMPOSE;
+	f->have_selection = v4l_ioctl(f, VIDIOC_G_SELECTION, &sel) != ENOTTY;
+
+	return f->fd;
+}
+
+static inline int v4l_reopen(struct v4l_fd *f, bool non_blocking)
+{
+	f->close(f);
+	return v4l_open(f, f->devname, non_blocking);
 }
 
 static inline void v4l_format_init(struct v4l2_format *fmt, unsigned type)
 {
 	memset(fmt, 0, sizeof(*fmt));
 	fmt->type = type;
+	if (fmt->type == V4L2_BUF_TYPE_VIDEO_CAPTURE ||
+	    fmt->type == V4L2_BUF_TYPE_VIDEO_OUTPUT)
+		fmt->fmt.pix.priv = V4L2_PIX_FMT_PRIV_MAGIC;
 }
 
 static inline void v4l_format_s_width(struct v4l2_format *fmt, __u32 width)
@@ -291,7 +581,29 @@ static inline unsigned v4l_format_g_field(const struct v4l2_format *fmt)
 	}
 }
 
-static inline void v4l_format_s_pix_colorspace(struct v4l2_format *fmt,
+static inline unsigned v4l_format_g_first_field(const struct v4l2_format *fmt,
+						v4l2_std_id std)
+{
+	unsigned field = v4l_format_g_field(fmt);
+
+	if (field != V4L2_FIELD_ALTERNATE)
+		return field;
+	if (std & V4L2_STD_525_60)
+		return V4L2_FIELD_BOTTOM;
+	return V4L2_FIELD_TOP;
+}
+
+static inline unsigned v4l_format_g_flds_per_frm(const struct v4l2_format *fmt)
+{
+	unsigned field = v4l_format_g_field(fmt);
+
+	if (field == V4L2_FIELD_ALTERNATE ||
+	    field == V4L2_FIELD_TOP || field == V4L2_FIELD_BOTTOM)
+		return 2;
+	return 1;
+}
+
+static inline void v4l_format_s_colorspace(struct v4l2_format *fmt,
 					       unsigned colorspace)
 {
 	switch (fmt->type) {
@@ -307,7 +619,7 @@ static inline void v4l_format_s_pix_colorspace(struct v4l2_format *fmt,
 }
 
 static inline unsigned
-v4l_format_g_pix_colorspace(const struct v4l2_format *fmt)
+v4l_format_g_colorspace(const struct v4l2_format *fmt)
 {
 	switch (fmt->type) {
 	case V4L2_BUF_TYPE_VIDEO_CAPTURE:
@@ -344,16 +656,23 @@ v4l_format_g_num_planes(const struct v4l2_format *fmt)
 }
 
 static inline void v4l_format_s_bytesperline(struct v4l2_format *fmt,
-					     unsigned plane, __u32 bytesperline)
+					     __u32 bytesperline, unsigned plane)
 {
 	switch (fmt->type) {
 	case V4L2_BUF_TYPE_VIDEO_CAPTURE:
 	case V4L2_BUF_TYPE_VIDEO_OUTPUT:
-		fmt->fmt.pix.bytesperline = bytesperline;
+		if (plane == 0)
+			fmt->fmt.pix.bytesperline = bytesperline;
 		break;
 	case V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE:
 	case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
 		fmt->fmt.pix_mp.plane_fmt[plane].bytesperline = bytesperline;
+		break;
+	case V4L2_BUF_TYPE_VBI_CAPTURE:
+	case V4L2_BUF_TYPE_VBI_OUTPUT:
+		/* This assumes V4L2_PIX_FMT_GREY which is always the case */
+		if (plane == 0)
+			fmt->fmt.vbi.samples_per_line = bytesperline;
 		break;
 	}
 }
@@ -364,22 +683,27 @@ v4l_format_g_bytesperline(const struct v4l2_format *fmt, unsigned plane)
 	switch (fmt->type) {
 	case V4L2_BUF_TYPE_VIDEO_CAPTURE:
 	case V4L2_BUF_TYPE_VIDEO_OUTPUT:
-		return fmt->fmt.pix.bytesperline;
+		return plane ? 0 : fmt->fmt.pix.bytesperline;
 	case V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE:
 	case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
 		return fmt->fmt.pix_mp.plane_fmt[plane].bytesperline;
+	case V4L2_BUF_TYPE_VBI_CAPTURE:
+	case V4L2_BUF_TYPE_VBI_OUTPUT:
+		/* This assumes V4L2_PIX_FMT_GREY which is always the case */
+		return plane ? 0 : fmt->fmt.vbi.samples_per_line;
 	default:
 		return 0;
 	}
 }
 
 static inline void v4l_format_s_sizeimage(struct v4l2_format *fmt,
-					  unsigned plane, __u32 sizeimage)
+					  __u32 sizeimage, unsigned plane)
 {
 	switch (fmt->type) {
 	case V4L2_BUF_TYPE_VIDEO_CAPTURE:
 	case V4L2_BUF_TYPE_VIDEO_OUTPUT:
-		fmt->fmt.pix.sizeimage = sizeimage;
+		if (plane == 0)
+			fmt->fmt.pix.sizeimage = sizeimage;
 		break;
 	case V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE:
 	case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
@@ -394,13 +718,39 @@ v4l_format_g_sizeimage(const struct v4l2_format *fmt, unsigned plane)
 	switch (fmt->type) {
 	case V4L2_BUF_TYPE_VIDEO_CAPTURE:
 	case V4L2_BUF_TYPE_VIDEO_OUTPUT:
-		return fmt->fmt.pix.sizeimage;
+		return plane ? 0 : fmt->fmt.pix.sizeimage;
 	case V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE:
 	case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
 		return fmt->fmt.pix_mp.plane_fmt[plane].sizeimage;
+	case V4L2_BUF_TYPE_VBI_CAPTURE:
+	case V4L2_BUF_TYPE_VBI_OUTPUT:
+		/* This assumes V4L2_PIX_FMT_GREY which is always the case */
+		return plane ? 0 : fmt->fmt.vbi.samples_per_line *
+			(fmt->fmt.vbi.count[0] + fmt->fmt.vbi.count[1]);
+	case V4L2_BUF_TYPE_SLICED_VBI_CAPTURE:
+	case V4L2_BUF_TYPE_SLICED_VBI_OUTPUT:
+		return plane ? 0 : fmt->fmt.sliced.io_size;
+	case V4L2_BUF_TYPE_SDR_CAPTURE:
+		return plane ? 0 : fmt->fmt.sdr.buffersize;
 	default:
 		return 0;
 	}
+}
+
+static inline int v4l_g_fmt(struct v4l_fd *f, struct v4l2_format *fmt, unsigned type)
+{
+	v4l_format_init(fmt, type ? type : f->type);
+	return v4l_ioctl(f, VIDIOC_G_FMT, fmt);
+}
+
+static inline int v4l_try_fmt(struct v4l_fd *f, struct v4l2_format *fmt)
+{
+	return v4l_ioctl(f, VIDIOC_TRY_FMT, fmt);
+}
+
+static inline int v4l_s_fmt(struct v4l_fd *f, struct v4l2_format *fmt)
+{
+	return v4l_ioctl(f, VIDIOC_S_FMT, fmt);
 }
 
 struct v4l_buffer {
@@ -421,44 +771,65 @@ static inline void v4l_buffer_init(struct v4l_buffer *buf,
 	}
 }
 
-static inline bool v4l_buffer_is_planar(const struct v4l_buffer *buf)
+static inline bool v4l_type_is_planar(unsigned type)
 {
-	return v4l_buf_type_is_planar(buf->buf.type);
+       return V4L2_TYPE_IS_MULTIPLANAR(type);
 }
 
-static inline bool v4l_buffer_is_output(const struct v4l_buffer *buf)
+static inline bool v4l_type_is_output(unsigned type)
 {
-	return v4l_buf_type_is_output(buf->buf.type);
+       return V4L2_TYPE_IS_OUTPUT(type);
 }
 
-static inline bool v4l_buffer_is_capture(const struct v4l_buffer *buf)
+static inline bool v4l_type_is_capture(unsigned type)
 {
-	return v4l_buf_type_is_capture(buf->buf.type);
+       return !v4l_type_is_output(type);
 }
 
-static inline bool v4l_buffer_is_video(const struct v4l_buffer *buf)
+static inline bool v4l_type_is_video(unsigned type)
 {
-	return v4l_buf_type_is_video(buf->buf.type);
+       switch (type) {
+       case V4L2_BUF_TYPE_VIDEO_CAPTURE:
+       case V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE:
+       case V4L2_BUF_TYPE_VIDEO_OUTPUT:
+       case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
+               return true;
+       default:
+               return false;
+       }
 }
 
-static inline bool v4l_buffer_is_vbi(const struct v4l_buffer *buf)
+static inline bool v4l_type_is_raw_vbi(unsigned type)
 {
-	return v4l_buf_type_is_vbi(buf->buf.type);
+       return type == V4L2_BUF_TYPE_VBI_CAPTURE ||
+              type == V4L2_BUF_TYPE_VBI_OUTPUT;
 }
 
-static inline bool v4l_buffer_is_sliced_vbi(const struct v4l_buffer *buf)
+static inline bool v4l_type_is_sliced_vbi(unsigned type)
 {
-	return v4l_buf_type_is_sliced_vbi(buf->buf.type);
+       return type == V4L2_BUF_TYPE_SLICED_VBI_CAPTURE ||
+              type == V4L2_BUF_TYPE_SLICED_VBI_OUTPUT;
 }
 
-static inline bool v4l_buffer_is_sdr(const struct v4l_buffer *buf)
+static inline bool v4l_type_is_vbi(unsigned type)
 {
-	return v4l_buf_type_is_sdr(buf->buf.type);
+       return v4l_type_is_raw_vbi(type) || v4l_type_is_sliced_vbi(type);
+}
+
+static inline bool v4l_type_is_overlay(unsigned type)
+{
+       return type == V4L2_BUF_TYPE_VIDEO_OVERLAY ||
+              type == V4L2_BUF_TYPE_VIDEO_OUTPUT_OVERLAY;
+}
+
+static inline bool v4l_type_is_sdr(unsigned type)
+{
+       return type == V4L2_BUF_TYPE_SDR_CAPTURE;
 }
 
 static inline unsigned v4l_buffer_g_num_planes(const struct v4l_buffer *buf)
 {
-	if (v4l_buffer_is_planar(buf))
+	if (v4l_type_is_planar(buf->buf.type))
 		return buf->buf.length;
 	return 1;
 }
@@ -570,74 +941,82 @@ static inline void v4l_buffer_s_timestamp_src(struct v4l_buffer *buf, __u32 src)
 
 static inline unsigned v4l_buffer_g_length(const struct v4l_buffer *buf, unsigned plane)
 {
-	if (v4l_buffer_is_planar(buf))
+	if (v4l_type_is_planar(buf->buf.type))
 		return buf->planes[plane].length;
-	return buf->buf.length;
+	return plane ? 0 : buf->buf.length;
+}
+
+static inline void v4l_buffer_s_length(struct v4l_buffer *buf, unsigned plane, unsigned length)
+{
+	if (v4l_type_is_planar(buf->buf.type))
+		buf->planes[plane].length = length;
+	else if (plane == 0)
+		buf->buf.length = length;
 }
 
 static inline unsigned v4l_buffer_g_bytesused(const struct v4l_buffer *buf, unsigned plane)
 {
-	if (v4l_buffer_is_planar(buf))
+	if (v4l_type_is_planar(buf->buf.type))
 		return buf->planes[plane].bytesused;
-	return buf->buf.bytesused;
+	return plane ? 0 : buf->buf.bytesused;
 }
 
 static inline void v4l_buffer_s_bytesused(struct v4l_buffer *buf, unsigned plane, __u32 bytesused)
 {
-	if (v4l_buffer_is_planar(buf))
+	if (v4l_type_is_planar(buf->buf.type))
 		buf->planes[plane].bytesused = bytesused;
-	else
+	else if (plane == 0)
 		buf->buf.bytesused = bytesused;
 }
 
 static inline unsigned v4l_buffer_g_data_offset(const struct v4l_buffer *buf, unsigned plane)
 {
-	if (v4l_buffer_is_planar(buf))
+	if (v4l_type_is_planar(buf->buf.type))
 		return buf->planes[plane].data_offset;
 	return 0;
 }
 
 static inline void v4l_buffer_s_data_offset(struct v4l_buffer *buf, unsigned plane, __u32 data_offset)
 {
-	if (v4l_buffer_is_planar(buf))
+	if (v4l_type_is_planar(buf->buf.type))
 		buf->planes[plane].data_offset = data_offset;
 }
 
 static inline __u32 v4l_buffer_g_mem_offset(const struct v4l_buffer *buf, unsigned plane)
 {
-	if (v4l_buffer_is_planar(buf))
+	if (v4l_type_is_planar(buf->buf.type))
 		return buf->planes[plane].m.mem_offset;
-	return buf->buf.m.offset;
+	return plane ? 0 : buf->buf.m.offset;
 }
 
 static inline void v4l_buffer_s_userptr(struct v4l_buffer *buf, unsigned plane, void *userptr)
 {
-	if (v4l_buffer_is_planar(buf))
+	if (v4l_type_is_planar(buf->buf.type))
 		buf->planes[plane].m.userptr = (unsigned long)userptr;
-	else
+	else if (plane == 0)
 		buf->buf.m.userptr = (unsigned long)userptr;
 }
 
 static inline void *v4l_buffer_g_userptr(const struct v4l_buffer *buf, unsigned plane)
 {
-	if (v4l_buffer_is_planar(buf))
+	if (v4l_type_is_planar(buf->buf.type))
 		return (void *)buf->planes[plane].m.userptr;
-	return (void *)buf->buf.m.userptr;
+	return plane ? NULL : (void *)buf->buf.m.userptr;
 }
 
 static inline void v4l_buffer_s_fd(struct v4l_buffer *buf, unsigned plane, int fd)
 {
-	if (v4l_buffer_is_planar(buf))
+	if (v4l_type_is_planar(buf->buf.type))
 		buf->planes[plane].m.fd = fd;
-	else
+	else if (plane == 0)
 		buf->buf.m.fd = fd;
 }
 
 static inline int v4l_buffer_g_fd(const struct v4l_buffer *buf, unsigned plane)
 {
-	if (v4l_buffer_is_planar(buf))
+	if (v4l_type_is_planar(buf->buf.type))
 		return buf->planes[plane].m.fd;
-	return buf->buf.m.fd;
+	return plane ? -1 : buf->buf.m.fd;
 }
 
 static inline int v4l_buffer_prepare_buf(struct v4l_fd *f, struct v4l_buffer *buf)
@@ -687,60 +1066,10 @@ static inline void v4l_queue_init(struct v4l_queue *q,
 			q->fds[i][p] = -1;
 }
 
-static inline unsigned v4l_queue_g_type(const struct v4l_queue *q)
-{
-	return q->type;
-}
-
-static inline unsigned v4l_queue_g_memory(const struct v4l_queue *q)
-{
-	return q->memory;
-}
-
-static inline bool v4l_queue_is_planar(const struct v4l_queue *q)
-{
-	return v4l_buf_type_is_planar(q->type);
-}
-
-static inline bool v4l_queue_is_output(const struct v4l_queue *q)
-{
-	return v4l_buf_type_is_output(q->type);
-}
-
-static inline bool v4l_queue_is_capture(const struct v4l_queue *q)
-{
-	return v4l_buf_type_is_capture(q->type);
-}
-
-static inline bool v4l_queue_is_video(const struct v4l_queue *q)
-{
-	return v4l_buf_type_is_video(q->type);
-}
-
-static inline bool v4l_queue_is_vbi(const struct v4l_queue *q)
-{
-	return v4l_buf_type_is_vbi(q->type);
-}
-
-static inline bool v4l_queue_is_sliced_vbi(const struct v4l_queue *q)
-{
-	return v4l_buf_type_is_sliced_vbi(q->type);
-}
-
-static inline bool v4l_queue_is_sdr(const struct v4l_queue *q)
-{
-	return v4l_buf_type_is_sdr(q->type);
-}
-
-static inline unsigned v4l_queue_g_buffers(const struct v4l_queue *q)
-{
-	return q->buffers;
-}
-
-static inline unsigned v4l_queue_g_num_planes(const struct v4l_queue *q)
-{
-	return q->num_planes;
-}
+static inline unsigned v4l_queue_g_type(const struct v4l_queue *q) { return q->type; }
+static inline unsigned v4l_queue_g_memory(const struct v4l_queue *q) { return q->memory; }
+static inline unsigned v4l_queue_g_buffers(const struct v4l_queue *q) { return q->buffers; }
+static inline unsigned v4l_queue_g_num_planes(const struct v4l_queue *q) { return q->num_planes; }
 
 static inline __u32 v4l_queue_g_length(const struct v4l_queue *q, unsigned plane)
 {
@@ -759,6 +1088,8 @@ static inline void v4l_queue_s_mmapping(struct v4l_queue *q, unsigned index, uns
 
 static inline void *v4l_queue_g_mmapping(const struct v4l_queue *q, unsigned index, unsigned plane)
 {
+	if (index >= v4l_queue_g_buffers(q) || plane >= v4l_queue_g_num_planes(q))
+		return NULL;
 	return q->mmappings[index][plane];
 }
 
@@ -769,6 +1100,8 @@ static inline void v4l_queue_s_userptr(struct v4l_queue *q, unsigned index, unsi
 
 static inline void *v4l_queue_g_userptr(const struct v4l_queue *q, unsigned index, unsigned plane)
 {
+	if (index >= v4l_queue_g_buffers(q) || plane >= v4l_queue_g_num_planes(q))
+		return NULL;
 	return (void *)q->userptrs[index][plane];
 }
 
@@ -780,6 +1113,13 @@ static inline void v4l_queue_s_fd(struct v4l_queue *q, unsigned index, unsigned 
 static inline int v4l_queue_g_fd(const struct v4l_queue *q, unsigned index, unsigned plane)
 {
 	return q->fds[index][plane];
+}
+
+static inline void *v4l_queue_g_dataptr(const struct v4l_queue *q, unsigned index, unsigned plane)
+{
+	if (q->memory == V4L2_MEMORY_USERPTR)
+		return v4l_queue_g_userptr(q, index, plane);
+	return v4l_queue_g_mmapping(q, index, plane);
 }
 
 static inline int v4l_queue_querybufs(struct v4l_fd *f, struct v4l_queue *q, unsigned from)
@@ -849,7 +1189,7 @@ static inline int v4l_queue_create_bufs(struct v4l_fd *f,
 	if (fmt) {
 		createbufs.format = *fmt;
 	} else {
-		ret = v4l_ioctl(f, VIDIOC_G_FMT, &createbufs.format);
+		ret = v4l_g_fmt(f, &createbufs.format, q->type);
 		if (ret)
 			return ret;
 	}
@@ -859,16 +1199,6 @@ static inline int v4l_queue_create_bufs(struct v4l_fd *f,
 		return ret;
 	q->buffers += createbufs.count;
 	return v4l_queue_querybufs(f, q, q->buffers - createbufs.count);
-}
-
-static inline int v4l_queue_streamon(struct v4l_fd *f, struct v4l_queue *q)
-{
-	return v4l_ioctl(f, VIDIOC_STREAMON, &q->type);
-}
-
-static inline int v4l_queue_streamoff(struct v4l_fd *f, struct v4l_queue *q)
-{
-	return v4l_ioctl(f, VIDIOC_STREAMOFF, &q->type);
 }
 
 static inline int v4l_queue_mmap_bufs(struct v4l_fd *f,
@@ -951,11 +1281,26 @@ static inline int v4l_queue_free_bufs(struct v4l_queue *q)
 		return 0;
 	for (b = 0; b < v4l_queue_g_buffers(q); b++) {
 		for (p = 0; p < v4l_queue_g_num_planes(q); p++) {
-			free(v4l_queue_g_mmapping(q, b, p));
-			v4l_queue_s_mmapping(q, b, p, NULL);
+			free(v4l_queue_g_userptr(q, b, p));
+			v4l_queue_s_userptr(q, b, p, NULL);
 		}
 	}
 	return 0;
+}
+
+static inline int v4l_queue_obtain_bufs(struct v4l_fd *f,
+		struct v4l_queue *q, unsigned from)
+{
+	if (q->memory == V4L2_MEMORY_USERPTR)
+		return v4l_queue_alloc_bufs(f, q, from);
+	return v4l_queue_mmap_bufs(f, q, from);
+}
+
+static inline int v4l_queue_release_bufs(struct v4l_fd *f, struct v4l_queue *q)
+{
+	if (q->memory == V4L2_MEMORY_USERPTR)
+		return v4l_queue_free_bufs(q);
+	return v4l_queue_munmap_bufs(f, q);
 }
 
 
@@ -1010,9 +1355,8 @@ static inline void v4l_queue_close_exported_fds(struct v4l_queue *q)
 
 static inline void v4l_queue_free(struct v4l_fd *f, struct v4l_queue *q)
 {
-	v4l_queue_streamoff(f, q);
-	v4l_queue_free_bufs(q);
-	v4l_queue_munmap_bufs(f, q);
+	v4l_ioctl(f, VIDIOC_STREAMOFF, &q->type);
+	v4l_queue_release_bufs(f, q);
 	v4l_queue_close_exported_fds(q);
 	v4l_queue_reqbufs(f, q, 0);
 }
@@ -1022,14 +1366,16 @@ static inline void v4l_queue_buffer_init(const struct v4l_queue *q, struct v4l_b
 	unsigned p;
 		
 	v4l_buffer_init(buf, v4l_queue_g_type(q), v4l_queue_g_memory(q), index);
-	if (v4l_queue_is_planar(q)) {
+	if (v4l_type_is_planar(q->type)) {
 		buf->buf.length = v4l_queue_g_num_planes(q);
 		buf->buf.m.planes = buf->planes;
 	}
 	switch (q->memory) {
 	case V4L2_MEMORY_USERPTR:
-		for (p = 0; p < v4l_queue_g_num_planes(q); p++)
+		for (p = 0; p < v4l_queue_g_num_planes(q); p++) {
 			v4l_buffer_s_userptr(buf, p, v4l_queue_g_userptr(q, index, p));
+			v4l_buffer_s_length(buf, p, v4l_queue_g_length(q, p));
+		}
 		break;
 	case V4L2_MEMORY_DMABUF:
 		for (p = 0; p < v4l_queue_g_num_planes(q); p++)
@@ -1039,5 +1385,207 @@ static inline void v4l_queue_buffer_init(const struct v4l_queue *q, struct v4l_b
 		break;
 	}
 }
+
+static inline int v4l_query_ext_ctrl(v4l_fd *f, struct v4l2_query_ext_ctrl *qec,
+		bool next_ctrl, bool next_compound)
+{
+	struct v4l2_queryctrl qc;
+	int ret;
+
+	if (next_compound && !f->have_query_ext_ctrl) {
+		if (!next_ctrl)
+			return -EINVAL;
+		next_compound = false;
+	}
+	if (next_compound)
+		qec->id |= V4L2_CTRL_FLAG_NEXT_COMPOUND;
+	if (next_ctrl) {
+		if (f->have_next_ctrl)
+			qec->id |= V4L2_CTRL_FLAG_NEXT_CTRL;
+		else
+			qec->id = qec->id ? qec->id + 1 : V4L2_CID_BASE;
+	}
+	if (f->have_query_ext_ctrl)
+		return v4l_ioctl(f, VIDIOC_QUERY_EXT_CTRL, qec);
+
+	for (;;) {
+		if (qec->id == V4L2_CID_LASTP1 && next_ctrl)
+			qec->id = V4L2_CID_PRIVATE_BASE;
+		qc.id = qec->id;
+		ret = v4l_ioctl(f, VIDIOC_QUERYCTRL, &qc);
+		if (!ret)
+			break;
+		if (ret != EINVAL)
+			return ret;
+		if (!next_ctrl || f->have_next_ctrl)
+			return ret;
+		if (qec->id >= V4L2_CID_PRIVATE_BASE)
+			return ret;
+		qec->id++;
+	}
+	qec->id = qc.id;
+	qec->type = qc.type;
+	memcpy(qec->name, qc.name, sizeof(qec->name));
+	qec->minimum = qc.minimum;
+	qec->maximum = qc.maximum;
+	qec->step = qc.step;
+	qec->default_value = qc.default_value;
+	qec->flags = qc.flags;
+	qec->elems = 1;
+	qec->nr_of_dims = 0;
+	memset(qec->dims, 0, sizeof(qec->dims));
+	switch (qec->type) {
+	case V4L2_CTRL_TYPE_INTEGER64:
+		qec->elem_size = sizeof(__s64);
+		qec->minimum = 0x8000000000000000ULL;
+		qec->maximum = 0x7fffffffffffffffULL;
+		qec->step = 1;
+		break;
+	case V4L2_CTRL_TYPE_STRING:
+		qec->elem_size = qc.maximum + 1;
+		break;
+	default:
+		qec->elem_size = sizeof(__s32);
+		break;
+	}
+	memset(qec->reserved, 0, sizeof(qec->reserved));
+	return 0;
+}
+
+static inline int v4l_g_ext_ctrls(v4l_fd *f, struct v4l2_ext_controls *ec)
+{
+	unsigned i;
+
+	if (f->have_ext_ctrls)
+		return v4l_ioctl(f, VIDIOC_G_EXT_CTRLS, ec);
+	if (ec->count == 0)
+		return 0;
+	for (i = 0; i < ec->count; i++) {
+		struct v4l2_control c = { ec->controls[i].id };
+		int ret = v4l_ioctl(f, VIDIOC_G_CTRL, &c);
+
+		if (ret) {
+			ec->error_idx = i;
+			return ret;
+		}
+		ec->controls[i].value = c.value;
+	}
+	return 0;
+}
+
+static inline int v4l_s_ext_ctrls(v4l_fd *f, struct v4l2_ext_controls *ec)
+{
+	unsigned i;
+
+	if (f->have_ext_ctrls)
+		return v4l_ioctl(f, VIDIOC_S_EXT_CTRLS, ec);
+	if (ec->count == 0)
+		return 0;
+	for (i = 0; i < ec->count; i++) {
+		struct v4l2_control c = { ec->controls[i].id, ec->controls[i].value };
+		int ret = v4l_ioctl(f, VIDIOC_S_CTRL, &c);
+
+		if (ret) {
+			ec->error_idx = i;
+			return ret;
+		}
+	}
+	return 0;
+}
+
+static inline int v4l_try_ext_ctrls(v4l_fd *f, struct v4l2_ext_controls *ec)
+{
+	unsigned i;
+
+	if (f->have_ext_ctrls)
+		return v4l_ioctl(f, VIDIOC_TRY_EXT_CTRLS, ec);
+	if (ec->count == 0)
+		return 0;
+	for (i = 0; i < ec->count; i++) {
+		struct v4l2_queryctrl qc = { ec->controls[i].id };
+		int ret = v4l_ioctl(f, VIDIOC_QUERYCTRL, &qc);
+
+		if (ret || qc.type == V4L2_CTRL_TYPE_STRING ||
+			   qc.type == V4L2_CTRL_TYPE_INTEGER64) {
+			ec->error_idx = i;
+			return ret ? ret : EINVAL;
+		}
+	}
+	return 0;
+}
+
+static inline int v4l_g_selection(v4l_fd *f, struct v4l2_selection *sel)
+{
+	struct v4l2_cropcap cc;
+	struct v4l2_crop crop;
+	int ret;
+
+	if (f->have_selection)
+		return v4l_ioctl(f, VIDIOC_G_SELECTION, sel);
+	crop.type = sel->type;
+	cc.type = sel->type;
+	ret = v4l_ioctl(f, VIDIOC_CROPCAP, &cc);
+	if (ret)
+		return ret;
+	ret = v4l_ioctl(f, VIDIOC_G_CROP, &crop);
+	if (ret)
+		return ret;
+	if (sel->type == V4L2_BUF_TYPE_VIDEO_CAPTURE) {
+		switch (sel->target) {
+		case V4L2_SEL_TGT_CROP:
+			sel->r = crop.c;
+			return 0;
+		case V4L2_SEL_TGT_CROP_DEFAULT:
+			sel->r = cc.defrect;
+			return 0;
+		case V4L2_SEL_TGT_CROP_BOUNDS:
+			sel->r = cc.bounds;
+			return 0;
+		default:
+			return EINVAL;
+		}
+	}
+	switch (sel->target) {
+	case V4L2_SEL_TGT_COMPOSE:
+		sel->r = crop.c;
+		return 0;
+	case V4L2_SEL_TGT_COMPOSE_DEFAULT:
+		sel->r = cc.defrect;
+		return 0;
+	case V4L2_SEL_TGT_COMPOSE_BOUNDS:
+		sel->r = cc.bounds;
+		return 0;
+	default:
+		return EINVAL;
+	}
+}
+
+static inline int v4l_s_selection(v4l_fd *f, struct v4l2_selection *sel)
+{
+	struct v4l2_crop crop;
+	int ret;
+
+	if (f->have_selection)
+		return v4l_ioctl(f, VIDIOC_S_SELECTION, sel);
+	crop.type = sel->type;
+	ret = v4l_ioctl(f, VIDIOC_G_CROP, &crop);
+	if (ret)
+		return ret;
+	if (sel->type == V4L2_BUF_TYPE_VIDEO_CAPTURE &&
+	    sel->target == V4L2_SEL_TGT_CROP) {
+		crop.c = sel->r;
+		return v4l_ioctl(f, VIDIOC_S_CROP, &crop);
+	}
+	if (sel->type == V4L2_BUF_TYPE_VIDEO_OUTPUT &&
+	    sel->target == V4L2_SEL_TGT_COMPOSE) {
+		crop.c = sel->r;
+		return v4l_ioctl(f, VIDIOC_S_CROP, &crop);
+	}
+	return EINVAL;
+}
+
+#ifdef __cplusplus
+}
+#endif /* __cplusplus */
 
 #endif

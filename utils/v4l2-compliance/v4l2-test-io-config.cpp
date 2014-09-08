@@ -155,7 +155,7 @@ static int checkTimings(struct node *node, bool has_timings, bool is_input)
 	struct v4l2_enum_dv_timings enumtimings;
 	struct v4l2_dv_timings timings;
 	struct v4l2_format fmt;
-	bool is_mplane = node->caps & (V4L2_CAP_VIDEO_CAPTURE_MPLANE |
+	bool is_mplane = node->g_caps() & (V4L2_CAP_VIDEO_CAPTURE_MPLANE |
 				       V4L2_CAP_VIDEO_OUTPUT_MPLANE |
 				       V4L2_CAP_VIDEO_M2M_MPLANE);
 	unsigned type;
@@ -187,6 +187,8 @@ static int checkTimings(struct node *node, bool has_timings, bool is_input)
 		if (enumtimings.index != i)
 			return fail("index changed!\n");
 		fail_on_test(doioctl(node, VIDIOC_S_DV_TIMINGS, &enumtimings.timings));
+		if (node->is_vbi)
+			continue;
 		fmt.type = type;
 		fail_on_test(doioctl(node, VIDIOC_G_FMT, &fmt));
 
@@ -370,6 +372,12 @@ static int checkEdid(struct node *node, unsigned pad, bool is_input)
 	fail_on_test(!is_input);
 	fail_on_test(ret);
 	fail_on_test(check_0(edid.reserved, sizeof(edid.reserved)));
+	if (blocks == 256)
+		return 0;
+	edid.blocks = 256;
+	ret = doioctl(node, VIDIOC_S_EDID, &edid);
+	fail_on_test(ret != E2BIG);
+	fail_on_test(edid.blocks == 0 || edid.blocks >= 256);
 	return 0;
 }
 

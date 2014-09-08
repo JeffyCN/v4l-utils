@@ -104,6 +104,12 @@ static void print_frmival(const struct v4l2_frmivalenum &frmival, const char *pr
 	if (frmival.type == V4L2_FRMIVAL_TYPE_DISCRETE) {
 		printf("%ss (%s fps)\n", fract2sec(frmival.discrete).c_str(),
 				fract2fps(frmival.discrete).c_str());
+	} else if (frmival.type == V4L2_FRMIVAL_TYPE_CONTINUOUS) {
+		printf("%ss - %ss (%s-%s fps)\n",
+				fract2sec(frmival.stepwise.min).c_str(),
+				fract2sec(frmival.stepwise.max).c_str(),
+				fract2fps(frmival.stepwise.max).c_str(),
+				fract2fps(frmival.stepwise.min).c_str());
 	} else if (frmival.type == V4L2_FRMIVAL_TYPE_STEPWISE) {
 		printf("%ss - %ss with step %ss (%s-%s fps)\n",
 				fract2sec(frmival.stepwise.min).c_str(),
@@ -156,6 +162,8 @@ static void print_video_fields(int fd)
 	struct v4l2_format fmt;
 	struct v4l2_format tmp;
 
+	memset(&fmt, 0, sizeof(fmt));
+	fmt.fmt.pix.priv = priv_magic;
 	fmt.type = vidcap_buftype;
 	if (test_ioctl(fd, VIDIOC_G_FMT, &fmt) < 0)
 		return;
@@ -242,6 +250,8 @@ void vidcap_set(int fd)
 	if (options[OptSetVideoFormat] || options[OptTryVideoFormat]) {
 		struct v4l2_format vfmt;
 
+		memset(&vfmt, 0, sizeof(vfmt));
+		vfmt.fmt.pix.priv = priv_magic;
 		vfmt.type = vidcap_buftype;
 
 		if (doioctl(fd, VIDIOC_G_FMT, &vfmt) == 0) {
@@ -311,6 +321,8 @@ void vidcap_get(int fd)
 	if (options[OptGetVideoFormat]) {
 		struct v4l2_format vfmt;
 
+		memset(&vfmt, 0, sizeof(vfmt));
+		vfmt.fmt.pix.priv = priv_magic;
 		vfmt.type = vidcap_buftype;
 		if (doioctl(fd, VIDIOC_G_FMT, &vfmt) == 0)
 			printfmt(vfmt);

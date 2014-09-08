@@ -24,13 +24,14 @@
 #include <config.h>
 
 #include <QSpinBox>
+#include <QCheckBox>
 #include <QDoubleSpinBox>
+#include <QStackedWidget>
 #include <sys/time.h>
 #include <linux/videodev2.h>
 #include <map>
 
 #include "qv4l2.h"
-#include "v4l2-api.h"
 #include "capture-win.h"
 
 #ifdef HAVE_ALSA
@@ -44,14 +45,15 @@ extern "C" {
 class QComboBox;
 class QCheckBox;
 class QSpinBox;
-class QPushButton;
+class QToolButton;
+class QSlider;
 
-class GeneralTab: public QGridLayout, public v4l2
+class GeneralTab: public QGridLayout
 {
 	Q_OBJECT
 
 public:
-	GeneralTab(const QString &device, v4l2 &fd, int n, QWidget *parent = 0);
+	GeneralTab(const QString &device, cv4l_fd *fd, int n, QWidget *parent = 0);
 	virtual ~GeneralTab() {}
 
 	CapMethod capMethod();
@@ -70,25 +72,25 @@ public:
 	bool isVbi() const { return m_isVbi; }
 	bool isSlicedVbi() const;
 	bool isPlanar() const { return m_isPlanar; }
-	__u32 bufType() const { return m_buftype; }
-	inline bool reqbufs_mmap(v4l2_requestbuffers &reqbuf, int count = 0) {
-		return v4l2::reqbufs_mmap(reqbuf, m_buftype, count);
+	__u32 usePrio() const
+	{
+		return m_recordPrio->isChecked() ?
+			V4L2_PRIORITY_RECORD : V4L2_PRIORITY_DEFAULT;
 	}
-	inline bool reqbufs_user(v4l2_requestbuffers &reqbuf, int count = 0) {
-		return v4l2::reqbufs_user(reqbuf, m_buftype, count);
-	}
-	inline bool streamon() { return v4l2::streamon(m_buftype); }
-	inline bool streamoff() { return v4l2::streamoff(m_buftype); }
 	void setHaveBuffers(bool haveBuffers);
 	void sourceChange(const v4l2_event &ev);
-
-public slots:
-	void showAllAudioDevices(bool use);
+	void sourceChangeSubscribe();
+	unsigned getDisplayColorspace() const;
+	unsigned getColorspace() const;
+	int getWidth();
 
 signals:
 	void audioDeviceChanged();
 	void pixelAspectRatioChanged();
-	void cropChanged();
+	void croppingChanged();
+	void colorspaceChanged();
+	void clearBuffers();
+	void displayColorspaceChanged();
 
 private slots:
 	void inputChanged(int);
@@ -108,7 +110,7 @@ private slots:
 	void stereoModeChanged();
 	void rdsModeChanged();
 	void vidCapFormatChanged(int);
-	void vidCapFieldChanged(int);
+	void vidFieldChanged(int);
 	void frameWidthChanged();
 	void frameHeightChanged();
 	void frameSizeChanged(int);
@@ -117,8 +119,18 @@ private slots:
 	void vbiMethodsChanged(int);
 	void changeAudioDevice();
 	void changePixelAspectRatio();
+	void cropChanged();
+	void composeChanged();
 
 private:
+	void inputSection(v4l2_input vin);
+	void outputSection(v4l2_output vout);
+	void audioSection(v4l2_audio vaudio, v4l2_audioout vaudout);
+	void formatSection(v4l2_fmtdesc fmt); 
+	void cropSection(); 
+	void fixWidth();
+	void updateGUIInput(__u32);
+	void updateGUIOutput(__u32);
 	void updateVideoInput();
 	void updateVideoOutput();
 	void updateAudioInput();
@@ -131,21 +143,30 @@ private:
 	void updateFreqChannel();
 	void updateFreqRf();
 	void updateVidCapFormat();
-	void updateVidCapFields();
+	void updateVidFields();
 	void updateFrameSize();
 	void updateFrameInterval();
 	void updateVidOutFormat();
+	void updateCrop();
+	void updateCompose();
+	void updateVidFormat()
+	{
+		if (m_isOutput)
+			updateVidOutFormat();
+		else
+			updateVidCapFormat();
+	}
 	int addAudioDevice(void *hint, int deviceNum);
-	bool filterAudioInDevice(QString &deviceName);
-	bool filterAudioOutDevice(QString &deviceName);
+	bool filterAudioDevice(QString &deviceName);
 	bool createAudioDeviceList();
 #ifdef HAVE_ALSA
 	int matchAudioDevice();
-	int checkMatchAudioDevice(void *md, const char *vid, const enum device_type type);
+	int checkMatchAudioDevice(void *md, const char *vid, enum device_type type);
 #endif
 
 	void addWidget(QWidget *w, Qt::Alignment align = Qt::AlignLeft);
-	void addLabel(const QString &text, Qt::Alignment align = Qt::AlignRight)
+	void addTitle(const QString &titlename);
+	void addLabel(const QString &text, Qt::Alignment align = Qt::AlignLeft)
 	{
 		addWidget(new QLabel(text, parentWidget()), align);
 	}
@@ -157,17 +178,124 @@ private:
 	{
 		g_mw->error(error);
 	}
+	virtual void error(int error)
+	{
+		g_mw->error(error);
+	}
+	v4l_fd *g_v4l_fd() { return m_fd->g_v4l_fd(); }
 
+	__u32 g_type() const { return m_fd->g_type(); }
+	void s_type(__u32 type) { m_fd->s_type(type); }
+	__u32 g_selection_type() const { return m_fd->g_selection_type(); }
+	__u32 g_caps() const { return m_fd->g_caps(); }
+
+	bool has_vid_cap() const { return m_fd->has_vid_cap(); }
+	bool has_vid_out() const { return m_fd->has_vid_out(); }
+	bool has_vid_m2m() const { return m_fd->has_vid_m2m(); }
+	bool has_vid_mplane() const { return m_fd->has_vid_mplane(); }
+	bool has_overlay_cap() const { return m_fd->has_overlay_cap(); }
+	bool has_overlay_out() const { return m_fd->has_overlay_out(); }
+	bool has_raw_vbi_cap() const { return m_fd->has_raw_vbi_cap(); }
+	bool has_sliced_vbi_cap() const { return m_fd->has_sliced_vbi_cap(); }
+	bool has_vbi_cap() const { return m_fd->has_vbi_cap(); }
+	bool has_raw_vbi_out() const { return m_fd->has_raw_vbi_out(); }
+	bool has_sliced_vbi_out() const { return m_fd->has_sliced_vbi_out(); }
+	bool has_vbi_out() const { return m_fd->has_vbi_out(); }
+	bool has_vbi() const { return m_fd->has_vbi(); }
+	bool has_radio_rx() const { return m_fd->has_radio_rx(); }
+	bool has_radio_tx() const { return m_fd->has_radio_tx(); }
+	bool has_rds_cap() const { return m_fd->has_rds_cap(); }
+	bool has_rds_out() const { return m_fd->has_rds_out(); }
+	bool has_sdr_cap() const { return m_fd->has_sdr_cap(); }
+	bool has_hwseek() const { return m_fd->has_hwseek(); }
+	bool has_rw() const { return m_fd->has_rw(); }
+	bool has_streaming() const { return m_fd->has_streaming(); }
+	bool has_ext_pix_format() const { return m_fd->has_ext_pix_format(); }
+
+	bool g_direct() const { return m_fd->g_direct(); }
+	void s_direct(bool direct) { m_fd->s_direct(direct); }
+	void querycap(v4l2_capability &cap) { return m_fd->querycap(cap); }
+	int queryctrl(v4l2_queryctrl &qc) { return m_fd->queryctrl(qc); }
+	int querymenu(v4l2_querymenu &qm) { return m_fd->querymenu(qm); }
+	int g_fmt(v4l2_format &fmt, unsigned type = 0) { return m_fd->g_fmt(fmt); }
+	int try_fmt(v4l2_format &fmt) { return m_fd->try_fmt(fmt); }
+	int s_fmt(v4l2_format &fmt) { return m_fd->s_fmt(fmt); }
+	int g_selection(v4l2_selection &sel) { return m_fd->g_selection(sel); }
+	int s_selection(v4l2_selection &sel) { return m_fd->s_selection(sel); }
+	int g_tuner(v4l2_tuner &tuner, unsigned index = 0) { return m_fd->g_tuner(tuner, index); }
+	int s_tuner(v4l2_tuner &tuner) { return m_fd->s_tuner(tuner); }
+	int g_modulator(v4l2_modulator &modulator) { return m_fd->g_modulator(modulator); }
+	int s_modulator(v4l2_modulator &modulator) { return m_fd->s_modulator(modulator); }
+	int enum_input(v4l2_input &in, bool init = false, int index = 0) { return m_fd->enum_input(in, init, index); }
+	int enum_output(v4l2_output &out, bool init = false, int index = 0) { return m_fd->enum_output(out, init, index); }
+	int enum_audio(v4l2_audio &audio, bool init = false, int index = 0) { return m_fd->enum_audio(audio, init, index); }
+	int enum_audout(v4l2_audioout &audout, bool init = false, int index = 0) { return m_fd->enum_audout(audout, init, index); }
+	int subscribe_event(v4l2_event_subscription &sub) { return m_fd->subscribe_event(sub); }
+	int dqevent(v4l2_event &ev) { return m_fd->dqevent(ev); }
+	int g_input(__u32 &input) { return m_fd->g_input(input); }
+	int s_input(__u32 input) { return m_fd->s_input(input); }
+	int g_output(__u32 &output) { return m_fd->g_output(output); }
+	int s_output(__u32 output) { return m_fd->s_output(output); }
+	int g_audio(v4l2_audio &audio) { return m_fd->g_audio(audio); }
+	int s_audio(__u32 input) { return m_fd->s_audio(input); }
+	int g_audout(v4l2_audioout &audout) { return m_fd->g_audout(audout); }
+	int s_audout(__u32 output) { return m_fd->s_audout(output); }
+	int g_std(v4l2_std_id &std) { return m_fd->g_std(std); }
+	int s_std(v4l2_std_id std) { return m_fd->s_std(std); }
+	int query_std(v4l2_std_id &std) { return m_fd->query_std(std); }
+	int g_dv_timings(v4l2_dv_timings &timings) { return m_fd->g_dv_timings(timings); }
+	int s_dv_timings(v4l2_dv_timings &timings) { return m_fd->s_dv_timings(timings); }
+	int query_dv_timings(v4l2_dv_timings &timings) { return m_fd->query_dv_timings(timings); }
+	int g_frequency(v4l2_frequency &freq, unsigned index = 0) { return m_fd->g_frequency(freq, index); }
+	int s_frequency(v4l2_frequency &freq) { return m_fd->s_frequency(freq); }
+	int g_priority(__u32 &prio) { return m_fd->g_priority(prio); }
+	int s_priority(__u32 prio = V4L2_PRIORITY_DEFAULT) { return m_fd->s_priority(prio); }
+	int streamon(__u32 type = 0) { return m_fd->streamon(type); }
+	int streamoff(__u32 type = 0) { return m_fd->streamoff(type); }
+	int querybuf(v4l_buffer &buf, unsigned index) { return m_fd->querybuf(buf, index); }
+	int dqbuf(v4l_buffer &buf) { return m_fd->dqbuf(buf); }
+	int qbuf(v4l_buffer &buf) { return m_fd->qbuf(buf); }
+	int prepare_buf(v4l_buffer &buf) { return m_fd->prepare_buf(buf); }
+	int enum_std(v4l2_standard &std, bool init = false, int index = 0) { return m_fd->enum_std(std, init, index); }
+	int enum_dv_timings(v4l2_enum_dv_timings &timings, bool init = false, int index = 0) { return m_fd->enum_dv_timings(timings, init, index); }
+	int enum_fmt(v4l2_fmtdesc &fmt, bool init = false, int index = 0, unsigned type = 0) { return m_fd->enum_fmt(fmt, init, index, type); }
+	int enum_framesizes(v4l2_frmsizeenum &frm, __u32 init_pixfmt = 0, int index = 0) { return m_fd->enum_framesizes(frm, init_pixfmt, index); }
+	int enum_frameintervals(v4l2_frmivalenum &frm, __u32 init_pixfmt = 0, __u32 w = 0, __u32 h = 0, int index = 0) { return m_fd->enum_frameintervals(frm, init_pixfmt, w, h, index); }
+	int set_interval(v4l2_fract interval, unsigned type = 0) { return m_fd->set_interval(interval, type); }
+	v4l2_fract g_pixel_aspect(unsigned &width, unsigned &height, unsigned type = 0)
+	{
+		return m_fd->g_pixel_aspect(width, height, type);
+	}
+	bool has_crop() { return m_fd->has_crop(); }
+	bool has_compose() { return m_fd->has_compose(); }
+	bool cur_io_has_crop() { return m_fd->cur_io_has_crop(); }
+	bool cur_io_has_compose() { return m_fd->cur_io_has_compose(); }
+	bool ioctl_exists(int ret)
+	{
+		return ret == 0 || errno != ENOTTY;
+	}
+
+
+	cv4l_fd *m_fd;
 	int m_row;
 	int m_col;
 	int m_cols;
+	const int m_minWidth;
+	const double m_pxw;
+	const int m_vMargin;
+	const int m_hMargin;
+	int m_increment;
+	int m_maxw[4];
+	int m_maxh;
 	bool m_isRadio;
 	bool m_isSDR;
 	bool m_isVbi;
+	bool m_isOutput;
 	double m_freqFac;
 	double m_freqRfFac;
 	bool m_isPlanar;
-	__u32 m_buftype;
+	bool m_haveBuffers;
+	bool m_discreteSizes;
 	__u32 m_audioModes[5];
 	QString m_device;
 	struct v4l2_tuner m_tuner;
@@ -184,16 +312,22 @@ private:
 	std::map<QString, QString> m_audioOutDeviceMap;
 
 	// General tab
+	QList<QGridLayout *> m_grids;
+	QStackedWidget *m_stackedStandards;
+	QStackedWidget *m_stackedFrameSettings;
+	QStackedWidget *m_stackedFrequency;
 	QComboBox *m_videoInput;
 	QComboBox *m_videoOutput;
 	QComboBox *m_audioInput;
 	QComboBox *m_audioOutput;
 	QComboBox *m_tvStandard;
-	QPushButton *m_qryStandard;
+	QToolButton *m_qryStandard;
 	QComboBox *m_videoTimings;
 	QComboBox *m_pixelAspectRatio;
-	QComboBox *m_crop;
-	QPushButton *m_qryTimings;
+	QComboBox *m_colorspace;
+	QComboBox *m_displayColorspace;
+	QComboBox *m_cropping;
+	QToolButton *m_qryTimings;
 	QDoubleSpinBox *m_freq;
 	QComboBox *m_freqTable;
 	QComboBox *m_freqChannel;
@@ -202,18 +336,27 @@ private:
 	QDoubleSpinBox *m_freqRf;
 	QCheckBox *m_stereoMode;
 	QCheckBox *m_rdsMode;
-	QPushButton *m_detectSubchans;
+	QToolButton *m_detectSubchans;
 	QComboBox *m_vidCapFormats;
-	QComboBox *m_vidCapFields;
+	QComboBox *m_vidFields;
 	QComboBox *m_frameSize;
 	QSpinBox *m_frameWidth;
 	QSpinBox *m_frameHeight;
 	QComboBox *m_frameInterval;
 	QComboBox *m_vidOutFormats;
 	QComboBox *m_capMethods;
+	QCheckBox *m_recordPrio;
 	QComboBox *m_vbiMethods;
 	QComboBox *m_audioInDevice;
 	QComboBox *m_audioOutDevice;
+	QSlider *m_cropWidth;
+	QSlider *m_cropLeft;
+	QSlider *m_cropHeight;
+	QSlider *m_cropTop;
+	QSlider *m_composeWidth;
+	QSlider *m_composeLeft;
+	QSlider *m_composeHeight;
+	QSlider *m_composeTop;
 };
 
 #endif

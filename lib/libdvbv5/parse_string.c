@@ -29,7 +29,7 @@
 #include <string.h>
 #include <strings.h> /* strcasecmp */
 
-#include "parse_string.h"
+#include <parse_string.h>
 #include <libdvbv5/dvb-log.h>
 #include <libdvbv5/dvb-fe.h>
 
@@ -300,12 +300,12 @@ static struct charset_conv en300468_latin_00_to_utf8[256] = {
 	[0xff] = { 2, {0xc2, 0xad, } },
 };
 
-void iconv_to_charset(struct dvb_v5_fe_parms *parms,
-		      char *dest,
-		      size_t destlen,
-		      const unsigned char *src,
-		      size_t len,
-		      char *type, char *output_charset)
+void dvb_iconv_to_charset(struct dvb_v5_fe_parms *parms,
+			  char *dest,
+			  size_t destlen,
+			  const unsigned char *src,
+			  size_t len,
+			  char *input_charset, char *output_charset)
 {
 	char out_cs[strlen(output_charset) + 1 + sizeof(CS_OPTIONS)];
 	char *p = dest;
@@ -313,12 +313,12 @@ void iconv_to_charset(struct dvb_v5_fe_parms *parms,
 	strcpy(out_cs, output_charset);
 	strcat(out_cs, CS_OPTIONS);
 
-	iconv_t cd = iconv_open(out_cs, type);
+	iconv_t cd = iconv_open(out_cs, input_charset);
 	if (cd == (iconv_t)(-1)) {
 		memcpy(p, src, len);
 		p[len] = '\0';
 		dvb_logerr("Conversion from %s to %s not supported\n",
-				type, output_charset);
+				input_charset, output_charset);
 	} else {
 		iconv(cd, (ICONV_CONST char **)&src, &len, &p, &destlen);
 		iconv_close(cd);
@@ -327,14 +327,13 @@ void iconv_to_charset(struct dvb_v5_fe_parms *parms,
 }
 
 static void charset_conversion(struct dvb_v5_fe_parms *parms, char **dest, const unsigned char *s,
-			       size_t len,
-			       char *type, char *output_charset)
+			       size_t len, char *input_charset)
 {
 	size_t destlen = len * 3;
 	int need_conversion = 1;
 
 	/* Special handler for ISO-6937 */
-	if (!strcasecmp(type, "ISO-6937")) {
+	if (!strcasecmp(input_charset, "ISO-6937")) {
 		char *p = *dest;
 		unsigned char *tmp;
 		unsigned char *p1, *p2;
@@ -348,12 +347,12 @@ static void charset_conversion(struct dvb_v5_fe_parms *parms, char **dest, const
 		*p = '\0';
 
 		/* If desired charset is not UTF-8, prepare for conversion */
-		if (strcasecmp(output_charset, "UTF-8")) {
+		if (strcasecmp(parms->output_charset, "UTF-8")) {
 			tmp = (unsigned char *)*dest;
 			len = p - *dest;
 
 			*dest = malloc(destlen + 1);
-			type = "UTF-8";
+			input_charset = "UTF-8";
 			s = tmp;
 		} else
 			need_conversion = 0;
@@ -362,16 +361,16 @@ static void charset_conversion(struct dvb_v5_fe_parms *parms, char **dest, const
 
 	/* Convert from original charset to the desired one */
 	if (need_conversion)
-		iconv_to_charset(parms, *dest, destlen, s, len, type,
-				 output_charset);
+		dvb_iconv_to_charset(parms, *dest, destlen, s, len,
+				     input_charset,
+				     parms->output_charset);
 }
 
-void parse_string(struct dvb_v5_fe_parms *parms, char **dest, char **emph,
-		  const unsigned char *src, size_t len,
-		  char *default_charset, char *output_charset)
+void dvb_parse_string(struct dvb_v5_fe_parms *parms, char **dest, char **emph,
+		      const unsigned char *src, size_t len)
 {
 	size_t destlen, i, len2 = 0;
-	char *p, *p2, *type = default_charset;
+	char *p, *p2, *type = parms->default_charset;
 	unsigned char *tmp1 = NULL, *tmp2 = NULL;
 	const unsigned char *s;
 	int emphasis = 0;
@@ -480,7 +479,7 @@ void parse_string(struct dvb_v5_fe_parms *parms, char **dest, char **emph,
 	else
 		s = src;
 
-	charset_conversion(parms, dest, s, len, type, output_charset);
+	charset_conversion(parms, dest, s, len, type);
 	/* The code had over-sized the space. Fix it. */
 	if (*dest)
 		*dest = realloc(*dest, strlen(*dest) + 1);
@@ -493,7 +492,7 @@ void parse_string(struct dvb_v5_fe_parms *parms, char **dest, char **emph,
 		free (*emph);
 		*emph = NULL;
 	} else {
-		charset_conversion(parms, emph, tmp2, len2, type, output_charset);
+		charset_conversion(parms, emph, tmp2, len2, type);
 		*emph = realloc(*emph, strlen(*emph) + 1);
 	}
 

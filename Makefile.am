@@ -7,7 +7,9 @@ if WITH_V4LUTILS
 SUBDIRS += utils contrib
 endif
 
-EXTRA_DIST = android-config.h include COPYING.libv4l README.libv4l README.lib-multi-threading
+EXTRA_DIST = android-config.h doxygen_libdvbv5.cfg include COPYING.libv4l README.libv4l README.lib-multi-threading
+
+include $(top_srcdir)/aminclude.am
 
 # custom targets
 
@@ -38,6 +40,9 @@ sync-with-kernel:
 	cp -a $(KERNEL_DIR)/usr/include/linux/dvb/dmx.h $(top_srcdir)/include/linux/dvb
 	cp -a $(KERNEL_DIR)/usr/include/linux/dvb/audio.h $(top_srcdir)/include/linux/dvb
 	cp -a $(KERNEL_DIR)/usr/include/linux/dvb/video.h $(top_srcdir)/include/linux/dvb
+	cp -a $(KERNEL_DIR)/drivers/media/platform/vivid/vivid-tpg.[ch] $(top_srcdir)/utils/v4l2-ctl
+	cp -a $(KERNEL_DIR)/drivers/media/platform/vivid/vivid-tpg-colors.[ch] $(top_srcdir)/utils/v4l2-ctl
+	patch -p1 <$(top_srcdir)/utils/v4l2-ctl/vivid-tpg.h.patch
 
 	$(MAKE) -C utils/keytable $@
 	$(MAKE) -C utils/xc3028-firmware $@

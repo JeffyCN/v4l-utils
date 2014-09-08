@@ -94,6 +94,48 @@ static struct v4l2_dev_info devices[V4L2_MAX_DEVICES] = {
 };
 static int devices_used;
 
+static int v4l2_ensure_convert_mmap_buf(int index)
+{
+	long page_size;
+
+	if (devices[index].convert_mmap_buf != MAP_FAILED) {
+		return 0;
+	}
+
+	page_size = sysconf(_SC_PAGESIZE);
+	if (page_size < 0) {
+		int saved_err = errno;
+		V4L2_LOG_ERR("unable to retrieve page size\n");
+		errno = saved_err;
+		return -1;
+	}
+
+	/* round up to full page size */
+	devices[index].convert_mmap_frame_size =
+		(((devices[index].dest_fmt.fmt.pix.sizeimage + page_size - 1) /
+		page_size) * page_size);
+
+	devices[index].convert_mmap_buf_size =
+		devices[index].convert_mmap_frame_size * devices[index].no_frames;
+
+	devices[index].convert_mmap_buf = (void *)SYS_MMAP(NULL,
+			devices[index].convert_mmap_buf_size,
+			PROT_READ | PROT_WRITE,
+			MAP_ANONYMOUS | MAP_PRIVATE,
+			-1, 0);
+
+	if (devices[index].convert_mmap_buf == MAP_FAILED) {
+		devices[index].convert_mmap_frame_size = 0;
+		devices[index].convert_mmap_buf_size = 0;
+
+		int saved_err = errno;
+		V4L2_LOG_ERR("allocating conversion buffer\n");
+		errno = saved_err;
+		return -1;
+	}
+
+	return 0;
+}
 
 static int v4l2_request_read_buffers(int index)
 {
@@ -158,6 +200,7 @@ static int v4l2_map_buffers(int index)
 		buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 		buf.memory = V4L2_MEMORY_MMAP;
 		buf.index = i;
+		buf.reserved = buf.reserved2 = 0;
 		result = devices[index].dev_ops->ioctl(
 				devices[index].dev_ops_priv,
 				devices[index].fd, VIDIOC_QUERYBUF, &buf);
@@ -317,7 +360,8 @@ static int v4l2_dequeue_and_convert(int index, struct v4l2_buffer *buf,
 				&devices[index].src_fmt, &devices[index].dest_fmt,
 				devices[index].frame_pointers[buf->index],
 				buf->bytesused, dest ? dest : (devices[index].convert_mmap_buf +
-					buf->index * V4L2_FRAME_BUF_SIZE), dest_size);
+					buf->index * devices[index].convert_mmap_frame_size),
+				dest_size);
 
 		if (devices[index].first_frame) {
 			/* Always treat convert errors as EAGAIN during the first few frames, as
@@ -526,7 +570,7 @@ static void v4l2_set_conversion_buf_params(int index, struct v4l2_buffer *buf)
 		buf->index = 0;
 
 	buf->m.offset = V4L2_MMAP_OFFSET_MAGIC | buf->index;
-	buf->length = V4L2_FRAME_BUF_SIZE;
+	buf->length = devices[index].convert_mmap_frame_size;
 	if (devices[index].frame_map_count[buf->index])
 		buf->flags |= V4L2_BUF_FLAG_MAPPED;
 	else
@@ -545,6 +589,7 @@ static int v4l2_buffers_mapped(int index)
 			buf.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 			buf.memory = V4L2_MEMORY_MMAP;
 			buf.index = i;
+			buf.reserved = buf.reserved2 = 0;
 			if (devices[index].dev_ops->ioctl(
 					devices[index].dev_ops_priv,
 					devices[index].fd, VIDIOC_QUERYBUF,
@@ -735,6 +780,8 @@ no_capture:
 	devices[index].nreadbuffers = V4L2_DEFAULT_NREADBUFFERS;
 	devices[index].convert = convert;
 	devices[index].convert_mmap_buf = MAP_FAILED;
+	devices[index].convert_mmap_buf_size = 0;
+	devices[index].convert_mmap_frame_size = 0;
 	for (i = 0; i < V4L2_MAX_NO_FRAMES; i++) {
 		devices[index].frame_pointers[i] = MAP_FAILED;
 		devices[index].frame_map_count[i] = 0;
@@ -808,9 +855,11 @@ int v4l2_close(int fd)
 				V4L2_LOG_WARN("v4l2 mmap buffers still mapped on close()\n");
 		} else {
 			SYS_MUNMAP(devices[index].convert_mmap_buf,
-					devices[index].no_frames * V4L2_FRAME_BUF_SIZE);
+					devices[index].convert_mmap_buf_size);
 		}
 		devices[index].convert_mmap_buf = MAP_FAILED;
+		devices[index].convert_mmap_buf_size = 0;
+		devices[index].convert_mmap_frame_size = 0;
 	}
 	v4lconvert_destroy(devices[index].convert);
 	free(devices[index].readbuf);
@@ -864,8 +913,10 @@ static int v4l2_check_buffer_change_ok(int index)
 	   v4l2_unrequest_read_buffers may change the no_frames, so free the
 	   convert mmap buffer */
 	SYS_MUNMAP(devices[index].convert_mmap_buf,
-			devices[index].no_frames * V4L2_FRAME_BUF_SIZE);
+			devices[index].convert_mmap_buf_size);
 	devices[index].convert_mmap_buf = MAP_FAILED;
+	devices[index].convert_mmap_buf_size = 0;
+	devices[index].convert_mmap_frame_size = 0;
 
 	if (devices[index].flags & V4L2_STREAM_CONTROLLED_BY_READ) {
 		V4L2_LOG("deactivating read-stream for settings change\n");
@@ -1022,6 +1073,9 @@ int v4l2_ioctl(int fd, unsigned long int request, ...)
 	case VIDIOC_QUERYCTRL:
 	case VIDIOC_G_CTRL:
 	case VIDIOC_S_CTRL:
+	case VIDIOC_G_EXT_CTRLS:
+	case VIDIOC_TRY_EXT_CTRLS:
+	case VIDIOC_S_EXT_CTRLS:
 	case VIDIOC_ENUM_FRAMESIZES:
 	case VIDIOC_ENUM_FRAMEINTERVALS:
 		is_capture_request = 1;
@@ -1129,6 +1183,18 @@ no_capture_request:
 		result = v4lconvert_vidioc_s_ctrl(devices[index].convert, arg);
 		break;
 
+	case VIDIOC_G_EXT_CTRLS:
+		result = v4lconvert_vidioc_g_ext_ctrls(devices[index].convert, arg);
+		break;
+
+	case VIDIOC_TRY_EXT_CTRLS:
+		result = v4lconvert_vidioc_try_ext_ctrls(devices[index].convert, arg);
+		break;
+
+	case VIDIOC_S_EXT_CTRLS:
+		result = v4lconvert_vidioc_s_ext_ctrls(devices[index].convert, arg);
+		break;
+
 	case VIDIOC_QUERYCAP: {
 		struct v4l2_capability *cap = arg;
 
@@ -1178,7 +1244,7 @@ no_capture_request:
 	case VIDIOC_S_STD:
 	case VIDIOC_S_INPUT:
 	case VIDIOC_S_DV_TIMINGS: {
-		struct v4l2_format src_fmt;
+		struct v4l2_format src_fmt = { 0 };
 
 		result = devices[index].dev_ops->ioctl(
 				devices[index].dev_ops_priv,
@@ -1319,23 +1385,12 @@ no_capture_request:
 		/* An application can do a DQBUF before mmap-ing in the buffer,
 		   but we need the buffer _now_ to write our converted data
 		   to it! */
-		if (devices[index].convert_mmap_buf == MAP_FAILED) {
-			devices[index].convert_mmap_buf = (void *)SYS_MMAP(NULL,
-				(size_t)(devices[index].no_frames * V4L2_FRAME_BUF_SIZE),
-				PROT_READ | PROT_WRITE,
-				MAP_ANONYMOUS | MAP_PRIVATE,
-				-1, 0);
-			if (devices[index].convert_mmap_buf == MAP_FAILED) {
-				saved_err = errno;
-				V4L2_LOG_ERR("allocating conversion buffer\n");
-				errno = saved_err;
-				result = -1;
-				break;
-			}
-		}
+		result = v4l2_ensure_convert_mmap_buf(index);
+		if (result)
+			break;
 
 		result = v4l2_dequeue_and_convert(index, buf, 0,
-						  V4L2_FRAME_BUF_SIZE);
+				devices[index].convert_mmap_frame_size);
 		if (result >= 0) {
 			buf->bytesused = result;
 			result = 0;
@@ -1560,7 +1615,7 @@ void *v4l2_mmap(void *start, size_t length, int prot, int flags, int fd,
 	if (index == -1 ||
 			/* Check if the mmap data matches our answer to QUERY_BUF. If it doesn't,
 			   let the kernel handle it (to allow for mmap-based non capture use) */
-			start || length != V4L2_FRAME_BUF_SIZE ||
+			start || length != devices[index].convert_mmap_frame_size ||
 			((unsigned int)offset & ~0xFFu) != V4L2_MMAP_OFFSET_MAGIC) {
 		if (index != -1)
 			V4L2_LOG("Passing mmap(%p, %d, ..., %x, through to the driver\n",
@@ -1585,26 +1640,16 @@ void *v4l2_mmap(void *start, size_t length, int prot, int flags, int fd,
 		goto leave;
 	}
 
-	if (devices[index].convert_mmap_buf == MAP_FAILED) {
-		devices[index].convert_mmap_buf = (void *)SYS_MMAP(NULL,
-			(size_t)(devices[index].no_frames * V4L2_FRAME_BUF_SIZE),
-			PROT_READ | PROT_WRITE,
-			MAP_ANONYMOUS | MAP_PRIVATE,
-			-1, 0);
-		if (devices[index].convert_mmap_buf == MAP_FAILED) {
-			int saved_err = errno;
-
-			V4L2_LOG_ERR("allocating conversion buffer\n");
-			errno = saved_err;
-			result = MAP_FAILED;
-			goto leave;
-		}
+	if (v4l2_ensure_convert_mmap_buf(index)) {
+		errno = EINVAL;
+		result = MAP_FAILED;
+		goto leave;
 	}
 
 	devices[index].frame_map_count[buffer_index]++;
 
 	result = devices[index].convert_mmap_buf +
-		buffer_index * V4L2_FRAME_BUF_SIZE;
+		buffer_index * devices[index].convert_mmap_frame_size;
 
 	V4L2_LOG("Fake (conversion) mmap buf %u, seen by app at: %p\n",
 			buffer_index, result);
@@ -1622,10 +1667,11 @@ int v4l2_munmap(void *_start, size_t length)
 	unsigned char *start = _start;
 
 	/* Is this memory ours? */
-	if (start != MAP_FAILED && length == V4L2_FRAME_BUF_SIZE) {
+	if (start != MAP_FAILED) {
 		for (index = 0; index < devices_used; index++)
 			if (devices[index].fd != -1 &&
 					devices[index].convert_mmap_buf != MAP_FAILED &&
+					length == devices[index].convert_mmap_frame_size &&
 					start >= devices[index].convert_mmap_buf &&
 					(start - devices[index].convert_mmap_buf) % length == 0)
 				break;
@@ -1639,6 +1685,7 @@ int v4l2_munmap(void *_start, size_t length)
 
 			/* Re-do our checks now that we have the lock, things may have changed */
 			if (devices[index].convert_mmap_buf != MAP_FAILED &&
+					length == devices[index].convert_mmap_frame_size &&
 					start >= devices[index].convert_mmap_buf &&
 					(start - devices[index].convert_mmap_buf) % length == 0 &&
 					buffer_index < devices[index].no_frames) {

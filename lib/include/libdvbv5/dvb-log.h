@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2012 - Mauro Carvalho Chehab
+ * Copyright (c) 2011-2014 - Mauro Carvalho Chehab
  * Copyright (c) 2012 - Andre Roth <neolynx@gmail.com>
  *
  * This program is free software; you can redistribute it and/or
@@ -24,7 +24,30 @@
 
 #include <syslog.h>
 
+/**
+ * @file dvb-log.h
+ * @brief Provides interfaces to handle libdvbv5 log messages.
+ * @copyright GNU General Public License version 2 (GPLv2)
+ * @author Mauro Carvalho Chehab
+ * @author Andre Roth
+ *
+ * Please submit bug report and patches to linux-media@vger.kernel.org
+ */
+
+/**
+ * @typedef void (*dvb_logfunc)(int level, const char *fmt, ...)
+ * @brief typedef used by dvb_fe_open2 for the log function
+ */
+
 typedef void (*dvb_logfunc)(int level, const char *fmt, ...) __attribute__ (( format( printf, 2, 3 )));
+
+/*
+ * Macros used internally inside libdvbv5 frontend part, to output logs
+ */
+
+#ifndef _DOXYGEN
+
+#ifndef __DVB_FE_PRIV_H
 
 #define dvb_log(fmt, arg...) do {\
 	parms->logfunc(LOG_INFO, fmt, ##arg); \
@@ -42,11 +65,40 @@ typedef void (*dvb_logfunc)(int level, const char *fmt, ...) __attribute__ (( fo
 	parms->logfunc(LOG_NOTICE, fmt, ##arg); \
 } while (0)
 
-
 #define dvb_perror(msg) do {\
 	parms->logfunc(LOG_ERR, "%s: %s", msg, strerror(errno)); \
 } while (0)
 
+#else
+
+#define dvb_log(fmt, arg...) do {\
+	parms->p.logfunc(LOG_INFO, fmt, ##arg); \
+} while (0)
+#define dvb_logerr(fmt, arg...) do {\
+	parms->p.logfunc(LOG_ERR, fmt, ##arg); \
+} while (0)
+#define dvb_logdbg(fmt, arg...) do {\
+	parms->p.logfunc(LOG_DEBUG, fmt, ##arg); \
+} while (0)
+#define dvb_logwarn(fmt, arg...) do {\
+	parms->p.logfunc(LOG_WARNING, fmt, ##arg); \
+} while (0)
+#define dvb_loginfo(fmt, arg...) do {\
+	parms->p.logfunc(LOG_NOTICE, fmt, ##arg); \
+} while (0)
+
+#define dvb_perror(msg) do {\
+	parms->p.logfunc(LOG_ERR, "%s: %s", msg, strerror(errno)); \
+} while (0)
+
+#endif
+
+#endif /* _DOXYGEN */
+
+/**
+ * @brief This is the prototype of the internal log function that it is used,
+ * if the library client doesn't desire to override with something else.
+ */
 void dvb_default_log(int level, const char *fmt, ...) __attribute__ (( format( printf, 2, 3 )));
 
 #endif

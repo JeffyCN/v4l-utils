@@ -56,7 +56,7 @@ struct arguments {
 	unsigned diseqc_wait, silent, verbose, frontend_only, freq_bpf;
 	unsigned timeout, dvr, rec_psi, exit_after_tuning;
 	unsigned n_apid, n_vpid, all_pids;
-	enum file_formats input_format, output_format;
+	enum dvb_file_formats input_format, output_format;
 	unsigned traffic_monitor, low_traffic;
 	char *search;
 
@@ -174,7 +174,7 @@ static int parse(struct arguments *args,
 		if (freq) {
 			for (entry = dvb_file->first_entry; entry != NULL;
 			entry = entry->next) {
-				retrieve_entry_prop(entry, DTV_FREQUENCY, &f);
+				dvb_retrieve_entry_prop(entry, DTV_FREQUENCY, &f);
 				if (f == freq)
 					break;
 			}
@@ -188,7 +188,13 @@ static int parse(struct arguments *args,
 		return -3;
 	}
 
-	if (entry->lnb) {
+	/*
+	 * Both the DVBv5 format and the command line parameters may
+	 * specify the LNBf. If both have the definition, use the one
+	 * provided by the command line parameter, overriding the one
+	 * stored in the channel file.
+	 */
+	if (entry->lnb && !parms->lnb) {
 		int lnb = dvb_sat_search_lnb(entry->lnb);
 		if (lnb == -1) {
 			PERROR("unknown LNB %s\n", entry->lnb);
@@ -226,7 +232,7 @@ static int parse(struct arguments *args,
 	*sid = entry->service_id;
 
         /* First of all, set the delivery system */
-	retrieve_entry_prop(entry, DTV_DELIVERY_SYSTEM, &sys);
+	dvb_retrieve_entry_prop(entry, DTV_DELIVERY_SYSTEM, &sys);
 	dvb_set_compat_delivery_system(parms, sys);
 
 	/* Copy data into parms */
@@ -408,6 +414,22 @@ static int check_frontend(struct arguments *args,
 	return status & FE_HAS_LOCK;
 }
 
+static void get_show_stats(struct arguments *args,
+			   struct dvb_v5_fe_parms *parms,
+			   int loop)
+{
+	int rc;
+
+	args->n_status_lines = 0;
+	do {
+		rc = dvb_fe_get_stats(parms);
+		if (!rc)
+			print_frontend_stats(stderr, args, parms);
+		if (!timeout_flag && loop)
+			usleep(1000000);
+	} while (!timeout_flag && loop);
+}
+
 #define BUFLEN (188 * 256)
 static void copy_to_file(int in_fd, int out_fd, int timeout, int silent)
 {
@@ -454,7 +476,7 @@ static error_t parse_opt(int k, char *optarg, struct argp_state *state)
 		args->timeout = strtoul(optarg, NULL, 0);
 		break;
 	case 'I':
-		args->input_format = parse_format(optarg);
+		args->input_format = dvb_parse_format(optarg);
 		break;
 	case 'o':
 		args->filename = strdup(optarg);
@@ -671,12 +693,13 @@ int do_traffic_monitor(struct arguments *args,
 				     pidt[_pid] * 1000. / diff * 8 * 188 / 1024,
 				     pidt[_pid] * 188 / 1024);
 				printf("\n\n");
-				print_frontend_stats(stdout, args, parms);
+				get_show_stats(args, parms, 0);
 				wait += 1000;
 			}
 		}
 	}
-	close (fd);
+	close(dvr_fd);
+	close(fd);
 	return 0;
 }
 
@@ -688,7 +711,7 @@ int main(int argc, char **argv)
 	int lnb = -1, idx = -1;
 	int vpid = -1, apid = -1, sid = -1;
 	int pmtpid = 0;
-	int pat_fd = -1, pmt_fd = -1;
+	int pat_fd = -1, pmt_fd = -1, sid_fd = -1;
 	int audio_fd = -1, video_fd = -1;
 	int dvr_fd = -1, file_fd = -1;
 	int err = -1;
@@ -732,11 +755,11 @@ int main(int argc, char **argv)
 		lnb = dvb_sat_search_lnb(args.lnb_name);
 		if (lnb < 0) {
 			printf("Please select one of the LNBf's below:\n");
-			print_all_lnb();
+			dvb_print_all_lnb();
 			exit(1);
 		} else {
 			printf("Using LNBf ");
-			print_lnb(lnb);
+			dvb_print_lnb(lnb);
 		}
 	}
 
@@ -773,7 +796,7 @@ int main(int argc, char **argv)
 	parms = dvb_fe_open(args.adapter, args.frontend, args.verbose, args.force_dvbv3);
 	if (!parms)
 		goto err;
-	if (lnb)
+	if (lnb >= 0)
 		parms->lnb = dvb_sat_get_lnb(lnb);
 	if (args.sat_number > 0)
 		parms->sat_number = args.sat_number % 3;
@@ -811,10 +834,18 @@ int main(int argc, char **argv)
 				sid);
 			goto err;
 		}
-		pmtpid = get_pmt_pid(args.demux_dev, sid);
+
+		sid_fd = dvb_dmx_open(args.adapter, args.demux);
+		if (sid_fd < 0) {
+			perror("opening pat demux failed");
+			return -1;
+		}
+		pmtpid = dvb_get_pmt_pid(sid_fd, sid);
+		dvb_dmx_close(sid_fd);
 		if (pmtpid <= 0) {
 			fprintf(stderr, "couldn't find pmt-pid for sid %04x\n",
 				sid);
+
 			goto err;
 		}
 
@@ -917,7 +948,7 @@ int main(int argc, char **argv)
 		}
 
 		if (args.silent < 2)
-			print_frontend_stats(stderr, &args, parms);
+			get_show_stats(&args, parms, 0);
 
 		if (file_fd >= 0) {
 			if ((dvr_fd = open(args.dvr_dev, O_RDONLY)) < 0) {
@@ -930,11 +961,11 @@ int main(int argc, char **argv)
 		} else {
 			if (!timeout_flag)
 				fprintf(stderr, "DVR interface '%s' can now be opened\n", args.dvr_dev);
-			while (timeout_flag == 0)
-				sleep(1);
+
+			get_show_stats(&args, parms, 1);
 		}
 		if (args.silent < 2)
-			print_frontend_stats(stderr, &args, parms);
+			get_show_stats(&args, parms, 0);
 	}
 	err = 0;
 
