@@ -1,0 +1,9 @@
+Document: libdvbv5-reference
+Title: libdvbv5 Reference Manual
+Author: Mauro Carvalho Chehab <m.chehab@samsung.com>
+Abstract: This manual describes API which libdvbv5 offers
+Section: Programming/C
+
+Format: HTML
+Index: /usr/share/doc/libdvbv5-doc/html/index.html
+Files: /usr/share/doc/libdvbv5-doc/html/*.html

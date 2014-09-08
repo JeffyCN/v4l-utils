@@ -1,0 +1,4 @@
+usr/include/libdvbv5/*
+usr/lib/*/libdvbv5*.so
+usr/lib/*/libdvbv5*.a
+usr/lib/*/pkgconfig/libdvbv5*

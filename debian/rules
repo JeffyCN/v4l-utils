@@ -1,14 +1,22 @@
 #!/usr/bin/make -f
 
+#export DH_VERBOSE=1
+
 ifeq ($(DEB_HOST_ARCH_OS), linux)
 CONFIGURE_FLAGS = --with-libudev
 endif
+
+# latex generation seems to be broken
+CONFIGURE_FLAGS += --disable-doxygen-ps --disable-doxygen-pdf
 
 %:
 	dh $@ --with autoreconf
 
 override_dh_auto_configure:
-	dh_auto_configure -- --disable-silent-rules --with-libv4lconvertsubdir=libv4lconvert0 --disable-libdvbv5 $(CONFIGURE_FLAGS)
+	dh_auto_configure -- --disable-silent-rules --with-libv4lconvertsubdir=libv4lconvert0 $(CONFIGURE_FLAGS)
+
+override_dh_auto_build-indep:
+	$(MAKE) doxygen-doc
 
 override_dh_installchangelogs:
 	dh_installchangelogs -Nlibv4l-dev -Nv4l-utils -Nqv4l2 ChangeLog

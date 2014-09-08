@@ -7,6 +7,9 @@ Uploaders: Martin Pitt <mpitt@debian.org>,
 Build-Depends: debhelper (>= 8.1.3),
                dh-autoreconf,
                autotools-dev,
+               doxygen,
+               doxygen-latex,
+               graphviz,
                libasound2-dev,
                libtool,
                libjpeg-dev,
@@ -122,10 +125,49 @@ Description: Collection of command line video4linux utilities
   v4l2-dbg: tool to directly get and set registers of v4l2 devices
   v4l2-sysfs-path: sysfs helper tool
 
+Package: libdvbv5-0
+Section: libs
+Architecture: linux-any
+Depends: ${shlibs:Depends},
+         ${misc:Depends}
+Pre-Depends: ${misc:Pre-Depends}
+Multi-Arch: same
+Description: Libraries to control, scan and zap on Digital TV channels
+ This library provides functions to work with DVB devices that
+ implement the DVB v5 API.
+ .
+ This package contains the shared libraries.
+
+Package: libdvbv5-0-dev
+Section: libdevel
+Architecture: linux-any
+Depends: libdvbv5-0 (= ${binary:Version}),
+         ${shlibs:Depends},
+         ${misc:Depends}
+Suggests: pkg-config (>= 0.18), libdvbv5-doc
+Multi-Arch: same
+Description: Development files for libdvbv5
+ This library provides functions to work with DVB devices that
+ implement the DVB v5 API.
+ .
+ This package contains the development files.
+
+Package: libdvbv5-doc
+Section: doc
+Architecture: all
+Depends: ${misc:Depends}
+Suggests: devhelp
+Description: Doxygen generated documentation for libdvbv5
+ This library provides functions to work with DVB devices that
+ implement the DVB v5 API.
+ .
+ This package provides doxygen generated documentation for the library.
+
 Package: dvb-tools
 Section: utils
 Architecture: linux-any
-Depends: ${shlibs:Depends},
+Depends: libdvbv5-0 (= ${binary:Version}),
+         ${shlibs:Depends},
          ${misc:Depends}
 Description: Collection of command line DVB utilities
  This is a series of tools written to help testing and working with DVB,
