@@ -29,7 +29,7 @@ int dvb_desc_event_extended_init(struct dvb_v5_fe_parms *parms, const uint8_t *b
 	uint8_t len;  /* the length of the string in the input data */
 	uint8_t len1; /* the lenght of the output strings */
 
-	/*hexdump(parms, "event extended desc: ", buf - 2, desc->length + 2);*/
+	/*dvb_hexdump(parms, "event extended desc: ", buf - 2, desc->length + 2);*/
 
 	event->ids = buf[0];
 	event->language[0] = buf[1];
@@ -59,7 +59,7 @@ int dvb_desc_event_extended_init(struct dvb_v5_fe_parms *parms, const uint8_t *b
 	len = *buf;
 	len1 = len;
 	buf++;
-	parse_string(parms, &event->text, &event->text_emph, buf, len1, default_charset, output_charset);
+	dvb_parse_string(parms, &event->text, &event->text_emph, buf, len1);
 	buf += len;
 	return 0;
 }

@@ -79,7 +79,8 @@ static int checkQCtrl(struct node *node, struct test_queryctrl &qctrl)
 			return fail("step == 0\n");
 		if (qctrl.step < 0)
 			return fail("step < 0\n");
-		if ((unsigned)qctrl.step > (unsigned)(qctrl.maximum - qctrl.minimum))
+		if ((unsigned)qctrl.step > (unsigned)(qctrl.maximum - qctrl.minimum) &&
+		    qctrl.maximum != qctrl.minimum)
 			return fail("step > max - min\n");
 		if ((qctrl.maximum - qctrl.minimum) % qctrl.step) {
 			// This really should be a fail, but there are so few
@@ -378,7 +379,7 @@ int testSimpleControls(struct node *node)
 			ctrl.id = iter->id;
 			ctrl.value = iter->minimum - 1;
 			ret = doioctl(node, VIDIOC_S_CTRL, &ctrl);
-			if (ret && ret != ERANGE)
+			if (ret && ret != EIO && ret != ERANGE)
 				return fail("invalid minimum range check\n");
 			if (!ret && checkSimpleCtrl(ctrl, *iter))
 				return fail("invalid control %08x\n", iter->id);
@@ -388,7 +389,7 @@ int testSimpleControls(struct node *node)
 			ctrl.id = iter->id;
 			ctrl.value = iter->maximum + 1;
 			ret = doioctl(node, VIDIOC_S_CTRL, &ctrl);
-			if (ret && ret != ERANGE)
+			if (ret && ret != EIO && ret != ERANGE)
 				return fail("invalid maximum range check\n");
 			if (!ret && checkSimpleCtrl(ctrl, *iter))
 				return fail("invalid control %08x\n", iter->id);
@@ -401,7 +402,7 @@ int testSimpleControls(struct node *node)
 			if (ret == ERANGE)
 				warn("%s: returns ERANGE for in-range, but non-step-multiple value\n",
 						iter->name);
-			else if (ret)
+			else if (ret && ret != EIO)
 				return fail("returns error for in-range, but non-step-multiple value\n");
 		}
 
@@ -431,15 +432,15 @@ int testSimpleControls(struct node *node)
 			ctrl.id = iter->id; 
 			ctrl.value = iter->minimum;
 			ret = doioctl(node, VIDIOC_S_CTRL, &ctrl);
-			if (ret)
+			if (ret && ret != EIO)
 				return fail("could not set minimum value\n");
 			ctrl.value = iter->maximum;
 			ret = doioctl(node, VIDIOC_S_CTRL, &ctrl);
-			if (ret)
+			if (ret && ret != EIO)
 				return fail("could not set maximum value\n");
 			ctrl.value = iter->default_value;
 			ret = doioctl(node, VIDIOC_S_CTRL, &ctrl);
-			if (ret)
+			if (ret && ret != EIO)
 				return fail("could not set default value\n");
 		}
 	}
@@ -720,8 +721,8 @@ int testControlEvents(struct node *node)
 			return fail("subscribe event for control '%s' failed\n", iter->name);
 		//if (iter->type == V4L2_CTRL_TYPE_CTRL_CLASS)
 		FD_ZERO(&set);
-		FD_SET(node->vfd.fd, &set);
-		ret = select(node->vfd.fd + 1, NULL, NULL, &set, &timeout);
+		FD_SET(node->g_fd(), &set);
+		ret = select(node->g_fd() + 1, NULL, NULL, &set, &timeout);
 		if (ret == 0) {
 			if (iter->type != V4L2_CTRL_TYPE_CTRL_CLASS)
 				return fail("failed to find event for control '%s'\n", iter->name);

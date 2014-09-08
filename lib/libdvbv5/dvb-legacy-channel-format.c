@@ -24,14 +24,16 @@
 #include <libdvbv5/dvb-file.h>
 #include <libdvbv5/dvb-v5-std.h>
 
+#define PTABLE(a) .table = a, .size=ARRAY_SIZE(a)
+
 /*
- * Standard channel.conf format for DVB-T, DVB-C, DVB-S and ATSC
+ * Standard channel.conf format for DVB-T, DVB-C, DVB-S, DVB-S2 and ATSC
  */
 static const char *channel_parse_modulation[] = {
-	[APSK_16] =  "APSK16",
-	[APSK_32] =  "APSK32",
+	[APSK_16] =  "16APSK",
+	[APSK_32] =  "32APSK",
 	[DQPSK] =    "DQPSK",
-	[PSK_8] =    "PSK8",
+	[PSK_8] =    "8PSK",
 	[QAM_16] =   "QAM16",
 	[QAM_32] =   "QAM32",
 	[QAM_64] =   "QAM64",
@@ -105,12 +107,19 @@ static const char *channel_parse_polarization[] = {
 	[POLARIZATION_R] = "R",
 };
 
-static const struct parse_table sys_atsc_table[] = {
+static const char *channel_parse_rolloff[] = {
+	[ROLLOFF_20] = "20",
+	[ROLLOFF_25] = "25",
+	[ROLLOFF_35] = "35",
+	[ROLLOFF_AUTO] = "AUTO",
+};
+
+static const struct dvb_parse_table sys_atsc_table[] = {
 	{ DTV_FREQUENCY, NULL, 0 },
 	{ DTV_MODULATION, PTABLE(channel_parse_modulation) },
 };
 
-static const struct parse_table sys_dvbc_table[] = {
+static const struct dvb_parse_table sys_dvbc_table[] = {
 	{ DTV_FREQUENCY, NULL, 0 },
 	{ DTV_SYMBOL_RATE, NULL, 0 },
 	{ DTV_INNER_FEC, PTABLE(channel_parse_code_rate) },
@@ -118,14 +127,26 @@ static const struct parse_table sys_dvbc_table[] = {
 };
 
 /* Note: On DVB-S, frequency is divided by 1000 */
-static const struct parse_table sys_dvbs_table[] = {
+static const struct dvb_parse_table sys_dvbs_table[] = {
 	{ DTV_FREQUENCY, NULL, 0 },
 	{ DTV_POLARIZATION, PTABLE(channel_parse_polarization) },
 	{ DTV_SYMBOL_RATE, NULL, 0 },
 	{ DTV_INNER_FEC, PTABLE(channel_parse_code_rate) },
 };
 
-static const struct parse_table sys_dvbt_table[] = {
+static const struct dvb_parse_table sys_dvbs2_table[] = {
+	{ DTV_FREQUENCY, NULL, 0 },
+	{ DTV_POLARIZATION, PTABLE(channel_parse_polarization) },
+	{ DTV_SYMBOL_RATE, NULL, 0 },
+	{ DTV_INNER_FEC, PTABLE(channel_parse_code_rate) },
+	{ DTV_ROLLOFF, PTABLE(channel_parse_rolloff) },
+	{ DTV_MODULATION, PTABLE(channel_parse_modulation) },
+	{ DTV_STREAM_ID, NULL, 0, 0, 1, 0 },
+	{ DTV_PLS_CODE, NULL, 0, 0, 1, -1 },
+	{ DTV_PLS_MODE, NULL, 0, 0, 1, -1 },
+};
+
+static const struct dvb_parse_table sys_dvbt_table[] = {
 	{ DTV_FREQUENCY, NULL, 0 },
 	{ DTV_BANDWIDTH_HZ, PTABLE(channel_parse_bandwidth) },
 	{ DTV_CODE_RATE_HP, PTABLE(channel_parse_code_rate) },
@@ -136,9 +157,21 @@ static const struct parse_table sys_dvbt_table[] = {
 	{ DTV_HIERARCHY, PTABLE(channel_parse_hierarchy) },
 };
 
-const struct parse_file channel_file_format = {
+static const struct dvb_parse_table sys_dvbt2_table[] = {
+	{ DTV_FREQUENCY, NULL, 0 },
+	{ DTV_BANDWIDTH_HZ, PTABLE(channel_parse_bandwidth) },
+	{ DTV_CODE_RATE_HP, PTABLE(channel_parse_code_rate) },
+	{ DTV_CODE_RATE_LP, PTABLE(channel_parse_code_rate) },
+	{ DTV_MODULATION, PTABLE(channel_parse_modulation) },
+	{ DTV_TRANSMISSION_MODE, PTABLE(channel_parse_trans_mode) },
+	{ DTV_GUARD_INTERVAL, PTABLE(channel_parse_guard_interval) },
+	{ DTV_HIERARCHY, PTABLE(channel_parse_hierarchy) },
+	{ DTV_STREAM_ID, NULL, 0, 0, 1, -1 },
+};
+
+const struct dvb_parse_file channel_file_format = {
 	.has_delsys_id = 1,
-	.delimiter = " \n",
+	.delimiter = " \n\t",
 	.formats = {
 		{
 			.id		= "A",
@@ -153,9 +186,17 @@ const struct parse_file channel_file_format = {
 			.delsys		= SYS_DVBS,
 			PTABLE(sys_dvbs_table),
 		}, {
+			.id		= "S2",
+			.delsys		= SYS_DVBS2,
+			PTABLE(sys_dvbs2_table),
+		}, {
 			.id		= "T",
 			.delsys		= SYS_DVBT,
 			PTABLE(sys_dvbt_table),
+		}, {
+			.id		= "T2",
+			.delsys		= SYS_DVBT2,
+			PTABLE(sys_dvbt2_table),
 		}, {
 			NULL, 0, NULL, 0,
 		}

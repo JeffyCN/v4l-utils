@@ -50,6 +50,7 @@ enum Option {
 	OptSetOutput = 'o',
 	OptGetParm = 'P',
 	OptSetParm = 'p',
+	OptSubset = 'r',
 	OptGetStandard = 'S',
 	OptSetStandard = 's',
 	OptGetTuner = 'T',
@@ -168,10 +169,23 @@ enum Option {
 	OptStreamUser,
 	OptStreamDmaBuf,
 	OptStreamFrom,
-	OptStreamPattern,
+	OptStreamOutPattern,
+	OptStreamOutSquare,
+	OptStreamOutBorder,
+	OptStreamOutInsertSAV,
+	OptStreamOutInsertEAV,
+	OptStreamOutHorSpeed,
+	OptStreamOutVertSpeed,
+	OptStreamOutPercFill,
+	OptStreamOutAlphaComponent,
+	OptStreamOutAlphaRedOnly,
+	OptStreamOutRGBLimitedRange,
+	OptStreamOutPixelAspect,
+	OptStreamOutVideoAspect,
 	OptStreamOutMmap,
 	OptStreamOutUser,
 	OptStreamOutDmaBuf,
+	OptListPatterns,
 	OptHelpTuner,
 	OptHelpIO,
 	OptHelpStds,
@@ -191,6 +205,8 @@ enum Option {
 extern char options[OptLast];
 extern unsigned capabilities;
 extern unsigned out_capabilities;
+extern unsigned priv_magic;
+extern unsigned out_priv_magic;
 extern bool is_multiplanar;
 extern __u32 vidcap_buftype;
 extern __u32 vidout_buftype;
@@ -319,10 +335,6 @@ void streaming_usage(void);
 void streaming_cmd(int ch, char *optarg);
 void streaming_set(int fd, int out_fd);
 void streaming_list(int fd, int out_fd);
-
-// v4l2-ctl-test-patterns.cpp
-void fill_buffer(void *buffer, struct v4l2_pix_format *pix);
-bool precalculate_bars(__u32 pixfmt, unsigned pattern);
 
 // v4l2-ctl-edid.cpp
 void edid_usage(void);

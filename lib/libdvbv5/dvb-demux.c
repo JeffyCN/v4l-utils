@@ -125,9 +125,9 @@ int dvb_set_section_filter(int dmxfd, int pid, unsigned filtsize,
 	return 0;
 }
 
-int get_pmt_pid(const char *dmxdev, int sid)
+int dvb_get_pmt_pid(int patfd, int sid)
 {
-	int patfd, count;
+	int count;
 	int pmt_pid = 0;
 	int patread = 0;
 	int section_length;
@@ -142,14 +142,8 @@ int get_pmt_pid(const char *dmxdev, int sid)
 	f.timeout = 0;
 	f.flags = DMX_IMMEDIATE_START | DMX_CHECK_CRC;
 
-	if ((patfd = open(dmxdev, O_RDWR)) < 0) {
-		perror("openening pat demux failed");
-		return -1;
-	}
-
 	if (ioctl(patfd, DMX_SET_FILTER, &f) == -1) {
 		perror("ioctl DMX_SET_FILTER failed");
-		close(patfd);
 		return -1;
 	}
 
@@ -158,7 +152,6 @@ int get_pmt_pid(const char *dmxdev, int sid)
 		count = read(patfd, buf, sizeof(buft));
 		if (count < 0) {
 		perror("read_sections: read error");
-		close(patfd);
 		return -1;
 		}
 
@@ -181,6 +174,5 @@ int get_pmt_pid(const char *dmxdev, int sid)
 		}
 	}
 
-	close(patfd);
 	return pmt_pid;
 }

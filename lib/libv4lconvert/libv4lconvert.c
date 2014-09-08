@@ -86,6 +86,10 @@ static const struct v4lconvert_pixfmt supported_src_pixfmts[] = {
 	{ V4L2_PIX_FMT_RGB565,		16,	 4,	 6,	0 },
 	{ V4L2_PIX_FMT_BGR32,		32,	 4,	 6,	0 },
 	{ V4L2_PIX_FMT_RGB32,		32,	 4,	 6,	0 },
+	{ V4L2_PIX_FMT_XBGR32,		32,	 4,	 6,	0 },
+	{ V4L2_PIX_FMT_XRGB32,		32,	 4,	 6,	0 },
+	{ V4L2_PIX_FMT_ABGR32,		32,	 4,	 6,	0 },
+	{ V4L2_PIX_FMT_ARGB32,		32,	 4,	 6,	0 },
 	/* yuv 4:2:2 formats */
 	{ V4L2_PIX_FMT_YUYV,		16,	 5,	 4,	0 },
 	{ V4L2_PIX_FMT_YVYU,		16,	 5,	 4,	0 },
@@ -1121,11 +1125,14 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 		break;
 
 	case V4L2_PIX_FMT_RGB32:
+	case V4L2_PIX_FMT_XRGB32:
+	case V4L2_PIX_FMT_ARGB32:
 		if (src_size < (width * height * 4)) {
 			V4LCONVERT_ERR("short rgb32 data frame\n");
 			errno = EPIPE;
 			result = -1;
 		}
+		src++;
 		switch (dest_pix_fmt) {
 		case V4L2_PIX_FMT_RGB24:
 			v4lconvert_rgb32_to_rgb24(src, dest, width, height, 0);
@@ -1143,6 +1150,8 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 		break;
 
 	case V4L2_PIX_FMT_BGR32:
+	case V4L2_PIX_FMT_XBGR32:
+	case V4L2_PIX_FMT_ABGR32:
 		if (src_size < (width * height * 4)) {
 			V4LCONVERT_ERR("short bgr32 data frame\n");
 			errno = EPIPE;
@@ -1657,6 +1666,21 @@ int v4lconvert_vidioc_g_ctrl(struct v4lconvert_data *data, void *arg)
 int v4lconvert_vidioc_s_ctrl(struct v4lconvert_data *data, void *arg)
 {
 	return v4lcontrol_vidioc_s_ctrl(data->control, arg);
+}
+
+int v4lconvert_vidioc_g_ext_ctrls(struct v4lconvert_data *data, void *arg)
+{
+	return v4lcontrol_vidioc_g_ext_ctrls(data->control, arg);
+}
+
+int v4lconvert_vidioc_try_ext_ctrls(struct v4lconvert_data *data, void *arg)
+{
+	return v4lcontrol_vidioc_try_ext_ctrls(data->control, arg);
+}
+
+int v4lconvert_vidioc_s_ext_ctrls(struct v4lconvert_data *data, void *arg)
+{
+	return v4lcontrol_vidioc_s_ext_ctrls(data->control, arg);
 }
 
 int v4lconvert_get_fps(struct v4lconvert_data *data)

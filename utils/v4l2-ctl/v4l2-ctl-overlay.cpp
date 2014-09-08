@@ -55,7 +55,7 @@ void overlay_usage(void)
 	       "                     used multiple times.\n"
 	       "                     The bitmap will be passed to --try/set-fmt-overlay\n"
 	       "  --get-fbuf         query the overlay framebuffer data [VIDIOC_G_FBUF]\n"
-	       "  --set-fbuf=chromakey=<b>,global_alpha=<b>,local_alpha=<b>,local_inv_alpha=<b>,fb=<fb>\n"
+	       "  --set-fbuf=chromakey=<b>,src_chromakey=<b>,global_alpha=<b>,local_alpha=<b>,local_inv_alpha=<b>,fb=<fb>\n"
 	       "		     set the overlay framebuffer [VIDIOC_S_FBUF]\n"
 	       "                     <b> is 0 or 1\n"
 	       "                     <fb> is the framebuffer device (/dev/fbX)\n"
@@ -71,6 +71,8 @@ static std::string fbufcap2s(unsigned cap)
 		s += "\t\t\tExtern Overlay\n";
 	if (cap & V4L2_FBUF_CAP_CHROMAKEY)
 		s += "\t\t\tChromakey\n";
+	if (cap & V4L2_FBUF_CAP_SRC_CHROMAKEY)
+		s += "\t\t\tSource Chromakey\n";
 	if (cap & V4L2_FBUF_CAP_GLOBAL_ALPHA)
 		s += "\t\t\tGlobal Alpha\n";
 	if (cap & V4L2_FBUF_CAP_LOCAL_ALPHA)
@@ -95,6 +97,8 @@ static std::string fbufflags2s(unsigned fl)
 		s += "\t\t\tOverlay Matches Capture/Output Size\n";
 	if (fl & V4L2_FBUF_FLAG_CHROMAKEY)
 		s += "\t\t\tChromakey\n";
+	if (fl & V4L2_FBUF_FLAG_SRC_CHROMAKEY)
+		s += "\t\t\tSource Chromakey\n";
 	if (fl & V4L2_FBUF_FLAG_GLOBAL_ALPHA)
 		s += "\t\t\tGlobal Alpha\n";
 	if (fl & V4L2_FBUF_FLAG_LOCAL_ALPHA)
@@ -179,14 +183,14 @@ struct bitfield2fmt {
 };
 
 static const struct bitfield2fmt fb_formats[] = {
-	{ 10, 5,  5, 5,  0, 5, 15, 1, V4L2_PIX_FMT_RGB555 },
+	{ 10, 5,  5, 5,  0, 5, 15, 1, V4L2_PIX_FMT_ARGB555 },
 	{ 11, 5,  5, 6,  0, 5,  0, 0, V4L2_PIX_FMT_RGB565 },
 	{  1, 5,  6, 5, 11, 5,  0, 1, V4L2_PIX_FMT_RGB555X },
 	{  0, 5,  5, 6, 11, 5,  0, 0, V4L2_PIX_FMT_RGB565X },
 	{ 16, 8,  8, 8,  0, 8,  0, 0, V4L2_PIX_FMT_BGR24 },
 	{  0, 8,  8, 8, 16, 8,  0, 0, V4L2_PIX_FMT_RGB24 },
-	{ 16, 8,  8, 8,  0, 8, 24, 8, V4L2_PIX_FMT_BGR32 },
-	{  8, 8, 16, 8, 24, 8,  0, 8, V4L2_PIX_FMT_RGB32 },
+	{ 16, 8,  8, 8,  0, 8, 24, 8, V4L2_PIX_FMT_ABGR32 },
+	{  8, 8, 16, 8, 24, 8,  0, 8, V4L2_PIX_FMT_ARGB32 },
 	{ }
 };
 
@@ -362,8 +366,14 @@ void overlay_cmd(int ch, char *optarg)
 	case OptSetFBuf:
 		subs = optarg;
 		while (*subs != '\0') {
+			const unsigned chroma_flags = V4L2_FBUF_FLAG_CHROMAKEY |
+						      V4L2_FBUF_FLAG_SRC_CHROMAKEY;
+			const unsigned alpha_flags = V4L2_FBUF_FLAG_GLOBAL_ALPHA |
+						     V4L2_FBUF_FLAG_LOCAL_ALPHA |
+						     V4L2_FBUF_FLAG_LOCAL_INV_ALPHA;
 			static const char *const subopts[] = {
 				"chromakey",
+				"src_chromakey",
 				"global_alpha",
 				"local_alpha",
 				"local_inv_alpha",
@@ -373,22 +383,31 @@ void overlay_cmd(int ch, char *optarg)
 
 			switch (parse_subopt(&subs, subopts, &value)) {
 			case 0:
+				fbuf.flags &= ~chroma_flags;
 				fbuf.flags |= strtol(value, 0L, 0) ? V4L2_FBUF_FLAG_CHROMAKEY : 0;
-				set_fbuf |= V4L2_FBUF_FLAG_CHROMAKEY;
+				set_fbuf |= chroma_flags;
 				break;
 			case 1:
-				fbuf.flags |= strtol(value, 0L, 0) ? V4L2_FBUF_FLAG_GLOBAL_ALPHA : 0;
-				set_fbuf |= V4L2_FBUF_FLAG_GLOBAL_ALPHA;
+				fbuf.flags &= ~chroma_flags;
+				fbuf.flags |= strtol(value, 0L, 0) ? V4L2_FBUF_FLAG_SRC_CHROMAKEY : 0;
+				set_fbuf |= chroma_flags;
 				break;
 			case 2:
-				fbuf.flags |= strtol(value, 0L, 0) ? V4L2_FBUF_FLAG_LOCAL_ALPHA : 0;
-				set_fbuf |= V4L2_FBUF_FLAG_LOCAL_ALPHA;
+				fbuf.flags &= ~alpha_flags;
+				fbuf.flags |= strtol(value, 0L, 0) ? V4L2_FBUF_FLAG_GLOBAL_ALPHA : 0;
+				set_fbuf |= alpha_flags;
 				break;
 			case 3:
-				fbuf.flags |= strtol(value, 0L, 0) ? V4L2_FBUF_FLAG_LOCAL_INV_ALPHA : 0;
-				set_fbuf |= V4L2_FBUF_FLAG_LOCAL_INV_ALPHA;
+				fbuf.flags &= ~alpha_flags;
+				fbuf.flags |= strtol(value, 0L, 0) ? V4L2_FBUF_FLAG_LOCAL_ALPHA : 0;
+				set_fbuf |= alpha_flags;
 				break;
 			case 4:
+				fbuf.flags &= ~alpha_flags;
+				fbuf.flags |= strtol(value, 0L, 0) ? V4L2_FBUF_FLAG_LOCAL_INV_ALPHA : 0;
+				set_fbuf |= alpha_flags;
+				break;
+			case 5:
 				fb_device = value;
 				if (fb_device[0] >= '0' && fb_device[0] <= '9' && strlen(fb_device) <= 3) {
 					static char newdev[20];
@@ -495,7 +514,8 @@ free:
 void overlay_set(int fd)
 {
 	if ((options[OptSetOverlayFormat] || options[OptTryOverlayFormat]) &&
-			(set_overlay_fmt || bitmap_rects.size() || clips.size())) {
+			(set_overlay_fmt || options[OptClearClips] || options[OptClearBitmap] ||
+			 bitmap_rects.size() || clips.size())) {
 		struct v4l2_format fmt;
 
 		memset(&fmt, 0, sizeof(fmt));
