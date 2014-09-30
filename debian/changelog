@@ -1,3 +1,9 @@
+v4l-utils (1.4.0-2) unstable; urgency=high
+
+  * Revert lazy-mmap-allocation patch (Closes: #763433)
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Tue, 30 Sep 2014 11:51:04 +0200
+
 v4l-utils (1.4.0-1) unstable; urgency=medium
 
   * Exclude instead of include packages with doc symlinks
