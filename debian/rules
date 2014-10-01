@@ -7,7 +7,7 @@ CONFIGURE_FLAGS = --with-libudev
 endif
 
 # latex generation seems to be broken
-CONFIGURE_FLAGS += --disable-doxygen-ps --disable-doxygen-pdf
+CONFIGURE_FLAGS += --enable-doxygen-man --disable-doxygen-ps --disable-doxygen-pdf
 
 %:
 	dh $@ --with autoreconf
@@ -16,7 +16,7 @@ override_dh_auto_configure:
 	dh_auto_configure -- --disable-silent-rules --with-libv4lconvertsubdir=libv4lconvert0 $(CONFIGURE_FLAGS)
 
 override_dh_auto_build-indep:
-	$(MAKE) doxygen-doc
+	$(MAKE) doxygen-run
 
 override_dh_installchangelogs:
 	dh_installchangelogs -Nlibv4l-dev -Nv4l-utils -Nqv4l2 ChangeLog
