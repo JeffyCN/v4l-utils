@@ -1,6 +1,5 @@
 /*
- * Copyright (c) 2011-2012 - Mauro Carvalho Chehab
- * Copyright (c) 2012 - Andre Roth <neolynx@gmail.com>
+ * Copyright (c) 2013 - Andre Roth <neolynx@gmail.com>
  *
  * This program is free software; you can redistribute it and/or
  * modify it under the terms of the GNU General Public License
@@ -19,33 +18,27 @@
  *
  */
 
-#ifndef _DESC_SERVICE_LIST_H
-#define _DESC_SERVICE_LIST_H
-
 #include <libdvbv5/descriptors.h>
+#include <libdvbv5/dvb-fe.h>
 
-struct dvb_desc_service_list_table {
-	uint16_t service_id;
-	uint8_t service_type;
-} __attribute__((packed));
-
-struct dvb_desc_service_list {
-	DVB_DESC_HEADER();
-
-	//struct dvb_desc_service_list_table services[];
-} __attribute__((packed));
-
-struct dvb_v5_fe_parms;
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-int dvb_desc_service_list_init (struct dvb_v5_fe_parms *parms, const uint8_t *buf, struct dvb_desc *desc);
-void dvb_desc_service_list_print(struct dvb_v5_fe_parms *parms, const struct dvb_desc *desc);
-
-#ifdef __cplusplus
+int dvb_desc_service_location_init(struct dvb_v5_fe_parms *parms, const uint8_t *buf, struct dvb_desc *desc)
+{
+	return -1;
 }
-#endif
 
-#endif
+void dvb_desc_service_location_print(struct dvb_v5_fe_parms *parms, const struct dvb_desc *desc)
+{
+}
+
+void dvb_desc_service_location_free(struct dvb_desc *desc)
+{
+}
+
+int dvb_desc_service_list_init(struct dvb_v5_fe_parms *parms, const uint8_t *buf, struct dvb_desc *desc)
+{
+	return -1;
+}
+
+void dvb_desc_service_list_print(struct dvb_v5_fe_parms *parms, const struct dvb_desc *desc)
+{
+}

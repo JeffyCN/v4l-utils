@@ -19,6 +19,18 @@
  *
  */
 
+/**
+ * @file crc32.h
+ * @ingroup ancillary
+ * @brief Provides ancillary code to calculate DVB crc32 checksum
+ * @copyright GNU General Public License version 2 (GPLv2)
+ * @author Mauro Carvalho Chehab
+ * @author Andre Roth
+ *
+ * @par Bug Report
+ * Please submit bug reports and patches to linux-media@vger.kernel.org
+ */
+
 #ifndef _CRC32_H
 #define _CRC32_H
 
@@ -29,6 +41,14 @@
 extern "C" {
 #endif
 
+/** @brief Calculates the crc-32 as defined at the MPEG-TS specs
+ * @ingroup ancillary
+ *
+ * @param data		Pointer to the buffer to be checked
+ * @param datalen	Length of the buffer
+ * @param crc		Initial value for the crc checksum. To calculate the
+ *			checksum of the entire packet at once, use 0xFFFFFFFF
+ */
 uint32_t dvb_crc32(uint8_t *data, size_t datalen, uint32_t crc);
 
 #ifdef __cplusplus

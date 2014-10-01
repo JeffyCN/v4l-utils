@@ -23,6 +23,7 @@
 #include <argp.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <unistd.h>
 
 #define PROGRAM_NAME	"dvb-fe-tool"
 
@@ -39,7 +40,11 @@ static const struct argp_option options[] = {
 	{"adapter",	'a',	"ADAPTER",	0,	"dvb adapter", 0},
 	{"frontend",	'f',	"FRONTEND",	0,	"dvb frontend", 0},
 	{"set-delsys",	'd',	"PARAMS",	0,	"set delivery system", 0},
+	{"femon",	'm',	0,		0,	"monitors frontend stats on an streaming frontend", 0},
+	{"acoustical",	'A',	0,		0,	"bips if signal quality is good. Also enables femon mode. Please notice that console bip should be enabled on your wm.", 0},
+#if 0 /* Currently not implemented */
 	{"set",		's',	"PARAMS",	0,	"set frontend", 0},
+#endif
 	{"get",		'g',	0,		0,	"get frontend", 0},
 	{"dvbv3",	'3',	0,		0,	"Use DVBv3 only", 0},
 	{ 0, 0, 0, 0, 0, 0 }
@@ -49,9 +54,18 @@ static int adapter = 0;
 static int frontend = 0;
 static unsigned get = 0;
 static char *set_params = NULL;
-static int verbose = 1;		/* FIXME */
+static int verbose = 0;
 static int dvbv3 = 0;
 static int delsys = 0;
+static int femon = 0;
+static int acoustical = 0;
+
+#define PERROR(x...)                                                    \
+	do {                                                            \
+		fprintf(stderr, "ERROR: ");                             \
+		fprintf(stderr, x);                                     \
+		fprintf(stderr, " (%s)\n", strerror(errno));		\
+	} while (0)
 
 static error_t parse_opt(int k, char *arg, struct argp_state *state)
 {
@@ -67,9 +81,18 @@ static error_t parse_opt(int k, char *arg, struct argp_state *state)
 		if (delsys < 0)
 			return ARGP_ERR_UNKNOWN;
 		break;
+	case 'm':
+		femon++;
+		break;
+	case 'A':
+		femon++;
+		acoustical++;
+		break;
+#if 0
 	case 's':
 		set_params = arg;
 		break;
+#endif
 	case 'g':
 		get++;
 		break;
@@ -91,13 +114,134 @@ static struct argp argp = {
 	.doc = doc,
 };
 
+static int print_frontend_stats(FILE *fd,
+				struct dvb_v5_fe_parms *parms)
+{
+	char buf[512], *p;
+	int rc, i, len, show, n_status_lines = 0;
+
+	rc = dvb_fe_get_stats(parms);
+	if (rc) {
+		PERROR("dvb_fe_get_stats failed");
+		return -1;
+	}
+
+	p = buf;
+	len = sizeof(buf);
+	dvb_fe_snprintf_stat(parms,  DTV_STATUS, NULL, 0, &p, &len, &show);
+
+	for (i = 0; i < MAX_DTV_STATS; i++) {
+		show = 1;
+
+		dvb_fe_snprintf_stat(parms, DTV_QUALITY, "Quality",
+				     i, &p, &len, &show);
+
+		dvb_fe_snprintf_stat(parms, DTV_STAT_SIGNAL_STRENGTH, "Signal",
+				     i, &p, &len, &show);
+
+		dvb_fe_snprintf_stat(parms, DTV_STAT_CNR, "C/N",
+				     i, &p, &len, &show);
+
+		dvb_fe_snprintf_stat(parms, DTV_STAT_ERROR_BLOCK_COUNT, "UCB",
+				     i,  &p, &len, &show);
+
+		dvb_fe_snprintf_stat(parms, DTV_BER, "postBER",
+				     i,  &p, &len, &show);
+
+		dvb_fe_snprintf_stat(parms, DTV_PRE_BER, "preBER",
+				     i,  &p, &len, &show);
+
+		dvb_fe_snprintf_stat(parms, DTV_PER, "PER",
+				     i,  &p, &len, &show);
+		if (p != buf) {
+			if (isatty(fileno(fd))) {
+				enum dvb_quality qual;
+				int color;
+
+				qual = dvb_fe_retrieve_quality(parms, 0);
+
+				switch (qual) {
+				case DVB_QUAL_POOR:
+					color = 31;
+					break;
+				case DVB_QUAL_OK:
+					color = 36;
+					break;
+				case DVB_QUAL_GOOD:
+					color = 32;
+					break;
+				case DVB_QUAL_UNKNOWN:
+				default:
+					color = 0;
+					break;
+				}
+				fprintf(fd, "\033[%dm", color);
+				/*
+				 * It would be great to change the BELL
+				 * tone depending on the quality. The legacy
+				 * femon used to to that, but this doesn't
+				 * work anymore with modern Linux distros.
+				 *
+				 * So, just print a bell if quality is good.
+				 *
+				 * The console audio should be enabled
+				 * at the window manater for this to
+				 * work.
+				 */
+				if (acoustical) {
+					if (qual == DVB_QUAL_GOOD)
+						fprintf(fd, "\a");
+				}
+			}
+
+			if (n_status_lines)
+				fprintf(fd, "\t%s\n", buf);
+			else
+				fprintf(fd, "%s\n", buf);
+
+			n_status_lines++;
+
+			p = buf;
+			len = sizeof(buf);
+		}
+	}
+
+	fflush(fd);
+
+	return 0;
+}
+
+static void get_show_stats(struct dvb_v5_fe_parms *parms)
+{
+	int rc;
+
+	do {
+		rc = dvb_fe_get_stats(parms);
+		if (!rc)
+			print_frontend_stats(stderr, parms);
+		usleep(1000000);
+	} while (1);
+}
+
 int main(int argc, char *argv[])
 {
 	struct dvb_v5_fe_parms *parms;
+	int fe_flags = O_RDWR;
 
 	argp_parse(&argp, argc, argv, 0, 0, 0);
 
-	parms = dvb_fe_open(adapter, frontend, verbose, dvbv3);
+	/*
+	 * If called without any option, be verbose, to print the
+	 * DVB frontend information.
+	 */
+	if (!get && !delsys && !set_params && !femon)
+		verbose++;
+
+	if (!delsys && !set_params)
+		fe_flags = O_RDONLY;
+
+	parms = dvb_fe_open_flags(adapter, frontend, verbose, dvbv3,
+				  NULL, fe_flags);
 	if (!parms)
 		return -1;
 
@@ -105,6 +249,7 @@ int main(int argc, char *argv[])
 		printf("Changing delivery system to: %s\n",
 			delivery_system_name[delsys]);
 		dvb_set_sys(parms, delsys);
+		goto ret;
 	}
 
 #if 0
@@ -116,6 +261,10 @@ int main(int argc, char *argv[])
 		dvb_fe_prt_parms(parms);
 	}
 
+	if (femon)
+		get_show_stats(parms);
+
+ret:
 	dvb_fe_close(parms);
 
 	return 0;

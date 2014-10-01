@@ -125,10 +125,11 @@ DIST_COMMON = $(top_srcdir)/aminclude.am $(srcdir)/Makefile.in \
 subdir = .
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/ac_define_dir.m4 \
+	$(top_srcdir)/m4/ax_prog_doxygen.m4 \
 	$(top_srcdir)/m4/libtool.m4 $(top_srcdir)/m4/ltoptions.m4 \
 	$(top_srcdir)/m4/ltsugar.m4 $(top_srcdir)/m4/ltversion.m4 \
 	$(top_srcdir)/m4/lt~obsolete.m4 $(top_srcdir)/m4/mode_t.m4 \
-	$(top_srcdir)/acinclude.m4 $(top_srcdir)/configure.ac
+	$(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 am__CONFIG_DISTCLEAN_FILES = config.status config.cache config.log \
@@ -272,7 +273,6 @@ DX_DOXYGEN = @DX_DOXYGEN@
 DX_DVIPS = @DX_DVIPS@
 DX_EGREP = @DX_EGREP@
 DX_ENV = @DX_ENV@
-DX_FLAG_DX_CURRENT_FEATURE = @DX_FLAG_DX_CURRENT_FEATURE@
 DX_FLAG_chi = @DX_FLAG_chi@
 DX_FLAG_chm = @DX_FLAG_chm@
 DX_FLAG_doc = @DX_FLAG_doc@
@@ -431,7 +431,9 @@ udevrulesdir = @udevrulesdir@
 AUTOMAKE_OPTIONS = foreign
 ACLOCAL_AMFLAGS = -I m4
 SUBDIRS = lib $(am__append_1)
-EXTRA_DIST = android-config.h doxygen_libdvbv5.cfg include COPYING.libv4l README.libv4l README.lib-multi-threading
+EXTRA_DIST = android-config.h doxygen_libdvbv5.cfg include COPYING.libv4l README.libv4l README.lib-multi-threading TODO.libdvbv5 \
+        doc/libdvbv5-index.doc
+
 @DX_COND_doc_TRUE@@DX_COND_html_TRUE@DX_CLEAN_HTML = @DX_DOCDIR@/html
 @DX_COND_chm_TRUE@@DX_COND_doc_TRUE@DX_CLEAN_CHM = @DX_DOCDIR@/chm
 @DX_COND_chi_TRUE@@DX_COND_chm_TRUE@@DX_COND_doc_TRUE@DX_CLEAN_CHI = @DX_DOCDIR@/@PACKAGE@.chi
