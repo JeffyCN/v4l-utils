@@ -15,7 +15,8 @@ CONFIGURE_FLAGS += --enable-doxygen-man --disable-doxygen-ps --disable-doxygen-p
 override_dh_auto_configure:
 	dh_auto_configure -- --disable-silent-rules --with-libv4lconvertsubdir=libv4lconvert0 $(CONFIGURE_FLAGS)
 
-override_dh_auto_build-indep:
+override_dh_auto_build:
+	dh_auto_build
 	$(MAKE) doxygen-run
 
 override_dh_installchangelogs:
