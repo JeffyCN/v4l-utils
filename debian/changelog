@@ -1,3 +1,9 @@
+v4l-utils (1.5.90-2) experimental; urgency=medium
+
+  * Always run doxygen during build
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Wed, 01 Oct 2014 12:54:37 +0200
+
 v4l-utils (1.5.90-1) experimental; urgency=medium
 
   * Imported Upstream version 1.5.90
