@@ -4,7 +4,7 @@ Forwarded: not-needed
 
 --- a/doxygen_libdvbv5.cfg
 +++ b/doxygen_libdvbv5.cfg
-@@ -1359,7 +1359,7 @@
+@@ -1394,7 +1394,7 @@
  # The default value is: NO.
  # This tag requires that the tag GENERATE_HTML is set to YES.
  
