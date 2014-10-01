@@ -23,11 +23,13 @@
 
 /**
  * @file dvb-sat.h
+ * @ingroup satellite
  * @brief Provides interfaces to deal with DVB Satellite systems.
  * @copyright GNU General Public License version 2 (GPLv2)
  * @author Mauro Carvalho Chehab
  *
- * Please submit bug report and patches to linux-media@vger.kernel.org
+ * @par Bug Report
+ * Please submit bug reports and patches to linux-media@vger.kernel.org
  */
 
 /*
@@ -37,6 +39,7 @@
 /**
  * @struct dvbsat_freqrange
  * @brief Defines a frequency range used by Satellite
+ * @ingroup satellite
  *
  * @param low	low frequency, in kHz
  * @param high	high frequency, in kHz
@@ -48,6 +51,7 @@ struct dvbsat_freqrange {
 /**
  * @struct dvb_sat_lnb
  * @brief Stores the information of a LNBf
+ * @ingroup satellite
  *
  * @param name		long name of the LNBf type
  * @param alias		short name for the LNBf type
@@ -80,14 +84,14 @@ struct dvb_sat_lnb {
 struct dvb_v5_fe_parms;
 
 #ifdef __cplusplus
-extern "C"
+extern "C" {
 #endif
 
 /* From libsat.c */
 
 /**
- * @fn int dvb_sat_search_lnb(const char *name)
  * @brief search for a LNBf entry
+ * @ingroup satellite
  *
  * @param name	name of the LNBf entry to seek.
  *
@@ -99,18 +103,18 @@ extern "C"
 int dvb_sat_search_lnb(const char *name);
 
 /**
- * @fn int dvb_print_lnb(int i)
  * @brief prints the contents of a LNBf entry at STDOUT.
+ * @ingroup satellite
  *
- * @param i		index for the entry
+ * @param index		index for the entry
  *
  * @return returns -1 if the index is out of range, zero otherwise.
  */
-int dvb_print_lnb(int i);
+int dvb_print_lnb(int index);
 
 /**
- * @fn void dvb_print_all_lnb()
  * @brief Prints all LNBf entries at STDOUT.
+ * @ingroup satellite
  *
  * This function doesn't return anything. Internally, it calls dvb_print_lnb()
  * for all entries inside its LNBf database.
@@ -118,18 +122,18 @@ int dvb_print_lnb(int i);
 void dvb_print_all_lnb(void);
 
 /**
- * @fn const struct dvb_sat_lnb *dvb_sat_get_lnb(int i)
  * @brief gets a LNBf entry at its internal database
+ * @ingroup satellite
  *
- * @param i		index for the entry.
+ * @param index		index for the entry.
  *
  * @return returns NULL if not found, of a struct dvb_sat_lnb pointer otherwise.
  */
-const struct dvb_sat_lnb *dvb_sat_get_lnb(int i);
+const struct dvb_sat_lnb *dvb_sat_get_lnb(int index);
 
 /**
- * @fn int dvb_sat_set_parms(struct dvb_v5_fe_parms *parms)
  * @brief sets the satellite parameters
+ * @ingroup satellite
  *
  * @param parms	struct dvb_v5_fe_parms pointer.
  *

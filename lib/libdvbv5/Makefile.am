@@ -24,7 +24,6 @@ otherinclude_HEADERS = \
 	../include/libdvbv5/desc_t2_delivery.h \
 	../include/libdvbv5/desc_service.h \
 	../include/libdvbv5/desc_frequency_list.h \
-	../include/libdvbv5/desc_service_list.h \
 	../include/libdvbv5/desc_event_short.h \
 	../include/libdvbv5/desc_event_extended.h \
 	../include/libdvbv5/desc_atsc_service_location.h \
@@ -34,7 +33,6 @@ otherinclude_HEADERS = \
 	../include/libdvbv5/desc_logical_channel.h \
 	../include/libdvbv5/desc_ts_info.h \
 	../include/libdvbv5/desc_partial_reception.h \
-	../include/libdvbv5/desc_service_location.h \
 	../include/libdvbv5/desc_ca.h \
 	../include/libdvbv5/desc_ca_identifier.h \
 	../include/libdvbv5/nit.h \
@@ -56,9 +54,11 @@ noinst_LTLIBRARIES = libdvbv5.la
 endif
 
 libdvbv5_la_SOURCES = \
+        compat-soname.c \
 	crc32.c \
 	dvb-legacy-channel-format.c \
 	dvb-zap-format.c \
+	dvb-vdr-format.c \
 	dvb-v5.c	 \
 	dvb-v5.h	 \
 	parse_string.c	 \
@@ -93,7 +93,6 @@ libdvbv5_la_SOURCES = \
 	descriptors/desc_t2_delivery.c		\
 	descriptors/desc_service.c		\
 	descriptors/desc_frequency_list.c	\
-	descriptors/desc_service_list.c		\
 	descriptors/desc_event_short.c		\
 	descriptors/desc_event_extended.c	\
 	descriptors/desc_atsc_service_location.c \
@@ -103,7 +102,6 @@ libdvbv5_la_SOURCES = \
 	descriptors/desc_logical_channel.c	\
 	descriptors/desc_ts_info.c		\
 	descriptors/desc_partial_reception.c	\
-	descriptors/desc_service_location.c	\
 	descriptors/desc_ca.c			\
 	descriptors/desc_ca_identifier.c
 

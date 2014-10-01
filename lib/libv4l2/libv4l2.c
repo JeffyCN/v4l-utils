@@ -84,6 +84,8 @@
 #define V4L2_MMAP_OFFSET_MAGIC      0xABCDEF00u
 
 static void v4l2_adjust_src_fmt_to_fps(int index, int fps);
+static void v4l2_set_src_and_dest_format(int index,
+		struct v4l2_format *src_fmt, struct v4l2_format *dest_fmt);
 
 static pthread_mutex_t v4l2_open_mutex = PTHREAD_MUTEX_INITIALIZER;
 static struct v4l2_dev_info devices[V4L2_MAX_DEVICES] = {
@@ -96,24 +98,9 @@ static int devices_used;
 
 static int v4l2_ensure_convert_mmap_buf(int index)
 {
-	long page_size;
-
 	if (devices[index].convert_mmap_buf != MAP_FAILED) {
 		return 0;
 	}
-
-	page_size = sysconf(_SC_PAGESIZE);
-	if (page_size < 0) {
-		int saved_err = errno;
-		V4L2_LOG_ERR("unable to retrieve page size\n");
-		errno = saved_err;
-		return -1;
-	}
-
-	/* round up to full page size */
-	devices[index].convert_mmap_frame_size =
-		(((devices[index].dest_fmt.fmt.pix.sizeimage + page_size - 1) /
-		page_size) * page_size);
 
 	devices[index].convert_mmap_buf_size =
 		devices[index].convert_mmap_frame_size * devices[index].no_frames;
@@ -125,7 +112,6 @@ static int v4l2_ensure_convert_mmap_buf(int index)
 			-1, 0);
 
 	if (devices[index].convert_mmap_buf == MAP_FAILED) {
-		devices[index].convert_mmap_frame_size = 0;
 		devices[index].convert_mmap_buf_size = 0;
 
 		int saved_err = errno;
@@ -673,6 +659,7 @@ int v4l2_fd_open(int fd, int v4l2_flags)
 	void *plugin_library;
 	void *dev_ops_priv;
 	const struct libv4l_dev_ops *dev_ops;
+	long page_size;
 
 	v4l2_plugin_init(fd, &plugin_library, &dev_ops_priv, &dev_ops);
 
@@ -682,6 +669,17 @@ int v4l2_fd_open(int fd, int v4l2_flags)
 		lfname = getenv("LIBV4L2_LOG_FILENAME");
 		if (lfname)
 			v4l2_log_file = fopen(lfname, "w");
+	}
+
+	/* Get page_size (for mmap emulation) */
+	page_size = sysconf(_SC_PAGESIZE);
+	if (page_size < 0) {
+		int saved_err = errno;
+		V4L2_LOG_ERR("unable to retrieve page size: %s\n",
+			     strerror(errno));
+		v4l2_plugin_cleanup(plugin_library, dev_ops_priv, dev_ops);
+		errno = saved_err;
+		return -1;
 	}
 
 	/* check that this is a v4l2 device */
@@ -761,18 +759,11 @@ no_capture:
 	    (parm.parm.capture.capability & V4L2_CAP_TIMEPERFRAME))
 		devices[index].flags |= V4L2_SUPPORTS_TIMEPERFRAME;
 	devices[index].open_count = 1;
-	devices[index].src_fmt = fmt;
+	devices[index].page_size = page_size;
+	devices[index].src_fmt  = fmt;
 	devices[index].dest_fmt = fmt;
-
-	/* When a user does a try_fmt with the current dest_fmt and the dest_fmt
-	   is a supported one we will align the resolution (see try_fmt for why).
-	   Do the same here now, so that a try_fmt on the result of a get_fmt done
-	   immediately after open leaves the fmt unchanged. */
-	if (v4lconvert_supported_dst_format(
-				devices[index].dest_fmt.fmt.pix.pixelformat)) {
-		devices[index].dest_fmt.fmt.pix.width &= ~7;
-		devices[index].dest_fmt.fmt.pix.height &= ~1;
-	}
+	v4l2_set_src_and_dest_format(index, &devices[index].src_fmt,
+				     &devices[index].dest_fmt);
 
 	pthread_mutex_init(&devices[index].stream_lock, NULL);
 
@@ -781,7 +772,6 @@ no_capture:
 	devices[index].convert = convert;
 	devices[index].convert_mmap_buf = MAP_FAILED;
 	devices[index].convert_mmap_buf_size = 0;
-	devices[index].convert_mmap_frame_size = 0;
 	for (i = 0; i < V4L2_MAX_NO_FRAMES; i++) {
 		devices[index].frame_pointers[i] = MAP_FAILED;
 		devices[index].frame_map_count[i] = 0;
@@ -859,7 +849,6 @@ int v4l2_close(int fd)
 		}
 		devices[index].convert_mmap_buf = MAP_FAILED;
 		devices[index].convert_mmap_buf_size = 0;
-		devices[index].convert_mmap_frame_size = 0;
 	}
 	v4lconvert_destroy(devices[index].convert);
 	free(devices[index].readbuf);
@@ -916,7 +905,6 @@ static int v4l2_check_buffer_change_ok(int index)
 			devices[index].convert_mmap_buf_size);
 	devices[index].convert_mmap_buf = MAP_FAILED;
 	devices[index].convert_mmap_buf_size = 0;
-	devices[index].convert_mmap_frame_size = 0;
 
 	if (devices[index].flags & V4L2_STREAM_CONTROLLED_BY_READ) {
 		V4L2_LOG("deactivating read-stream for settings change\n");
@@ -950,6 +938,18 @@ static int v4l2_pix_fmt_identical(struct v4l2_format *a, struct v4l2_format *b)
 static void v4l2_set_src_and_dest_format(int index,
 		struct v4l2_format *src_fmt, struct v4l2_format *dest_fmt)
 {
+	/*
+	 * When a user does a try_fmt with the current dest_fmt and the
+	 * dest_fmt is a supported one we will align the resolution (see
+	 * libv4lconvert_try_fmt). We do this here too, in case dest_fmt gets
+	 * set without having gone through libv4lconvert_try_fmt, so that a
+	 * try_fmt on the result of a get_fmt always returns the same result.
+	 */
+	if (v4lconvert_supported_dst_format(dest_fmt->fmt.pix.pixelformat)) {
+		dest_fmt->fmt.pix.width &= ~7;
+		dest_fmt->fmt.pix.height &= ~1;
+	}
+
 	/* Sigh some drivers (pwc) do not properly reflect what one really gets
 	   after a s_fmt in their try_fmt answer. So update dest format (which we
 	   report as result from s_fmt / g_fmt to the app) with all info from the src
@@ -960,10 +960,15 @@ static void v4l2_set_src_and_dest_format(int index,
 	if (v4l2_pix_fmt_compat(src_fmt, dest_fmt)) {
 		dest_fmt->fmt.pix.bytesperline = src_fmt->fmt.pix.bytesperline;
 		dest_fmt->fmt.pix.sizeimage = src_fmt->fmt.pix.sizeimage;
-	}
+	} else
+		v4lconvert_fixup_fmt(dest_fmt);
 
 	devices[index].src_fmt = *src_fmt;
 	devices[index].dest_fmt = *dest_fmt;
+	/* round up to full page size */
+	devices[index].convert_mmap_frame_size =
+		(((dest_fmt->fmt.pix.sizeimage + devices[index].page_size - 1)
+		/ devices[index].page_size) * devices[index].page_size);
 }
 
 static int v4l2_s_fmt(int index, struct v4l2_format *dest_fmt)
@@ -1245,6 +1250,8 @@ no_capture_request:
 	case VIDIOC_S_INPUT:
 	case VIDIOC_S_DV_TIMINGS: {
 		struct v4l2_format src_fmt = { 0 };
+		unsigned int orig_dest_pixelformat =
+			devices[index].dest_fmt.fmt.pix.pixelformat;
 
 		result = devices[index].dev_ops->ioctl(
 				devices[index].dev_ops_priv,
@@ -1273,9 +1280,10 @@ no_capture_request:
 		/* The fmt has been changed, remember the new format ... */
 		devices[index].src_fmt  = src_fmt;
 		devices[index].dest_fmt = src_fmt;
+		v4l2_set_src_and_dest_format(index, &devices[index].src_fmt,
+					     &devices[index].dest_fmt);
 		/* and try to restore the last set destination pixelformat. */
-		src_fmt.fmt.pix.pixelformat =
-			devices[index].dest_fmt.fmt.pix.pixelformat;
+		src_fmt.fmt.pix.pixelformat = orig_dest_pixelformat;
 		result = v4l2_s_fmt(index, &src_fmt);
 		if (result) {
 			V4L2_LOG_WARN("restoring destination pixelformat after %s failed\n",
