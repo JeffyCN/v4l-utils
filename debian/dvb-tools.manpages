@@ -1,4 +1,4 @@
-doxygen-doc/man/man3/dvbv5-scan.3
-doxygen-doc/man/man3/dvbv5-tools.3
-doxygen-doc/man/man3/dvbv5-zap.3
-doxygen-doc/man/man3/dvb-fe-tool.3
+utils/dvb/dvbv5-scan.1
+utils/dvb/dvbv5-zap.1
+utils/dvb/dvb-format-convert.1
+utils/dvb/dvb-fe-tool.1
