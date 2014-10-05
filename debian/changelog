@@ -1,3 +1,10 @@
+v4l-utils (1.6.0-1) unstable; urgency=medium
+
+  * Imported Upstream version 1.6.0
+  * Fix manpage errors reported by lintian
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Sun, 05 Oct 2014 17:14:55 +0200
+
 v4l-utils (1.5.91-1) experimental; urgency=medium
 
   * Imported Upstream version 1.5.91
