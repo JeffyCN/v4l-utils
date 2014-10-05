@@ -1,3 +1,11 @@
+v4l-utils (1.5.91-1) experimental; urgency=medium
+
+  * Imported Upstream version 1.5.91
+  * Remove upstream applied patches
+  * Replace doxygen generated manpages
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Sun, 05 Oct 2014 16:01:27 +0200
+
 v4l-utils (1.5.90-2) experimental; urgency=medium
 
   * Always run doxygen during build
