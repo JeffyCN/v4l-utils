@@ -59,13 +59,13 @@ struct dvb_v5_fe_parms_priv {
 	struct dvb_v5_fe_parms		p;
 
 	int				fd;
+	int				fe_flags;	/* open() flags */
 	char				*fname;
 	int				n_props;
 	struct dtv_property		dvb_prop[DTV_MAX_COMMAND];
 	struct dvb_v5_stats		stats;
 
 	/* Satellite specific stuff */
-	const struct dvb_sat_lnb       	*lnb;
 	int				high_band;
 	unsigned			freq_offset;
 };

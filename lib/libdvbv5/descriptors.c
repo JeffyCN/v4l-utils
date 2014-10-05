@@ -45,7 +45,6 @@
 #include <libdvbv5/desc_terrestrial_delivery.h>
 #include <libdvbv5/desc_isdbt_delivery.h>
 #include <libdvbv5/desc_service.h>
-#include <libdvbv5/desc_service_list.h>
 #include <libdvbv5/desc_frequency_list.h>
 #include <libdvbv5/desc_event_short.h>
 #include <libdvbv5/desc_event_extended.h>
@@ -138,7 +137,7 @@ int dvb_desc_parse(struct dvb_v5_fe_parms *parms, const uint8_t *buf,
 			dvb_log("%sdescriptor %s type 0x%02x, size %d",
 				dvb_descriptors[desc_type].init ? "" : "Not handled ",
 				dvb_descriptors[desc_type].name, desc_type, desc_len);
-			dvb_hexdump(parms, "content: ", ptr + 2, desc_len);
+			dvb_hexdump(parms, "content: ", ptr, desc_len);
 		}
 
 		dvb_desc_init_func init = dvb_descriptors[desc_type].init;
@@ -457,13 +456,6 @@ const struct dvb_descriptor dvb_descriptors[] = {
 		.print = dvb_desc_network_name_print,
 		.free  = dvb_desc_network_name_free,
 		.size  = sizeof(struct dvb_desc_network_name),
-	},
-	[service_list_descriptor] = {
-		.name  = "service_list_descriptor",
-		.init  = dvb_desc_service_list_init,
-		.print = dvb_desc_service_list_print,
-		.free  = NULL,
-		.size  = sizeof(struct dvb_desc_service_list),
 	},
 	[stuffing_descriptor] = {
 		.name  = "stuffing_descriptor",
@@ -1345,7 +1337,7 @@ void dvb_hexdump(struct dvb_v5_fe_parms *parms, const char *prefix, const unsign
 			strncat(hex, " ", sizeof(hex) - 1);
 		if (j == 16) {
 			ascii[j] = '\0';
-			dvb_log("%s%s  %s", prefix, hex, ascii);
+			dvb_loginfo("%s%s  %s", prefix, hex, ascii);
 			j = 0;
 			hex[0] = '\0';
 		}

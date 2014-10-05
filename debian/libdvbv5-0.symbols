@@ -92,10 +92,12 @@ libdvbv5.so.0 libdvbv5-0 #MINVER#
  dvb_fe_lnb_high_voltage@Base 1.4.0
  dvb_fe_open2@Base 1.4.0
  dvb_fe_open@Base 1.4.0
+ dvb_fe_open_flags@Base 1.5.90
  dvb_fe_prt_parms@Base 1.4.0
  dvb_fe_retrieve_ber@Base 1.4.0
  dvb_fe_retrieve_parm@Base 1.4.0
  dvb_fe_retrieve_per@Base 1.4.0
+ dvb_fe_retrieve_quality@Base 1.5.90
  dvb_fe_retrieve_stats@Base 1.4.0
  dvb_fe_retrieve_stats_layer@Base 1.4.0
  dvb_fe_sec_tone@Base 1.4.0
@@ -180,6 +182,7 @@ libdvbv5.so.0 libdvbv5-0 #MINVER#
  dvb_write_file@Base 1.4.0
  dvb_write_file_format@Base 1.4.0
  dvb_write_format_oneline@Base 1.4.0
+ dvb_write_format_vdr@Base 1.5.90
  dvbc_fec_table@Base 1.4.0
  dvbc_modulation_table@Base 1.4.0
  dvbs_dvbc_dvbs_freq_inner@Base 1.4.0

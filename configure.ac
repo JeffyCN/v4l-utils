@@ -3,7 +3,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.59)
-AC_INIT([v4l-utils],[1.4.0])
+AC_INIT([v4l-utils],[1.5.91])
 
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIR([m4])
@@ -46,6 +46,13 @@ AC_CONFIG_FILES([Makefile
 	lib/libv4l2rds/libv4l2rds.pc
 	utils/media-ctl/libmediactl.pc
 	utils/media-ctl/libv4l2subdev.pc
+
+	utils/qv4l2/qv4l2.1
+	utils/keytable/ir-keytable.1
+	utils/dvb/dvb-fe-tool.1
+	utils/dvb/dvbv5-scan.1
+	utils/dvb/dvb-format-convert.1
+	utils/dvb/dvbv5-zap.1
 ])
 
 AM_INIT_AUTOMAKE([1.9 subdir-objects no-dist-gzip dist-bzip2 -Wno-portability]) # 1.10 is needed for target_LIBTOOLFLAGS
@@ -61,6 +68,7 @@ AC_PROG_LIBTOOL
 AC_PROG_MKDIR_P
 AC_PROG_LN_S
 PKG_PROG_PKG_CONFIG
+DX_DOT_FEATURE(ON)
 DX_INIT_DOXYGEN($PACKAGE_NAME, doxygen_libdvbv5.cfg)
 
 # sync-with-kernel and keytable install could make use of them

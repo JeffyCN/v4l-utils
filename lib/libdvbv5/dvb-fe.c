@@ -43,23 +43,42 @@ struct dvb_v5_fe_parms *dvb_fe_dummy()
 	if (!parms)
 		return NULL;
 	parms->p.logfunc = dvb_default_log;
+	parms->fd = -1;
+	parms->p.default_charset = "iso-8859-1";
+	parms->p.output_charset = "utf-8";
 	return &parms->p;
 }
 
-struct dvb_v5_fe_parms *dvb_fe_open(int adapter, int frontend, unsigned verbose,
-				    unsigned use_legacy_call)
+struct dvb_v5_fe_parms *dvb_fe_open(int adapter, int frontend,
+						  unsigned verbose,
+						  unsigned use_legacy_call)
 {
-  return dvb_fe_open2(adapter, frontend, verbose, use_legacy_call,
-		      dvb_default_log);
+	return dvb_fe_open_flags(adapter, frontend, verbose, use_legacy_call,
+				 NULL, O_RDWR);
+
 }
 
-struct dvb_v5_fe_parms *dvb_fe_open2(int adapter, int frontend, unsigned verbose,
-				    unsigned use_legacy_call, dvb_logfunc logfunc)
+struct dvb_v5_fe_parms *dvb_fe_open2(int adapter, int frontend,
+				    unsigned verbose, unsigned use_legacy_call,
+				    dvb_logfunc logfunc)
+{
+	return dvb_fe_open_flags(adapter, frontend, verbose, use_legacy_call,
+				 logfunc, O_RDWR);
+}
+
+struct dvb_v5_fe_parms *dvb_fe_open_flags(int adapter, int frontend,
+					  unsigned verbose,
+					  unsigned use_legacy_call,
+					  dvb_logfunc logfunc,
+					  int flags)
 {
 	int fd, i, r;
 	char *fname;
 	struct dtv_properties dtv_prop;
 	struct dvb_v5_fe_parms_priv *parms = NULL;
+
+	if (logfunc == NULL)
+		logfunc = dvb_default_log;
 
 	r = asprintf(&fname, "/dev/dvb/adapter%i/frontend%i", adapter, frontend);
 	if (r < 0) {
@@ -71,7 +90,7 @@ struct dvb_v5_fe_parms *dvb_fe_open2(int adapter, int frontend, unsigned verbose
 		return NULL;
 	}
 
-	fd = open(fname, O_RDWR, 0);
+	fd = open(fname, flags, 0);
 	if (fd == -1) {
 		logfunc(LOG_ERR, "%s while opening %s", strerror(errno), fname);
 		free(fname);
@@ -85,8 +104,9 @@ struct dvb_v5_fe_parms *dvb_fe_open2(int adapter, int frontend, unsigned verbose
 		return NULL;
 	}
 	parms->fname = fname;
-	parms->p.verbose = verbose;
 	parms->fd = fd;
+	parms->fe_flags = flags;
+	parms->p.verbose = verbose;
 	parms->p.default_charset = "iso-8859-1";
 	parms->p.output_charset = "utf-8";
 	parms->p.logfunc = logfunc;
@@ -178,7 +198,6 @@ struct dvb_v5_fe_parms *dvb_fe_open2(int adapter, int frontend, unsigned verbose
 			dvb_logerr("delivery system not detected");
 			dvb_v5_free(parms);
 			close(fd);
-			free(fname);
 			return NULL;
 		}
 	} else {
@@ -190,7 +209,6 @@ struct dvb_v5_fe_parms *dvb_fe_open2(int adapter, int frontend, unsigned verbose
 			dvb_perror("FE_GET_PROPERTY");
 			dvb_v5_free(parms);
 			close(fd);
-			free(fname);
 			return NULL;
 		}
 		parms->p.num_systems = parms->dvb_prop[0].u.buffer.len;
@@ -198,10 +216,9 @@ struct dvb_v5_fe_parms *dvb_fe_open2(int adapter, int frontend, unsigned verbose
 			parms->p.systems[i] = parms->dvb_prop[0].u.buffer.data[i];
 
 		if (parms->p.num_systems == 0) {
-			dvb_logerr("driver died while trying to set the delivery system");
+			dvb_logerr("driver returned 0 supported delivery systems!");
 			dvb_v5_free(parms);
 			close(fd);
-			free(fname);
 			return NULL;
 		}
 	}
@@ -228,7 +245,10 @@ struct dvb_v5_fe_parms *dvb_fe_open2(int adapter, int frontend, unsigned verbose
 		parms->p.current_sys = parms->p.systems[0];
 
 	/* Prepare to use the delivery system */
-	dvb_set_sys(&parms->p, parms->p.current_sys);
+	parms->n_props = dvb_add_parms_for_sys(&parms->p, parms->p.current_sys);
+
+	if ((flags & O_ACCMODE) == O_RDWR)
+		dvb_set_sys(&parms->p, parms->p.current_sys);
 
 	/*
 	 * Prepare the status struct - DVBv5.10 parameters should
@@ -1095,9 +1115,10 @@ static enum dvb_quality dvbv_fe_cnr_to_quality(struct dvb_v5_fe_parms_priv *parm
 	return qual;
 };
 
-static enum dvb_quality dvb_fe_retrieve_quality(struct dvb_v5_fe_parms_priv *parms,
-						unsigned layer)
+enum dvb_quality dvb_fe_retrieve_quality(struct dvb_v5_fe_parms *p,
+					 unsigned layer)
 {
+	struct dvb_v5_fe_parms_priv *parms = (void *)p;
 	float ber, per;
 	struct dtv_stats *cnr;
 	enum dvb_quality qual = DVB_QUAL_UNKNOWN;
@@ -1440,18 +1461,21 @@ int dvb_fe_snprintf_stat(struct dvb_v5_fe_parms *p, uint32_t cmd,
 		for (i = ARRAY_SIZE(sig_bits) - 1; i >= 0 ; i--) {
 			if ((1 << i) & status) {
 				size = snprintf(*buf, *len, "%-7s", sig_bits[i]);
+				*buf += size;
+				*len -= size;
 				break;
 			}
 		}
-		if (i < 0)
+		if (i < 0) {
 			size = snprintf(*buf, *len, "%7s", "");
-		*buf += size;
-		len -= size;
+			*buf += size;
+			*len -= size;
+		}
 
 		/* Add the status bits */
 		size = snprintf(*buf, *len, "(0x%02x)", status);
 		*buf += size;
-		len -= size;
+		*len -= size;
 
 		return initial_len - *len;
 	}
@@ -1476,7 +1500,7 @@ int dvb_fe_snprintf_stat(struct dvb_v5_fe_parms *p, uint32_t cmd,
 		scale = FE_SCALE_COUNTER;
 		break;
 	case DTV_QUALITY:
-		qual = dvb_fe_retrieve_quality(parms, layer);
+		qual = dvb_fe_retrieve_quality(&parms->p, layer);
 		if (qual == DVB_QUAL_UNKNOWN)
 			return 0;
 		break;

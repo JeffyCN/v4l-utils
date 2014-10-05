@@ -6,6 +6,7 @@ libv4lconvert.so.0 libv4lconvert0 #MINVER#
  v4lconvert_enum_fmt@Base 0.5.0
  v4lconvert_enum_frameintervals@Base 0.5.0
  v4lconvert_enum_framesizes@Base 0.5.0
+ v4lconvert_fixup_fmt@Base 1.5.90
  v4lconvert_get_default_dev_ops@Base 0.9.0~test5
  v4lconvert_get_error_message@Base 0.5.0
  v4lconvert_get_fps@Base 0.8.4

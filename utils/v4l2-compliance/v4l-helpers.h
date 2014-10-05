@@ -390,7 +390,7 @@ static inline __u32 v4l_determine_type(const struct v4l_fd *f)
 
 static inline int v4l_open(struct v4l_fd *f, const char *devname, bool non_blocking)
 {
-	struct v4l2_query_ext_ctrl qec = { V4L2_CTRL_FLAG_NEXT_CTRL };
+	struct v4l2_query_ext_ctrl qec = { V4L2_CTRL_FLAG_NEXT_CTRL | V4L2_CTRL_FLAG_NEXT_COMPOUND };
 	struct v4l2_ext_controls ec = { 0, 0 };
 	struct v4l2_queryctrl qc = { V4L2_CTRL_FLAG_NEXT_CTRL };
 	struct v4l2_selection sel = { 0 };
@@ -410,9 +410,9 @@ static inline int v4l_open(struct v4l_fd *f, const char *devname, bool non_block
 	f->caps = v4l_capability_g_caps(&f->cap);
 	f->type = v4l_determine_type(f);
 
-	f->have_query_ext_ctrl = v4l_ioctl(f, VIDIOC_QUERY_EXT_CTRL, &qec) != ENOTTY;
-	f->have_ext_ctrls = v4l_ioctl(f, VIDIOC_TRY_EXT_CTRLS, &ec) != ENOTTY;
-	f->have_next_ctrl = v4l_ioctl(f, VIDIOC_QUERYCTRL, &qc) != ENOTTY;
+	f->have_query_ext_ctrl = v4l_ioctl(f, VIDIOC_QUERY_EXT_CTRL, &qec) == 0;
+	f->have_ext_ctrls = v4l_ioctl(f, VIDIOC_TRY_EXT_CTRLS, &ec) == 0;
+	f->have_next_ctrl = v4l_ioctl(f, VIDIOC_QUERYCTRL, &qc) == 0;
 	sel.type = v4l_g_selection_type(f);
 	sel.target = sel.type == V4L2_BUF_TYPE_VIDEO_CAPTURE ?
 			V4L2_SEL_TGT_CROP : V4L2_SEL_TGT_COMPOSE;
@@ -656,7 +656,7 @@ v4l_format_g_num_planes(const struct v4l2_format *fmt)
 }
 
 static inline void v4l_format_s_bytesperline(struct v4l2_format *fmt,
-					     __u32 bytesperline, unsigned plane)
+					     unsigned plane, __u32 bytesperline)
 {
 	switch (fmt->type) {
 	case V4L2_BUF_TYPE_VIDEO_CAPTURE:
@@ -697,7 +697,7 @@ v4l_format_g_bytesperline(const struct v4l2_format *fmt, unsigned plane)
 }
 
 static inline void v4l_format_s_sizeimage(struct v4l2_format *fmt,
-					  __u32 sizeimage, unsigned plane)
+					  unsigned plane, __u32 sizeimage)
 {
 	switch (fmt->type) {
 	case V4L2_BUF_TYPE_VIDEO_CAPTURE:
@@ -743,13 +743,35 @@ static inline int v4l_g_fmt(struct v4l_fd *f, struct v4l2_format *fmt, unsigned 
 	return v4l_ioctl(f, VIDIOC_G_FMT, fmt);
 }
 
-static inline int v4l_try_fmt(struct v4l_fd *f, struct v4l2_format *fmt)
+static inline int v4l_try_fmt(struct v4l_fd *f, struct v4l2_format *fmt, bool zero_bpl)
 {
+	/*
+	 * Some drivers allow applications to set bytesperline to a larger value.
+	 * In most cases you just want the driver to fill in the bytesperline field
+	 * and so you have to zero bytesperline first.
+	 */
+	if (zero_bpl) {
+		__u8 p;
+
+		for (p = 0; p < v4l_format_g_num_planes(fmt); p++)
+			v4l_format_s_bytesperline(fmt, p, 0);
+	}
 	return v4l_ioctl(f, VIDIOC_TRY_FMT, fmt);
 }
 
-static inline int v4l_s_fmt(struct v4l_fd *f, struct v4l2_format *fmt)
+static inline int v4l_s_fmt(struct v4l_fd *f, struct v4l2_format *fmt, bool zero_bpl)
 {
+	/*
+	 * Some drivers allow applications to set bytesperline to a larger value.
+	 * In most cases you just want the driver to fill in the bytesperline field
+	 * and so you have to zero bytesperline first.
+	 */
+	if (zero_bpl) {
+		__u8 p;
+
+		for (p = 0; p < v4l_format_g_num_planes(fmt); p++)
+			v4l_format_s_bytesperline(fmt, p, 0);
+	}
 	return v4l_ioctl(f, VIDIOC_S_FMT, fmt);
 }
 
