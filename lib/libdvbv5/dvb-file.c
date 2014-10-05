@@ -43,7 +43,6 @@
 #include <libdvbv5/desc_sat.h>
 #include <libdvbv5/desc_terrestrial_delivery.h>
 #include <libdvbv5/desc_service.h>
-#include <libdvbv5/desc_service_list.h>
 #include <libdvbv5/desc_frequency_list.h>
 #include <libdvbv5/desc_event_short.h>
 #include <libdvbv5/desc_event_extended.h>
@@ -359,7 +358,8 @@ struct dvb_file *dvb_parse_format_oneline(const char *fname,
 		adjust_delsys(entry);
 	} while (1);
 	fclose(fd);
-	free(buf);
+	if (buf)
+		free(buf);
 	return dvb_file;
 
 error:
@@ -367,7 +367,8 @@ error:
 		 err_msg, line, fname);
 	dvb_file_free(dvb_file);
 	fclose(fd);
-	free(buf);
+	if (buf)
+		free(buf);
 	return NULL;
 }
 
@@ -794,6 +795,8 @@ struct dvb_file *dvb_read_file(const char *fname)
 			}
 		}
 	} while (1);
+	if (buf)
+		free(buf);
 	if (entry)
 		adjust_delsys(entry);
 	fclose(fd);
@@ -802,6 +805,8 @@ struct dvb_file *dvb_read_file(const char *fname)
 error:
 	fprintf (stderr, "ERROR %s while parsing line %d of %s\n",
 		 err_msg, line, fname);
+	if (buf)
+		free(buf);
 	dvb_file_free(dvb_file);
 	fclose(fd);
 	return NULL;
@@ -1079,9 +1084,13 @@ static int get_program_and_store(struct dvb_v5_fe_parms_priv *parms,
 			break;
 		}
 	}
-
 	if (!found) {
-		dvb_logwarn("Service ID %d not found on PMT!", service_id);
+		dvb_logwarn("Channel %s (service ID %d) not found on PMT. Skipping it.",
+			    channel, service_id);
+		if (channel)
+			free(channel);
+		if (vchannel)
+			free(vchannel);
 		return 0;
 	}
 
@@ -1095,6 +1104,10 @@ static int get_program_and_store(struct dvb_v5_fe_parms_priv *parms,
 	}
 	if (!entry) {
 		dvb_logerr("Not enough memory");
+		if (channel)
+			free(channel);
+		if (vchannel)
+			free(vchannel);
 		return -1;
 	}
 
@@ -1121,19 +1134,18 @@ static int get_program_and_store(struct dvb_v5_fe_parms_priv *parms,
 		if (rc)
 			dvb_logerr("Couldn't get frontend props");
 	}
-	if (!*channel) {
-		r = asprintf(&channel, "%.2fMHz#%d", freq/1000000., service_id);
-		if (r < 0)
-			dvb_perror("asprintf");
-		if (parms->p.verbose)
-			dvb_log("Storing as: '%s'", channel);
-	}
 	for (j = 0; j < parms->n_props; j++) {
 		entry->props[j].cmd = parms->dvb_prop[j].cmd;
 		entry->props[j].u.data = parms->dvb_prop[j].u.data;
 
-		if (!*channel && entry->props[j].cmd == DTV_FREQUENCY)
+		if (!channel && entry->props[j].cmd == DTV_FREQUENCY)
 			freq = parms->dvb_prop[j].u.data;
+	}
+	if (!channel) {
+		r = asprintf(&channel, "%.2fMHz#%d", freq/1000000., service_id);
+		if (r < 0)
+			dvb_perror("asprintf");
+		dvb_log("Storing Service ID %d: '%s'", service_id, channel);
 	}
 	entry->n_props = parms->n_props;
 	entry->channel = channel;
@@ -1184,10 +1196,13 @@ int dvb_store_channel(struct dvb_file **dvb_file,
 		atsc_vct_channel_foreach(d, dvb_scan_handler->vct) {
 			char *channel = NULL;
 			char *vchannel = NULL;
+			char *p = d->short_name;
 			int r;
 
-			channel = calloc(1, strlen(d->short_name) + 1);
-			strcpy(channel, d->short_name);
+			while (*p == ' ')
+				p++;
+			channel = calloc(1, strlen(p) + 1);
+			strcpy(channel, p);
 
 			r = asprintf(&vchannel, "%d.%d",
 				d->major_channel_number,
@@ -1203,10 +1218,8 @@ int dvb_store_channel(struct dvb_file **dvb_file,
 						d->program_number,
 						channel, vchannel,
 						get_detected, get_nit);
-			if (rc < 0) {
-				free(channel);
+			if (rc < 0)
 				return rc;
-			}
 		}
 		if (!dvb_scan_handler->sdt)
 			return 0;
@@ -1214,20 +1227,23 @@ int dvb_store_channel(struct dvb_file **dvb_file,
 
 
 	if (!dvb_scan_handler->sdt) {
+		int warned = 0;
 		int i;
 
-		dvb_log("WARNING: no SDT table - storing channels without their names");
 		for (i = 0; i < dvb_scan_handler->num_program; i++) {
-			char *channel = "";
 			unsigned service_id;
 
 			if (!dvb_scan_handler->program[i].pmt)
 				continue;
 
 			service_id = dvb_scan_handler->program[i].pat_pgm->service_id;
+			if (!warned) {
+				dvb_log("WARNING: no SDT table - storing channel(s) without their names");
+				warned = 1;
+			}
 
 			rc = get_program_and_store(parms, *dvb_file, dvb_scan_handler,
-						   service_id, channel, NULL,
+						   service_id, NULL, NULL,
 						   get_detected, get_nit);
 			if (rc < 0)
 				return rc;
@@ -1242,8 +1258,12 @@ int dvb_store_channel(struct dvb_file **dvb_file,
 
 		dvb_desc_find(struct dvb_desc_service, desc, service, service_descriptor) {
 			if (desc->name) {
-				channel = calloc(strlen(desc->name) + 1, 1);
-				strcpy(channel, desc->name);
+				char *p = desc->name;
+
+				while (*p == ' ')
+					p++;
+				channel = calloc(strlen(p) + 1, 1);
+				strcpy(channel, p);
 			}
 			dvb_log("Service %s, provider %s: %s",
 				desc->name, desc->provider,
@@ -1265,10 +1285,8 @@ int dvb_store_channel(struct dvb_file **dvb_file,
 					   service->service_id,
 					   channel, vchannel,
 					   get_detected, get_nit);
-		if (rc < 0) {
-			free(channel);
+		if (rc < 0)
 			return rc;
-		}
 	}
 
 	return 0;
