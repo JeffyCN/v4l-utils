@@ -1,0 +1,83 @@
+Author: Hans de Goede <hdegoede@redhat.com>
+Origin: upstream, http://git.linuxtv.org/cgit.cgi/v4l-utils.git/commit/?id=757d7910ddf43d9a9187dddae4f51a57fb723e8d
+Date:   Thu Nov 20 13:03:35 2014 +0100
+Bug-Debian: http://bugs.debian.org/770340
+Description: v4lconvert: Fix decoding of jpeg data with no vertical sub-sampling
+
+Our YUV output is always 2x subsampled in both vertical and horizontal
+direction, but some cameras generate JPEG data which is only subsampled in
+the horizontal direction.
+
+Since averaging the extra UV data these JPEGs contains is somewhat slow,
+and UV data is not all that important anyways, we simple take every other
+line. Or at least that is the intent.
+
+But before this commit the code was not doing this properly, for each 16
+Y input lines 1 - 16 we also get 16 UV input lines 1 - 16, but we only need
+8 output lines. so we should store input line 1 or 2 in output line 1, input
+line 3 or 4 in output line 2, etc. Instead we were storing input lines
+9 - 16 into output lines 1 - 8, which leads to some unwanted color bleeding.
+
+More over this also leads for 1920x1080 JPEG to us writing (1080 / 8 + 1) / 2
+* 8 = 544 UV output lines rather then 540, this means that the last 4 U output
+lines overwrite the first 4 V output lines, and worse that the last 4 V output
+lines overrun the output buffer.
+
+So far this only lead to some wrong colors in various places, but since that
+we dynamically allocate the output buffer to just the right size this actually
+causes a crash.
+
+This commit fixes both the crash, and the wrong colors.
+
+Signed-off-by: Hans de Goede <hdegoede@redhat.com>
+
+--- a/lib/libv4lconvert/jpeg.c
++++ b/lib/libv4lconvert/jpeg.c
+@@ -242,23 +242,34 @@
+ 			y_rows[y] = ydest;
+ 			ydest += width;
+ 		}
+-		for (y = 0; y < 8; y++) {
+-			u_rows[y] = udest;
+-			v_rows[y] = vdest;
+-			udest += width / 2;
+-			vdest += width / 2;
++		/*
++		 * For v_samp == 1 were going to get 1 set of uv values per
++		 * line, but we need only 1 set per 2 lines since our output
++		 * has v_samp == 2. We store every 2 sets in 1 line,
++		 * effectively using the second set for each output line.
++		 */
++		if (v_samp == 1) {
++			for (y = 0; y < 8; y++) {
++				u_rows[y] = udest;
++				v_rows[y] = vdest;
++				y++;
++				u_rows[y] = udest;
++				v_rows[y] = vdest;
++				udest += width / 2;
++				vdest += width / 2;
++			}
++		} else { /* v_samp == 2 */
++			for (y = 0; y < 8; y++) {
++				u_rows[y] = udest;
++				v_rows[y] = vdest;
++				udest += width / 2;
++				vdest += width / 2;
++			}
+ 		}
++
+ 		y = jpeg_read_raw_data(cinfo, rows, 8 * v_samp);
+ 		if (y != 8 * v_samp)
+ 			return -1;
+-
+-		/* For v_samp == 1 were going to get another set of uv values,
+-		   but we need only 1 set since our output has v_samp == 2, so
+-		   rewind u and vdest and overwrite the previous set. */
+-		if (cinfo->output_scanline % 16) {
+-			udest -= width * 8 / 2;
+-			vdest -= width * 8 / 2;
+-		}
+ 	}
+ 	return 0;
+ }
