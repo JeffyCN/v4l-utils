@@ -207,7 +207,7 @@ static void list_devices()
 	}
 }
 
-static std::string name2var(char *name)
+static std::string name2var(const char *name)
 {
 	std::string s;
 	int add_underscore = 0;
@@ -339,6 +339,12 @@ static void print_qctrl(int fd, struct v4l2_query_ext_ctrl *queryctrl,
 		break;
 	case V4L2_CTRL_TYPE_U16:
 		printf("%31s (u16)    : min=%lld max=%lld step=%lld default=%lld",
+				s.c_str(),
+				queryctrl->minimum, queryctrl->maximum,
+				queryctrl->step, queryctrl->default_value);
+		break;
+	case V4L2_CTRL_TYPE_U32:
+		printf("%31s (u32)    : min=%lld max=%lld step=%lld default=%lld",
 				s.c_str(),
 				queryctrl->minimum, queryctrl->maximum,
 				queryctrl->step, queryctrl->default_value);
@@ -729,10 +735,12 @@ static bool fill_subset(const struct v4l2_query_ext_ctrl &qc, ctrl_subset &subse
 		subset.size[d] = qc.dims[d];
 	}
 
-	if (ctrl_subsets.find(qc.name) != ctrl_subsets.end()) {
+	std::string s = name2var(qc.name);
+
+	if (ctrl_subsets.find(s) != ctrl_subsets.end()) {
 		unsigned ss_dims;
 
-		subset = ctrl_subsets[qc.name];
+		subset = ctrl_subsets[s];
 		for (ss_dims = 0; ss_dims < V4L2_CTRL_MAX_DIMS && subset.size[ss_dims]; ss_dims++) ;
 		if (ss_dims != qc.nr_of_dims) {
 			fprintf(stderr, "expected %d dimensions but --subset specified %d\n",
@@ -801,8 +809,9 @@ void common_set(int fd)
 				if (fill_subset(qc, subset))
 					return;
 
-				for (d = 0; d < qc.nr_of_dims; d++) {
-					divide[d] = qc.dims[d];
+				divide[qc.nr_of_dims - 1] = 1;
+				for (d = 0; d < qc.nr_of_dims - 1; d++) {
+					divide[d] = qc.dims[d + 1];
 					for (i = 0; i < d; i++)
 						divide[i] *= divide[d];
 				}
@@ -820,6 +829,12 @@ void common_set(int fd)
 					for (i = 0; i < qc.elems; i++)
 						if (idx_in_subset(qc, subset, divide, i))
 							ctrl.p_u16[i] = v;
+					break;
+				case V4L2_CTRL_TYPE_U32:
+					v = strtoul(iter->second.c_str(), NULL, 0);
+					for (i = 0; i < qc.elems; i++)
+						if (idx_in_subset(qc, subset, divide, i))
+							ctrl.p_u32[i] = v;
 					break;
 				case V4L2_CTRL_TYPE_STRING:
 					strncpy(ctrl.string, iter->second.c_str(), qc.maximum);
@@ -885,8 +900,9 @@ static void print_array(const struct v4l2_query_ext_ctrl &qc, void *p)
 	if (fill_subset(qc, subset))
 		return;
 
-	for (d = 0; d < qc.nr_of_dims; d++) {
-		divide[d] = qc.dims[d];
+	divide[qc.nr_of_dims - 1] = 1;
+	for (d = 0; d < qc.nr_of_dims - 1; d++) {
+		divide[d] = qc.dims[d + 1];
 		for (i = 0; i < d; i++)
 			divide[i] *= divide[d];
 	}
@@ -894,7 +910,7 @@ static void print_array(const struct v4l2_query_ext_ctrl &qc, void *p)
 	from = subset.offset[qc.nr_of_dims - 1];
 	to = subset.offset[qc.nr_of_dims - 1] + subset.size[qc.nr_of_dims - 1] - 1;
 
-	for (unsigned idx = 0; idx < qc.elems / qc.dims[qc.nr_of_dims - 1]; idx++) {
+	for (unsigned idx = 0; idx < qc.elems; idx += qc.dims[qc.nr_of_dims - 1]) {
 		for (d = 0; d < qc.nr_of_dims - 1; d++) {
 			unsigned i = (idx / divide[d]) % qc.dims[d];
 
@@ -920,6 +936,14 @@ static void print_array(const struct v4l2_query_ext_ctrl &qc, void *p)
 		case V4L2_CTRL_TYPE_U16:
 			for (i = from; i <= to; i++) {
 				printf("%6d", ((__u16 *)p)[idx + i]);
+				if (i < to)
+					printf(", ");
+			}
+			printf("\n");
+			break;
+		case V4L2_CTRL_TYPE_U32:
+			for (i = from; i <= to; i++) {
+				printf("%6d", ((__u32 *)p)[idx + i]);
 				if (i < to)
 					printf(", ");
 			}
@@ -983,6 +1007,7 @@ void common_get(int fd)
 						switch (qc.type) {
 						case V4L2_CTRL_TYPE_U8:
 						case V4L2_CTRL_TYPE_U16:
+						case V4L2_CTRL_TYPE_U32:
 							print_array(qc, ctrl.ptr);
 							break;
 						case V4L2_CTRL_TYPE_STRING:
