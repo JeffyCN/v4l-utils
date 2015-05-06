@@ -121,6 +121,9 @@ am_v4l2_ctl_OBJECTS = v4l2-ctl.$(OBJEXT) v4l2-ctl-common.$(OBJEXT) \
 v4l2_ctl_OBJECTS = $(am_v4l2_ctl_OBJECTS)
 v4l2_ctl_DEPENDENCIES = ../../lib/libv4l2/libv4l2.la \
 	../../lib/libv4lconvert/libv4lconvert.la
+v4l2_ctl_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=link $(CXXLD) $(AM_CXXFLAGS) \
+	$(CXXFLAGS) $(v4l2_ctl_LDFLAGS) $(LDFLAGS) -o $@
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -401,6 +404,7 @@ v4l2_ctl_SOURCES = v4l2-ctl.cpp v4l2-ctl.h v4l2-ctl-common.cpp v4l2-ctl-tuner.cp
 	v4l2-ctl-streaming.cpp v4l2-ctl-sdr.cpp v4l2-ctl-edid.cpp vivid-tpg-colors.c vivid-tpg.c
 
 v4l2_ctl_LDADD = ../../lib/libv4l2/libv4l2.la ../../lib/libv4lconvert/libv4lconvert.la
+v4l2_ctl_LDFLAGS = -lrt
 EXTRA_DIST = Android.mk vivid-tpg.h.patch
 all: all-am
 
@@ -496,7 +500,7 @@ ivtv-ctl$(EXEEXT): $(ivtv_ctl_OBJECTS) $(ivtv_ctl_DEPENDENCIES) $(EXTRA_ivtv_ctl
 
 v4l2-ctl$(EXEEXT): $(v4l2_ctl_OBJECTS) $(v4l2_ctl_DEPENDENCIES) $(EXTRA_v4l2_ctl_DEPENDENCIES) 
 	@rm -f v4l2-ctl$(EXEEXT)
-	$(AM_V_CXXLD)$(CXXLINK) $(v4l2_ctl_OBJECTS) $(v4l2_ctl_LDADD) $(LIBS)
+	$(AM_V_CXXLD)$(v4l2_ctl_LINK) $(v4l2_ctl_OBJECTS) $(v4l2_ctl_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)

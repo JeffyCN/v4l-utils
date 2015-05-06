@@ -3,7 +3,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.59)
-AC_INIT([v4l-utils],[1.6.0])
+AC_INIT([v4l-utils],[1.6.3])
 
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIR([m4])
@@ -143,7 +143,7 @@ else
    AC_MSG_WARN(Qt4 or higher is not available)
 fi
 
-PKG_CHECK_MODULES(QTGL, [QtOpenGL >= 4.4 gl], [qt_pkgconfig_gl=true], [qt_pkgconfig_gl=false])
+PKG_CHECK_MODULES(QTGL, [QtOpenGL >= 4.8 gl], [qt_pkgconfig_gl=true], [qt_pkgconfig_gl=false])
 if test "x$qt_pkgconfig_gl" = "xtrue"; then
    AC_DEFINE([HAVE_QTGL], [1], [qt has opengl support])
 else

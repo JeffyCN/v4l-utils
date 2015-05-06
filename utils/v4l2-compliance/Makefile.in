@@ -109,6 +109,10 @@ AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
 am__v_lt_1 = 
+v4l2_compliance_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
+	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CXXLD) \
+	$(AM_CXXFLAGS) $(CXXFLAGS) $(v4l2_compliance_LDFLAGS) \
+	$(LDFLAGS) -o $@
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -384,6 +388,7 @@ v4l2_compliance_SOURCES = v4l2-compliance.cpp v4l2-test-debug.cpp v4l2-test-inpu
 	v4l2-test-codecs.cpp v4l2-compliance.h cv4l-helpers.h v4l-helpers.h
 
 v4l2_compliance_LDADD = ../../lib/libv4l2/libv4l2.la ../../lib/libv4lconvert/libv4lconvert.la
+v4l2_compliance_LDFLAGS = -lrt
 EXTRA_DIST = Android.mk fixme.txt
 all: all-am
 
@@ -471,7 +476,7 @@ clean-binPROGRAMS:
 
 v4l2-compliance$(EXEEXT): $(v4l2_compliance_OBJECTS) $(v4l2_compliance_DEPENDENCIES) $(EXTRA_v4l2_compliance_DEPENDENCIES) 
 	@rm -f v4l2-compliance$(EXEEXT)
-	$(AM_V_CXXLD)$(CXXLINK) $(v4l2_compliance_OBJECTS) $(v4l2_compliance_LDADD) $(LIBS)
+	$(AM_V_CXXLD)$(v4l2_compliance_LINK) $(v4l2_compliance_OBJECTS) $(v4l2_compliance_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)

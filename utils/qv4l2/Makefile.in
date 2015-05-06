@@ -432,8 +432,9 @@ nodist_qv4l2_SOURCES = moc_qv4l2.cpp moc_general-tab.cpp moc_capture-win.cpp moc
 qv4l2_LDADD = ../../lib/libv4l2/libv4l2.la ../../lib/libv4lconvert/libv4lconvert.la ../libv4l2util/libv4l2util.la \
   ../libmedia_dev/libmedia_dev.la
 
-qv4l2_CPPFLAGS = -I../v4l2-compliance -I../v4l2-ctl $(am__append_1) \
-	$(am__append_2) $(ALSA_CFLAGS)
+qv4l2_CPPFLAGS = -I$(srcdir)/../v4l2-compliance \
+	-I$(srcdir)/../v4l2-ctl $(am__append_1) $(am__append_2) \
+	$(ALSA_CFLAGS)
 @WITH_QTGL_FALSE@qv4l2_LDFLAGS = $(QT_LIBS) $(ALSA_LIBS) -pthread
 @WITH_QTGL_TRUE@qv4l2_LDFLAGS = $(QTGL_LIBS) $(ALSA_LIBS) -pthread
 EXTRA_DIST = enterbutt.png exit.png fileopen.png qv4l2_24x24.png qv4l2_64x64.png qv4l2.png qv4l2.svg \
