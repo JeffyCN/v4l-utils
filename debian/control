@@ -183,8 +183,8 @@ Description: Collection of command line DVB utilities
  .
  dvbv5-scan: a DVBv5 scan tool.
  .
- dvbv5-zap: a DVBv5 zap tool. It allow to tune into a DVB channel, and
- to watch to a DVB service (e. g. receiving the video and audio
+ dvbv5-zap: a DVBv5 zap tool. It allows one to tune into a DVB channel,
+ and to watch to a DVB service (e. g. receiving the video and audio
  streams, via another application using the dvr device).
 
 Package: qv4l2
