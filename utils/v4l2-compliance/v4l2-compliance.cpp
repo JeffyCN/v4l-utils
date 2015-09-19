@@ -32,6 +32,8 @@
 #include <sys/time.h>
 #include <math.h>
 #include <sys/utsname.h>
+#include <signal.h>
+#include <vector>
 
 #include "v4l2-compliance.h"
 
@@ -43,13 +45,13 @@
    In general the lower case is used to set something and the upper
    case is used to retrieve a setting. */
 enum Option {
+	OptStreamAllIO = 'a',
+	OptStreamAllColorTest = 'c',
 	OptSetDevice = 'd',
 	OptSetExpBufDevice = 'e',
-	OptSetFreq = 'f',
+	OptStreamAllFormats = 'f',
 	OptHelp = 'h',
-	OptSetInput = 'i',
 	OptNoWarnings = 'n',
-	OptSetOutput = 'o',
 	OptSetRadioDevice = 'r',
 	OptStreaming = 's',
 	OptSetSWRadioDevice = 'S',
@@ -71,9 +73,31 @@ bool show_warnings = true;
 int kernel_version;
 unsigned warnings;
 
-static unsigned select_input;
-static unsigned select_output;
-static double select_freq;
+static unsigned color_component;
+static unsigned color_skip;
+static unsigned color_perc = 90;
+
+struct dev_state {
+	struct node *node;
+	std::vector<v4l2_ext_control> control_vec;
+	v4l2_ext_controls controls;
+	v4l2_rect crop;
+	v4l2_rect compose;
+	v4l2_rect native_size;
+	v4l2_format fmt;
+	v4l2_input input;
+	v4l2_output output;
+	v4l2_audio ainput;
+	v4l2_audioout aoutput;
+	v4l2_frequency freq;
+	v4l2_tuner tuner;
+	v4l2_modulator modulator;
+	v4l2_std_id std;
+	v4l2_dv_timings timings;
+	v4l2_fract interval;
+};
+
+static struct dev_state state;
 
 static struct option long_options[] = {
 	{"device", required_argument, 0, OptSetDevice},
@@ -88,10 +112,10 @@ static struct option long_options[] = {
 #ifndef NO_LIBV4L2
 	{"wrapper", no_argument, 0, OptUseWrapper},
 #endif
-	{"set-input", required_argument, 0, OptSetInput},
-	{"set-output", required_argument, 0, OptSetOutput},
-	{"set-freq", required_argument, 0, OptSetFreq},
 	{"streaming", optional_argument, 0, OptStreaming},
+	{"stream-all-formats", no_argument, 0, OptStreamAllFormats},
+	{"stream-all-io", no_argument, 0, OptStreamAllIO},
+	{"stream-all-color", required_argument, 0, OptStreamAllColorTest},
 	{0, 0, 0, 0}
 };
 
@@ -99,30 +123,49 @@ static void usage(void)
 {
 	printf("Usage:\n");
 	printf("Common options:\n");
-	printf("  -d, --device=<dev> use device <dev> as the video device.\n");
-	printf("                     if <dev> starts with a digit, then /dev/video<dev> is used.\n");
-	printf("  -V, --vbi-device=<dev> use device <dev> as the vbi device.\n");
-	printf("                     if <dev> starts with a digit, then /dev/vbi<dev> is used.\n");
-	printf("  -r, --radio-device=<dev> use device <dev> as the radio device.\n");
-	printf("                     if <dev> starts with a digit, then /dev/radio<dev> is used.\n");
-	printf("  -S, --sdr-device=<dev> use device <dev> as the SDR device.\n");
-	printf("                     if <dev> starts with a digit, then /dev/swradio<dev> is used.\n");
-	printf("  -e, --expbuf-device=<dev> use device <dev> to obtain DMABUF handles.\n");
-	printf("                     if <dev> starts with a digit, then /dev/video<dev> is used.\n");
+	printf("  -d, --device=<dev> Use device <dev> as the video device.\n");
+	printf("                     If <dev> starts with a digit, then /dev/video<dev> is used.\n");
+	printf("  -V, --vbi-device=<dev>\n");
+	printf("                     Use device <dev> as the vbi device.\n");
+	printf("                     If <dev> starts with a digit, then /dev/vbi<dev> is used.\n");
+	printf("  -r, --radio-device=<dev>\n");
+	printf("                     Use device <dev> as the radio device.\n");
+	printf("                     If <dev> starts with a digit, then /dev/radio<dev> is used.\n");
+	printf("  -S, --sdr-device=<dev>\n");
+	printf("                     Use device <dev> as the SDR device.\n");
+	printf("                     If <dev> starts with a digit, then /dev/swradio<dev> is used.\n");
+	printf("  -e, --expbuf-device=<dev>\n");
+	printf("                     Use device <dev> to obtain DMABUF handles.\n");
+	printf("                     If <dev> starts with a digit, then /dev/video<dev> is used.\n");
 	printf("                     only /dev/videoX devices are supported.\n");
-	printf("  -i, --set-input    select input for streaming tests (default is 0).\n");
-	printf("  -o, --set-output   select output for streaming tests (default is 0).\n");
-	printf("  -f, --set-freq     select frequency in MHz (kHz for radio) for streaming tests.\n");
-	printf("  -s, --streaming=<count> enable the streaming tests. Set <count> to the number of\n");
+	printf("  -s, --streaming=<count>\n");
+	printf("                     Enable the streaming tests. Set <count> to the number of\n");
 	printf("                     frames to stream (default 60). Requires a valid input/output\n");
 	printf("                     and frequency (when dealing with a tuner). For DMABUF testing\n");
 	printf("                     --expbuf-device needs to be set as well.\n");
-	printf("  -h, --help         display this help message.\n");
-	printf("  -n, --no-warnings  turn off warning messages.\n");
-	printf("  -T, --trace        trace all called ioctls.\n");
-	printf("  -v, --verbose      turn on verbose reporting.\n");
+	printf("  -f, --stream-all-formats\n");
+	printf("                     Test streaming all available formats.\n");
+	printf("                     This attempts to stream using MMAP mode or read/write\n");
+	printf("                     for one second for all formats, at all sizes, at all intervals\n");
+	printf("                     and with all field values.\n");
+	printf("  -a, --stream-all-io\n");
+	printf("                     Do streaming tests for all inputs or outputs instead of just\n");
+	printf("                     the current input or output. This requires that a valid video\n");
+	printf("                     signal is present on all inputs and all outputs are hooked up.\n");
+	printf("  -c, --stream-all-color=color=red|green|blue,skip=<skip>,perc=<percentage>\n");
+	printf("                     For all formats stream <skip + 1> frames and check if\n");
+	printf("                     the last frame has at least <perc> percent of the pixels with\n");
+	printf("                     a <color> component that is higher than the other two color\n");
+	printf("                     components. This requires that a valid red, green or blue video\n");
+	printf("                     signal is present on the input(s). If <skip> is not specified,\n");
+	printf("                     then just capture the first frame. If <perc> is not specified,\n");
+	printf("                     then this defaults to 90%%.\n");
+	printf("  -h, --help         Display this help message.\n");
+	printf("  -n, --no-warnings  Turn off warning messages.\n");
+	printf("  -T, --trace        Trace all called ioctls.\n");
+	printf("  -v, --verbose      Turn on verbose reporting.\n");
 #ifndef NO_LIBV4L2
-	printf("  -w, --wrapper      use the libv4l2 wrapper library.\n");
+	printf("  -w, --wrapper      Use the libv4l2 wrapper library.\n");
 #endif
 	exit(0);
 }
@@ -262,6 +305,176 @@ int check_0(const void *p, int len)
 	return 0;
 }
 
+static void storeStateTimings(struct node *node, __u32 caps)
+{
+	if (caps & V4L2_IN_CAP_STD)
+		node->g_std(state.std);
+	if (caps & V4L2_IN_CAP_DV_TIMINGS)
+		node->g_dv_timings(state.timings);
+	if (caps & V4L2_IN_CAP_NATIVE_SIZE) {
+		v4l2_selection sel = {
+			node->g_selection_type(),
+			V4L2_SEL_TGT_NATIVE_SIZE
+		};
+
+		node->g_selection(sel);
+		state.native_size = sel.r;
+	}
+}
+
+static void storeState(struct node *node)
+{
+	state.node = node;
+	if (node->has_inputs) {
+		__u32 input;
+
+		node->g_input(input);
+		node->enum_input(state.input, true, input);
+		if (state.input.audioset)
+			node->g_audio(state.ainput);
+		if (node->g_caps() & V4L2_CAP_TUNER) {
+			node->g_tuner(state.tuner, state.input.tuner);
+			node->g_frequency(state.freq, state.input.tuner);
+		}
+		storeStateTimings(node, state.input.capabilities);
+	}
+	if (node->has_outputs) {
+		__u32 output;
+
+		node->g_output(output);
+		node->enum_output(state.output, true, output);
+		if (state.output.audioset)
+			node->g_audout(state.aoutput);
+		if (node->g_caps() & V4L2_CAP_MODULATOR) {
+			node->g_modulator(state.modulator, state.output.modulator);
+			node->g_frequency(state.freq, state.output.modulator);
+		}
+		storeStateTimings(node, state.output.capabilities);
+	}
+	node->g_fmt(state.fmt);
+
+	v4l2_selection sel = {
+		node->g_selection_type(),
+		V4L2_SEL_TGT_CROP
+	};
+	if (!node->g_selection(sel))
+		state.crop = sel.r;
+	sel.target = V4L2_SEL_TGT_COMPOSE;
+	if (!node->g_selection(sel))
+		state.compose = sel.r;
+	node->get_interval(state.interval);
+
+	v4l2_query_ext_ctrl qec = { 0 };
+
+	while (!node->query_ext_ctrl(qec, true, true)) {
+		if (qec.flags & (V4L2_CTRL_FLAG_DISABLED |
+				 V4L2_CTRL_FLAG_READ_ONLY |
+				 V4L2_CTRL_FLAG_WRITE_ONLY |
+				 V4L2_CTRL_FLAG_VOLATILE))
+			continue;
+		v4l2_ext_control ctrl = { qec.id };
+		if (qec.flags & V4L2_CTRL_FLAG_HAS_PAYLOAD) {
+			ctrl.size = qec.elems * qec.elem_size;
+			ctrl.ptr = malloc(ctrl.size);
+		}
+		state.control_vec.push_back(ctrl);
+	}
+	if (state.control_vec.empty())
+		return;
+	state.controls.count = state.control_vec.size();
+	state.controls.controls = &state.control_vec[0];
+	node->g_ext_ctrls(state.controls);
+}
+
+static void restoreStateTimings(struct node *node, __u32 caps)
+{
+	if (caps & V4L2_IN_CAP_STD)
+		node->s_std(state.std);
+	if (caps & V4L2_IN_CAP_DV_TIMINGS)
+		node->s_dv_timings(state.timings);
+	if (caps & V4L2_IN_CAP_NATIVE_SIZE) {
+		v4l2_selection sel = {
+			node->g_selection_type(),
+			V4L2_SEL_TGT_NATIVE_SIZE,
+			0, state.native_size
+		};
+
+		node->s_selection(sel);
+	}
+}
+
+static void restoreState()
+{
+	struct node *node = state.node;
+
+	node->reopen();
+	if (node->has_inputs) {
+		node->s_input(state.input.index);
+		if (state.input.audioset)
+			node->s_audio(state.ainput.index);
+		if (node->g_caps() & V4L2_CAP_TUNER) {
+			node->s_tuner(state.tuner);
+			node->s_frequency(state.freq);
+		}
+		restoreStateTimings(node, state.input.capabilities);
+	}
+	if (node->has_outputs) {
+		node->s_output(state.output.index);
+		if (state.output.audioset)
+		node->s_audout(state.aoutput.index);
+		if (node->g_caps() & V4L2_CAP_MODULATOR) {
+			node->s_modulator(state.modulator);
+			node->s_frequency(state.freq);
+		}
+		restoreStateTimings(node, state.output.capabilities);
+	}
+
+	/* First restore the format */
+	node->s_fmt(state.fmt);
+
+	v4l2_selection sel_compose = {
+		node->g_selection_type(),
+		V4L2_SEL_TGT_COMPOSE,
+		0, state.compose
+	};
+	v4l2_selection sel_crop = {
+		node->g_selection_type(),
+		V4L2_SEL_TGT_CROP,
+		0, state.crop
+	};
+	if (node->has_inputs) {
+		/*
+		 * For capture restore the compose rectangle
+		 * before the crop rectangle.
+		 */
+		if (sel_compose.r.width && sel_compose.r.height)
+			node->s_selection(sel_compose);
+		if (sel_crop.r.width && sel_crop.r.height)
+			node->s_selection(sel_crop);
+	}
+	if (node->has_outputs) {
+		/*
+		 * For output the crop rectangle should be
+		 * restored before the compose rectangle.
+		 */
+		if (sel_crop.r.width && sel_crop.r.height)
+			node->s_selection(sel_crop);
+		if (sel_compose.r.width && sel_compose.r.height)
+			node->s_selection(sel_compose);
+	}
+	if (state.interval.denominator)
+		node->set_interval(state.interval);
+
+	node->s_ext_ctrls(state.controls);
+}
+
+static void signal_handler_interrupt(int signum)
+{
+	restoreState();
+	printf("\n");
+	exit(-1);
+}
+
 static int testCap(struct node *node)
 {
 	struct v4l2_capability vcap;
@@ -397,65 +610,37 @@ static int testPrio(struct node *node, struct node *node2)
 
 static void streamingSetup(struct node *node)
 {
-	struct v4l2_input input;
-	struct v4l2_output output;
-
-	if (options[OptSetInput])
-		doioctl(node, VIDIOC_S_INPUT, &select_input);
-	if (options[OptSetOutput])
-		doioctl(node, VIDIOC_S_OUTPUT, &select_output);
-	if (options[OptSetFreq]) {
-		struct v4l2_frequency f = { 0 };
-		unsigned freq_caps;
-
-		if (node->g_caps() & V4L2_CAP_MODULATOR) {
-			struct v4l2_modulator m = { 0 };
-
-			doioctl(node, VIDIOC_G_MODULATOR, &m);
-			freq_caps = m.capability;
-			f.type = V4L2_TUNER_RADIO;
-		} else {
-			struct v4l2_tuner t = { 0 };
-
-			doioctl(node, VIDIOC_G_TUNER, &t);
-			f.type = t.type;
-			freq_caps = t.capability;
-		}
-		if (freq_caps & V4L2_TUNER_CAP_1HZ)
-			f.frequency = select_freq * 1000;
-		else if (freq_caps & V4L2_TUNER_CAP_LOW)
-			f.frequency = select_freq / 62.5;
-		else
-			f.frequency = select_freq / 62500;
-		doioctl(node, VIDIOC_S_FREQUENCY, &f);
-	}
-
 	if (node->can_capture) {
+		struct v4l2_input input;
+
 		memset(&input, 0, sizeof(input));
 		doioctl(node, VIDIOC_G_INPUT, &input.index);
 		doioctl(node, VIDIOC_ENUMINPUT, &input);
 		node->cur_io_caps = input.capabilities;
+	} else if (node->can_output) {
+		struct v4l2_output output;
 
-		if (input.capabilities & V4L2_IN_CAP_STD) {
-			v4l2_std_id std;
-
-			doioctl(node, VIDIOC_QUERYSTD, &std);
-			if (std)
-				doioctl(node, VIDIOC_S_STD, &std);
-		}
-
-		if (input.capabilities & V4L2_IN_CAP_DV_TIMINGS) {
-			struct v4l2_dv_timings t;
-
-			if (doioctl(node, VIDIOC_QUERY_DV_TIMINGS, &t) == 0)
-				doioctl(node, VIDIOC_S_DV_TIMINGS, &t);
-		}
-	} else {
 		memset(&output, 0, sizeof(output));
 		doioctl(node, VIDIOC_G_OUTPUT, &output.index);
 		doioctl(node, VIDIOC_ENUMOUTPUT, &output);
 		node->cur_io_caps = output.capabilities;
 	}
+}
+
+static int parse_subopt(char **subs, const char * const *subopts, char **value)
+{
+	int opt = getsubopt(subs, (char * const *)subopts, value);
+
+	if (opt == -1) {
+		fprintf(stderr, "Invalid suboptions specified\n");
+		return -1;
+	}
+	if (*value == NULL) {
+		fprintf(stderr, "No value given to suboption <%s>\n",
+				subopts[opt]);
+		return -1;
+	}
+	return opt;
 }
 
 int main(int argc, char **argv)
@@ -483,6 +668,7 @@ int main(int argc, char **argv)
 	struct v4l2_capability vcap;		/* list_cap */
 	unsigned frame_count = 60;
 	char short_options[26 * 2 * 3 + 1];
+	char *value, *subs;
 	int idx = 0;
 
 	for (i = 0; long_options[i].name; i++) {
@@ -555,18 +741,48 @@ int main(int argc, char **argv)
 				expbuf_device = newdev;
 			}
 			break;
-		case OptSetInput:
-			select_input = strtoul(optarg, NULL, 0);
-			break;
-		case OptSetOutput:
-			select_output = strtoul(optarg, NULL, 0);
-			break;
 		case OptStreaming:
 			if (optarg)
 				frame_count = strtoul(optarg, NULL, 0);
 			break;
-		case OptSetFreq:
-			select_freq = strtod(optarg, NULL);
+		case OptStreamAllColorTest:
+			subs = optarg;
+			while (*subs != '\0') {
+				static const char *const subopts[] = {
+					"color",
+					"skip",
+					"perc",
+					NULL
+				};
+
+				switch (parse_subopt(&subs, subopts, &value)) {
+				case 0:
+					if (!strcmp(value, "red"))
+						color_component = 0;
+					else if (!strcmp(value, "green"))
+						color_component = 1;
+					else if (!strcmp(value, "blue"))
+						color_component = 2;
+					else {
+						usage();
+						exit(1);
+					}
+					break;
+				case 1:
+					color_skip = strtoul(value, 0L, 0);
+					break;
+				case 2:
+					color_perc = strtoul(value, 0L, 0);
+					if (color_perc == 0)
+						color_perc = 90;
+					if (color_perc > 100)
+						color_perc = 100;
+					break;
+				default:
+					usage();
+					exit(1);
+				}
+			}
 			break;
 		case OptNoWarnings:
 			show_warnings = false;
@@ -781,6 +997,11 @@ int main(int argc, char **argv)
 	}
 	printf("\n");
 
+	storeState(&node);
+
+	/* register signal handler for interrupt signal, to exit gracefully */
+	signal(SIGINT, signal_handler_interrupt);
+
 	/* Debug ioctls */
 
 	printf("Debug ioctls:\n");
@@ -827,6 +1048,8 @@ int main(int argc, char **argv)
 	for (unsigned io = 0; io < (max_io ? max_io : 1); io++) {
 		node.std_controls = node.priv_controls = 0;
 		node.controls.clear();
+		node.frmsizes.clear();
+		node.frmsizes_count.clear();
 		for (unsigned idx = 0; idx < V4L2_BUF_TYPE_SDR_CAPTURE + 1; idx++)
 			node.buftype_pixfmts[idx].clear();
 
@@ -873,6 +1096,9 @@ int main(int argc, char **argv)
 		printf("\t\ttest VIDIOC_TRY_FMT: %s\n", ok(testTryFormats(&node)));
 		printf("\t\ttest VIDIOC_S_FMT: %s\n", ok(testSetFormats(&node)));
 		printf("\t\ttest VIDIOC_G_SLICED_VBI_CAP: %s\n", ok(testSlicedVBICap(&node)));
+		printf("\t\ttest Cropping: %s\n", ok(testCropping(&node)));
+		printf("\t\ttest Composing: %s\n", ok(testComposing(&node)));
+		printf("\t\ttest Scaling: %s\n", ok(testScaling(&node)));
 		printf("\n");
 
 		/* Codec ioctls */
@@ -890,33 +1116,78 @@ int main(int argc, char **argv)
 		printf("\t\ttest VIDIOC_EXPBUF: %s\n", ok(testExpBuf(&node)));
 		printf("\n");
 	}
-	if (options[OptStreaming]) {
-		printf("Streaming ioctls:\n");
 
-		streamingSetup(&node);
+	unsigned cur_io = node.has_inputs ? state.input.index : state.output.index;
+	unsigned min_io = 0;
 
-		printf("\ttest read/write: %s\n", ok(testReadWrite(&node)));
-		// Reopen after each streaming test to reset the streaming state
-		// in case of any errors in the preceeding test.
-		node.reopen();
-		printf("\ttest MMAP: %s\n", ok(testMmap(&node, frame_count)));
-		node.reopen();
-		printf("\ttest USERPTR: %s\n", ok(testUserPtr(&node, frame_count)));
-		node.reopen();
-		if (options[OptSetExpBufDevice] ||
-		    !(node.valid_memorytype & (1 << V4L2_MEMORY_DMABUF)))
-			printf("\ttest DMABUF: %s\n", ok(testDmaBuf(&expbuf_node, &node, frame_count)));
-		else if (!options[OptSetExpBufDevice])
-			printf("\ttest DMABUF: Cannot test, specify --expbuf-device\n");
-		node.reopen();
+	if (!options[OptStreamAllIO]) {
+		min_io = cur_io;
+		max_io = min_io + 1;
+	}
+
+	for (unsigned io = min_io; io < (max_io ? max_io : 1); io++) {
+		restoreState();
+
+		printf("Test %s %d:\n\n",
+				node.can_capture ? "input" : "output", io);
+		if (node.can_capture)
+			doioctl(&node, VIDIOC_S_INPUT, &io);
+		else
+			doioctl(&node, VIDIOC_S_OUTPUT, &io);
+
+		if (options[OptStreaming]) {
+			printf("Streaming ioctls:\n");
+			streamingSetup(&node);
+
+			printf("\ttest read/write: %s\n", ok(testReadWrite(&node)));
+			// Reopen after each streaming test to reset the streaming state
+			// in case of any errors in the preceeding test.
+			node.reopen();
+			printf("\ttest MMAP: %s\n", ok(testMmap(&node, frame_count)));
+			node.reopen();
+			printf("\ttest USERPTR: %s\n", ok(testUserPtr(&node, frame_count)));
+			node.reopen();
+			if (options[OptSetExpBufDevice] ||
+					!(node.valid_memorytype & (1 << V4L2_MEMORY_DMABUF)))
+				printf("\ttest DMABUF: %s\n", ok(testDmaBuf(&expbuf_node, &node, frame_count)));
+			else if (!options[OptSetExpBufDevice])
+				printf("\ttest DMABUF: Cannot test, specify --expbuf-device\n");
+			node.reopen();
+
+			printf("\n");
+		}
+
+		if (node.is_video && options[OptStreamAllFormats]) {
+			printf("Stream using all formats:\n");
+
+			if (node.is_m2m) {
+				printf("\tNot supported for M2M devices\n");
+			} else {
+				streamingSetup(&node);
+				streamAllFormats(&node);
+			}
+		}
+
+		if (node.is_video && node.can_capture && options[OptStreamAllColorTest]) {
+			printf("Stream using all formats and do a color check:\n");
+
+			if (node.is_m2m) {
+				printf("\tNot supported for M2M devices\n");
+			} else {
+				streamingSetup(&node);
+				testColorsAllFormats(&node, color_component,
+						     color_skip, color_perc);
+			}
+		}
 	}
 	printf("\n");
 
-	/* TODO:
+	/*
+	 * TODO: VIDIOC_S_FBUF/OVERLAY
+	 * 	 S_SELECTION flags tests
+	 */
 
-	   VIDIOC_CROPCAP, VIDIOC_G/S_CROP, VIDIOC_G/S_SELECTION
-	   VIDIOC_S_FBUF/OVERLAY
-	   */
+	restoreState();
 
 	/* Final test report */
 

@@ -18,6 +18,7 @@
  */
 
 #include "qv4l2.h"
+#include "general-tab.h"
 
 #include <QFrame>
 #include <QVBoxLayout>
@@ -121,19 +122,6 @@ void ApplicationWindow::addTpgTab(int m_winWidth)
 	addWidget(grid, combo);
 	connect(combo, SIGNAL(activated(int)), SLOT(vertMovementChanged(int)));
 
-	m_tpgColorspace = 0;
-	addLabel(grid, "Colorspace");
-	combo = new QComboBox(w);
-	combo->addItem("Autodetect");
-	combo->addItem("SMPTE 170M");
-	combo->addItem("SMPTE 240M");
-	combo->addItem("REC 709");
-	combo->addItem("470 System M");
-	combo->addItem("470 System BG");
-	combo->addItem("sRGB");
-	addWidget(grid, combo);
-	connect(combo, SIGNAL(activated(int)), SLOT(colorspaceChanged(int)));
-
 	addLabel(grid, "Show Border");
 	check = new QCheckBox(w);
 	addWidget(grid, check);
@@ -160,6 +148,53 @@ void ApplicationWindow::addTpgTab(int m_winWidth)
 	spin->setValue(100);
 	addWidget(grid, spin);
 	connect(spin, SIGNAL(valueChanged(int)), SLOT(fillPercentageChanged(int)));
+
+	addLabel(grid, "Colorspace");
+	m_tpgColorspace = new QComboBox(w);
+	m_tpgColorspace->addItem("Use Format", QVariant(0));
+	m_tpgColorspace->addItem("SMPTE 170M", QVariant(V4L2_COLORSPACE_SMPTE170M));
+	m_tpgColorspace->addItem("Rec. 709", QVariant(V4L2_COLORSPACE_REC709));
+	m_tpgColorspace->addItem("sRGB", QVariant(V4L2_COLORSPACE_SRGB));
+	m_tpgColorspace->addItem("Adobe RGB", QVariant(V4L2_COLORSPACE_ADOBERGB));
+	m_tpgColorspace->addItem("BT.2020", QVariant(V4L2_COLORSPACE_BT2020));
+	m_tpgColorspace->addItem("SMPTE 240M", QVariant(V4L2_COLORSPACE_SMPTE240M));
+	m_tpgColorspace->addItem("470 System M", QVariant(V4L2_COLORSPACE_470_SYSTEM_M));
+	m_tpgColorspace->addItem("470 System BG", QVariant(V4L2_COLORSPACE_470_SYSTEM_BG));
+	addWidget(grid, m_tpgColorspace);
+	connect(m_tpgColorspace, SIGNAL(activated(int)), SLOT(tpgColorspaceChanged()));
+
+	addLabel(grid, "Transfer Function");
+	m_tpgXferFunc = new QComboBox(w);
+	m_tpgXferFunc->addItem("Use Format", QVariant(V4L2_XFER_FUNC_DEFAULT));
+	m_tpgXferFunc->addItem("Rec. 709", QVariant(V4L2_XFER_FUNC_709));
+	m_tpgXferFunc->addItem("sRGB", QVariant(V4L2_XFER_FUNC_SRGB));
+	m_tpgXferFunc->addItem("Adobe RGB", QVariant(V4L2_XFER_FUNC_ADOBERGB));
+	m_tpgXferFunc->addItem("SMPTE 240M", QVariant(V4L2_XFER_FUNC_SMPTE240M));
+	m_tpgXferFunc->addItem("None", QVariant(V4L2_XFER_FUNC_NONE));
+	addWidget(grid, m_tpgXferFunc);
+	connect(m_tpgXferFunc, SIGNAL(activated(int)), SLOT(tpgXferFuncChanged()));
+
+	addLabel(grid, "Y'CbCr Encoding");
+	m_tpgYCbCrEnc = new QComboBox(w);
+	m_tpgYCbCrEnc->addItem("Use Format", QVariant(V4L2_YCBCR_ENC_DEFAULT));
+	m_tpgYCbCrEnc->addItem("ITU-R 601", QVariant(V4L2_YCBCR_ENC_601));
+	m_tpgYCbCrEnc->addItem("Rec. 709", QVariant(V4L2_YCBCR_ENC_709));
+	m_tpgYCbCrEnc->addItem("xvYCC 601", QVariant(V4L2_YCBCR_ENC_XV601));
+	m_tpgYCbCrEnc->addItem("xvYCC 709", QVariant(V4L2_YCBCR_ENC_XV709));
+	m_tpgYCbCrEnc->addItem("sYCC", QVariant(V4L2_YCBCR_ENC_SYCC));
+	m_tpgYCbCrEnc->addItem("BT.2020", QVariant(V4L2_YCBCR_ENC_BT2020));
+	m_tpgYCbCrEnc->addItem("BT.2020 Constant Luminance", QVariant(V4L2_YCBCR_ENC_BT2020_CONST_LUM));
+	m_tpgYCbCrEnc->addItem("SMPTE 240M", QVariant(V4L2_YCBCR_ENC_SMPTE240M));
+	addWidget(grid, m_tpgYCbCrEnc);
+	connect(m_tpgYCbCrEnc, SIGNAL(activated(int)), SLOT(tpgColorspaceChanged()));
+
+	addLabel(grid, "Quantization");
+	m_tpgQuantRange = new QComboBox(w);
+	m_tpgQuantRange->addItem("Use Format", QVariant(V4L2_QUANTIZATION_DEFAULT));
+	m_tpgQuantRange->addItem("Full Range", QVariant(V4L2_QUANTIZATION_FULL_RANGE));
+	m_tpgQuantRange->addItem("Limited Range", QVariant(V4L2_QUANTIZATION_LIM_RANGE));
+	addWidget(grid, m_tpgQuantRange);
+	connect(m_tpgQuantRange, SIGNAL(activated(int)), SLOT(tpgColorspaceChanged()));
 
 	addLabel(grid, "Limited RGB Range (16-235)");
 	m_tpgLimRGBRange = new QCheckBox(w);
@@ -264,27 +299,20 @@ void ApplicationWindow::updateLimRGBRange()
 	}
 }
 
-__u32 ApplicationWindow::defaultColorspace(bool capture)
+__u32 ApplicationWindow::tpgDefaultColorspace()
 {
 	v4l2_dv_timings timings = { 0 };
 	v4l2_output out;
-	v4l2_input in;
 	__u32 io_caps;
 	bool dvi_d = false;
 
-	if (capture) {
-		g_input(in.index);
-		enum_input(in, true, in.index);
-		io_caps = in.capabilities;
-	} else {
-		g_output(out.index);
-		enum_output(out, true, out.index);
-		io_caps = out.capabilities;
-		v4l2_control ctrl = { V4L2_CID_DV_TX_MODE };
+	g_output(out.index);
+	enum_output(out, true, out.index);
+	io_caps = out.capabilities;
+	v4l2_control ctrl = { V4L2_CID_DV_TX_MODE };
 
-		if (!g_ctrl(ctrl))
-			dvi_d = ctrl.value == V4L2_DV_TX_MODE_DVI_D;
-	}
+	if (!g_ctrl(ctrl))
+		dvi_d = ctrl.value == V4L2_DV_TX_MODE_DVI_D;
 
 	if (io_caps & V4L2_OUT_CAP_STD)
 		return V4L2_COLORSPACE_SMPTE170M;
@@ -300,46 +328,34 @@ __u32 ApplicationWindow::defaultColorspace(bool capture)
 	return V4L2_COLORSPACE_REC709;
 }
 
-void ApplicationWindow::colorspaceChanged(int val)
+static int combo2int(QComboBox *combo)
 {
-	switch (val) {
-	case 0:
-		m_tpgColorspace = 0;
-		break;
-	case 1:
-		m_tpgColorspace = V4L2_COLORSPACE_SMPTE170M;
-		break;
-	case 2:
-		m_tpgColorspace = V4L2_COLORSPACE_SMPTE240M;
-		break;
-	case 3:
-		m_tpgColorspace = V4L2_COLORSPACE_REC709;
-		break;
-	case 4:
-		m_tpgColorspace = V4L2_COLORSPACE_470_SYSTEM_M;
-		break;
-	case 5:
-		m_tpgColorspace = V4L2_COLORSPACE_470_SYSTEM_BG;
-		break;
-	case 6:
-	default:
-		m_tpgColorspace = V4L2_COLORSPACE_SRGB;
-		break;
-	}
+	return combo->itemData(combo->currentIndex()).toInt();
+}
 
+void ApplicationWindow::tpgColorspaceChanged()
+{
 	cv4l_fmt fmt;
-	v4l2_output out;
-
-	g_output(out.index);
-	enum_output(out, true, out.index);
+	int colorspace = combo2int(m_tpgColorspace);
+	int xferFunc = combo2int(m_tpgXferFunc);
+	int ycbcrEnc = combo2int(m_tpgYCbCrEnc);
+	int quantization = combo2int(m_tpgQuantRange);
 
 	g_fmt(fmt);
-	if (m_tpgColorspace == 0)
-		fmt.s_colorspace(defaultColorspace(false));
-	else
-		fmt.s_colorspace(m_tpgColorspace);
-	s_fmt(fmt);
-	tpg_s_colorspace(&m_tpg, m_tpgColorspace ? m_tpgColorspace : fmt.g_colorspace());
+	if (colorspace == V4L2_COLORSPACE_DEFAULT)
+		colorspace = fmt.g_colorspace();
+	if (colorspace == V4L2_COLORSPACE_DEFAULT)
+		colorspace = tpgDefaultColorspace();
+	if (xferFunc == V4L2_XFER_FUNC_DEFAULT)
+		xferFunc = fmt.g_xfer_func();
+	if (ycbcrEnc == V4L2_YCBCR_ENC_DEFAULT)
+		ycbcrEnc = fmt.g_ycbcr_enc();
+	if (quantization == V4L2_QUANTIZATION_DEFAULT)
+		quantization = fmt.g_quantization();
+	tpg_s_colorspace(&m_tpg, colorspace);
+	tpg_s_xfer_func(&m_tpg, xferFunc);
+	tpg_s_ycbcr_enc(&m_tpg, ycbcrEnc);
+	tpg_s_quantization(&m_tpg, quantization);
 }
 
 void ApplicationWindow::limRGBRangeChanged(int val)

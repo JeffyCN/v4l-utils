@@ -170,6 +170,14 @@ enum v4l2_colorfx {
  * We reserve 16 controls for this driver. */
 #define V4L2_CID_USER_SAA7134_BASE		(V4L2_CID_USER_BASE + 0x1060)
 
+/* The base for the adv7180 driver controls.
+ * We reserve 16 controls for this driver. */
+#define V4L2_CID_USER_ADV7180_BASE		(V4L2_CID_USER_BASE + 0x1070)
+
+/* The base for the tc358743 driver controls.
+ * We reserve 16 controls for this driver. */
+#define V4L2_CID_USER_TC358743_BASE		(V4L2_CID_USER_BASE + 0x1080)
+
 /* MPEG-class control IDs */
 /* The MPEG controls are applicable to all codec controls
  * and the 'MPEG' part of the define is historical */

@@ -25,7 +25,11 @@
 
 #define _LARGEFILE64_SOURCE 1
 
+#ifdef ANDROID
+#include <android-config.h>
+#else
 #include <config.h>
+#endif
 #include <stdarg.h>
 #include <stdlib.h>
 #include <fcntl.h>
@@ -86,7 +90,7 @@ LIBV4L_PUBLIC int open(const char *file, int oflag, ...)
 	return fd;
 }
 
-#ifdef linux
+#if defined(linux) && defined(__GLIBC__)
 LIBV4L_PUBLIC int open64(const char *file, int oflag, ...)
 {
 	int fd;
@@ -111,6 +115,7 @@ LIBV4L_PUBLIC int open64(const char *file, int oflag, ...)
 }
 #endif
 
+#ifndef ANDROID
 LIBV4L_PUBLIC int close(int fd)
 {
 	return v4l2_close(fd);
@@ -121,7 +126,11 @@ LIBV4L_PUBLIC int dup(int fd)
 	return v4l2_dup(fd);
 }
 
+#ifdef HAVE_POSIX_IOCTL
+LIBV4L_PUBLIC int ioctl(int fd, int request, ...)
+#else
 LIBV4L_PUBLIC int ioctl(int fd, unsigned long int request, ...)
+#endif
 {
 	void *arg;
 	va_list ap;
@@ -144,7 +153,7 @@ LIBV4L_PUBLIC void *mmap(void *start, size_t length, int prot, int flags, int fd
 	return v4l2_mmap(start, length, prot, flags, fd, offset);
 }
 
-#ifdef linux
+#if defined(linux) && defined(__GLIBC__)
 LIBV4L_PUBLIC void *mmap64(void *start, size_t length, int prot, int flags, int fd,
 		__off64_t offset)
 {
@@ -156,4 +165,4 @@ LIBV4L_PUBLIC int munmap(void *start, size_t length)
 {
 	return v4l2_munmap(start, length);
 }
-
+#endif

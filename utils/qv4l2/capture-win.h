@@ -44,7 +44,7 @@ enum CropMethod {
 struct frame {
 	__u32 format;
 	QSize size;        // int   frameHeight; int   frameWidth;
-	unsigned char *planeData[2];
+	unsigned char *planeData[3];
 	bool updated;
 };
 
@@ -69,9 +69,9 @@ public:
 	void setPixelAspectRatio(double ratio);
 	float getHorScaleFactor();
 	float getVertScaleFactor();
-	virtual void setColorspace(unsigned colorspace) = 0;
+	virtual void setColorspace(unsigned colorspace, unsigned xfer_func,
+			unsigned ycbcr_enc, unsigned quantization, bool is_sdtv) = 0;
 	virtual void setField(unsigned field) = 0;
-	virtual void setDisplayColorspace(unsigned colorspace) = 0;
 	virtual void setBlending(bool enable) = 0;
 	virtual void setLinearFilter(bool enable) = 0;
 	void setCropMethod(CropMethod crop);
@@ -92,7 +92,7 @@ public:
 	 * @param info A string containing capture information.
 	 */
 	void setFrame(int width, int height, __u32 format,
-		      unsigned char *data, unsigned char *data2);
+		      unsigned char *data, unsigned char *data2, unsigned char *data3);
 
 	/**
 	 * @brief Called when the capture stream is stopped.

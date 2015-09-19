@@ -606,7 +606,7 @@ int dvb_fe_get_event(struct dvb_v5_fe_parms *parms);
 /*
  * Other functions, associated to SEC/LNB/DISEqC
  *
- * The functions bellow are just wrappers for the Kernel calls, in order to
+ * The functions below are just wrappers for the Kernel calls, in order to
  * manually control satellite systems.
  *
  * Instead of using most them, the best is to set the LNBf parameters, and let
@@ -718,6 +718,22 @@ int dvb_fe_diseqc_reply(struct dvb_v5_fe_parms *parms, unsigned *len, char *buf,
  * @param delivery_system	delivery system to be selected
  */
 int dvb_fe_is_satellite(uint32_t delivery_system);
+
+/**
+ * @brief Set default country variant of delivery systems like ISDB-T
+ * @ingroup frontend
+ *
+ * @param parms		struct dvb_v5_fe_parms pointer to the opened device
+ * @param country	default country, in ISO 3316-1 two letter code. If
+ *			NULL, default charset is guessed from locale environment
+ *			variables.
+ *
+ * @return 0 if success or an errorno otherwise.
+ *
+ * "COUNTRY" property in dvb_fe_set_parm() overrides the setting.
+ */
+int dvb_fe_set_default_country(struct dvb_v5_fe_parms *parms,
+			       const char *country);
 
 #ifdef __cplusplus
 }

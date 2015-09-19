@@ -274,6 +274,7 @@ static std::string ctrlflags2s(__u32 flags)
 		{ V4L2_CTRL_FLAG_WRITE_ONLY, "write-only" },
 		{ V4L2_CTRL_FLAG_VOLATILE,   "volatile" },
 		{ V4L2_CTRL_FLAG_HAS_PAYLOAD,"has-payload" },
+		{ V4L2_CTRL_FLAG_EXECUTE_ON_WRITE, "execute-on-write" },
 		{ 0, NULL }
 	};
 	return flags2s(flags, def);
@@ -470,9 +471,14 @@ static int query_ext_ctrl_ioctl(int fd, struct v4l2_query_ext_ctrl &qctrl)
 		qctrl.type = qc.type;
 		memcpy(qctrl.name, qc.name, sizeof(qctrl.name));
 		qctrl.minimum = qc.minimum;
-		qctrl.maximum = qc.maximum;
+		if (qc.type == V4L2_CTRL_TYPE_BITMASK) {
+			qctrl.maximum = (__u32)qc.maximum;
+			qctrl.default_value = (__u32)qc.default_value;
+		} else {
+			qctrl.maximum = qc.maximum;
+			qctrl.default_value = qc.default_value;
+		}
 		qctrl.step = qc.step;
-		qctrl.default_value = qc.default_value;
 		qctrl.flags = qc.flags;
 		qctrl.elems = 1;
 		qctrl.nr_of_dims = 0;
@@ -506,7 +512,7 @@ static void list_controls(int fd, int show_menus)
 		print_control(fd, qctrl, show_menus);
 		qctrl.id |= next_fl;
 	}
-	if (!(qctrl.id & next_fl))
+	if (qctrl.id != next_fl)
 		return;
 	for (id = V4L2_CID_USER_BASE; id < V4L2_CID_LASTP1; id++) {
 		qctrl.id = id;
@@ -535,7 +541,7 @@ static void find_controls(int fd)
 		}
 		qctrl.id |= next_fl;
 	}
-	if (!(qctrl.id & next_fl))
+	if (qctrl.id != next_fl)
 		return;
 	for (id = V4L2_CID_USER_BASE; id < V4L2_CID_LASTP1; id++) {
 		qctrl.id = id;
@@ -595,14 +601,21 @@ void common_control_event(const struct v4l2_event *ev)
 	if (ctrl->changes & V4L2_EVENT_CTRL_CH_VALUE) {
 		if (ctrl->type == V4L2_CTRL_TYPE_INTEGER64)
 			printf("\tvalue: %lld 0x%llx\n", ctrl->value64, ctrl->value64);
+		else if (ctrl->type == V4L2_CTRL_TYPE_BITMASK)
+			printf("\tvalue: %u 0x%08x\n", ctrl->value, ctrl->value);
 		else
 			printf("\tvalue: %d 0x%x\n", ctrl->value, ctrl->value);
 	}
 	if (ctrl->changes & V4L2_EVENT_CTRL_CH_FLAGS)
 		printf("\tflags: %s\n", ctrlflags2s(ctrl->flags).c_str());
-	if (ctrl->changes & V4L2_EVENT_CTRL_CH_RANGE)
-		printf("\trange: min=%d max=%d step=%d default=%d\n",
-			ctrl->minimum, ctrl->maximum, ctrl->step, ctrl->default_value);
+	if (ctrl->changes & V4L2_EVENT_CTRL_CH_RANGE) {
+		if (ctrl->type == V4L2_CTRL_TYPE_BITMASK)
+			printf("\trange: max=0x%08x default=0x%08x\n",
+				ctrl->maximum, ctrl->default_value);
+		else
+			printf("\trange: min=%d max=%d step=%d default=%d\n",
+				ctrl->minimum, ctrl->maximum, ctrl->step, ctrl->default_value);
+	}
 }
 
 static bool parse_subset(char *optarg)
@@ -663,12 +676,11 @@ static bool parse_next_subopt(char **subs, char **value)
 	};
 	int opt = getsubopt(subs, subopts, value);
 
-	if (*value == NULL) {
-		fprintf(stderr, "No value given to suboption <%s>\n",
-				subopts[opt]);
-		return true;
-	}
-	return false;
+	if (opt < 0 || *value)
+		return false;
+	fprintf(stderr, "No value given to suboption <%s>\n",
+			subopts[opt]);
+	return true;
 }
 
 void common_cmd(int ch, char *optarg)

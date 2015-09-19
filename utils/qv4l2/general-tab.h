@@ -72,25 +72,31 @@ public:
 	bool isVbi() const { return m_isVbi; }
 	bool isSlicedVbi() const;
 	bool isPlanar() const { return m_isPlanar; }
+	bool isSDTV() const { return m_isSDTV; }
 	__u32 usePrio() const
 	{
 		return m_recordPrio->isChecked() ?
 			V4L2_PRIORITY_RECORD : V4L2_PRIORITY_DEFAULT;
 	}
 	void setHaveBuffers(bool haveBuffers);
+	unsigned getNumBuffers()
+	{
+		return m_numBuffers->value();
+	}
 	void sourceChange(const v4l2_event &ev);
 	void sourceChangeSubscribe();
-	unsigned getDisplayColorspace() const;
-	unsigned getColorspace() const;
 	int getWidth();
+	unsigned getNumBuffers() const;
+	QComboBox *m_tpgComboColorspace;
+	QComboBox *m_tpgComboXferFunc;
+	QComboBox *m_tpgComboYCbCrEnc;
+	QComboBox *m_tpgComboQuantRange;
 
 signals:
 	void audioDeviceChanged();
 	void pixelAspectRatioChanged();
 	void croppingChanged();
-	void colorspaceChanged();
 	void clearBuffers();
-	void displayColorspaceChanged();
 
 private slots:
 	void inputChanged(int);
@@ -121,6 +127,10 @@ private slots:
 	void changePixelAspectRatio();
 	void cropChanged();
 	void composeChanged();
+	void colorspaceChanged(int);
+	void xferFuncChanged(int);
+	void ycbcrEncChanged(int);
+	void quantRangeChanged(int);
 
 private:
 	void inputSection(v4l2_input vin);
@@ -142,6 +152,8 @@ private:
 	void updateFreq();
 	void updateFreqChannel();
 	void updateFreqRf();
+	void updateColorspace();
+	void clearColorspace(cv4l_fmt &fmt);
 	void updateVidCapFormat();
 	void updateVidFields();
 	void updateFrameSize();
@@ -291,6 +303,7 @@ private:
 	bool m_isSDR;
 	bool m_isVbi;
 	bool m_isOutput;
+	bool m_isSDTV;
 	double m_freqFac;
 	double m_freqRfFac;
 	bool m_isPlanar;
@@ -325,7 +338,9 @@ private:
 	QComboBox *m_videoTimings;
 	QComboBox *m_pixelAspectRatio;
 	QComboBox *m_colorspace;
-	QComboBox *m_displayColorspace;
+	QComboBox *m_xferFunc;
+	QComboBox *m_ycbcrEnc;
+	QComboBox *m_quantRange;
 	QComboBox *m_cropping;
 	QToolButton *m_qryTimings;
 	QDoubleSpinBox *m_freq;
@@ -345,6 +360,7 @@ private:
 	QComboBox *m_frameInterval;
 	QComboBox *m_vidOutFormats;
 	QComboBox *m_capMethods;
+	QSpinBox *m_numBuffers;
 	QCheckBox *m_recordPrio;
 	QComboBox *m_vbiMethods;
 	QComboBox *m_audioInDevice;
