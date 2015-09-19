@@ -75,6 +75,7 @@ const unsigned int sys_isdbt_props[] = {
 	DTV_ISDBT_LAYERC_MODULATION,
 	DTV_ISDBT_LAYERC_SEGMENT_COUNT,
 	DTV_ISDBT_LAYERC_TIME_INTERLEAVING,
+	DTV_COUNTRY_CODE,
 	0
 };
 
@@ -154,11 +155,19 @@ const unsigned int sys_turbo_props[] = {
 
 const unsigned int sys_isdbs_props[] = {
 	DTV_FREQUENCY,
-	DTV_INVERSION,
-	DTV_SYMBOL_RATE,
-	DTV_INNER_FEC,
 	DTV_STREAM_ID,
-	DTV_POLARIZATION,
+	0
+};
+
+const unsigned int sys_dtmb_props[] = {
+	DTV_FREQUENCY,
+	DTV_MODULATION,
+	DTV_BANDWIDTH_HZ,
+	DTV_INVERSION,
+	DTV_INNER_FEC,
+	DTV_GUARD_INTERVAL,
+	DTV_TRANSMISSION_MODE,
+	DTV_INTERLEAVING,
 	0
 };
 
@@ -175,10 +184,10 @@ const unsigned int *dvb_v5_delivery_system[] = {
 	[SYS_ISDBS] =         sys_isdbs_props,
 	[SYS_ISDBT] =         sys_isdbt_props,
 	[SYS_TURBO] =         sys_turbo_props,
+	[SYS_DTMB] =          sys_dtmb_props,
 	[SYS_ATSCMH] =        NULL,
 	[SYS_CMMB] =          NULL,
 	[SYS_DAB] =           NULL,
-	[SYS_DMBTH] =         NULL,
 	[SYS_DSS] =           NULL,
 	[SYS_DVBH] =          NULL,
 	[SYS_ISDBC] =         NULL,
@@ -230,6 +239,7 @@ const char *dvb_user_name[DTV_USER_NAME_SIZE + 1] = {
 	[DTV_FREQ_BPF - DTV_USER_COMMAND_START] =	"FREQ BPF",
 	[DTV_PLS_CODE - DTV_USER_COMMAND_START] =	"PLS CODE",
 	[DTV_PLS_MODE - DTV_USER_COMMAND_START] =	"PLS MODE",
+	[DTV_COUNTRY_CODE - DTV_USER_COMMAND_START] =	"COUNTRY",
 	[DTV_USER_NAME_SIZE] = NULL,
 };
 

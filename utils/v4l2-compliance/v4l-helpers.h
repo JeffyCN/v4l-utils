@@ -603,6 +603,22 @@ static inline unsigned v4l_format_g_flds_per_frm(const struct v4l2_format *fmt)
 	return 1;
 }
 
+static inline void v4l_format_s_frame_height(struct v4l2_format *fmt, __u32 height)
+{
+	if (V4L2_FIELD_HAS_T_OR_B(v4l_format_g_field(fmt)))
+		height /= 2;
+	v4l_format_s_height(fmt, height);
+}
+
+static inline __u32 v4l_format_g_frame_height(const struct v4l2_format *fmt)
+{
+	__u32 height = v4l_format_g_height(fmt);
+
+	if (V4L2_FIELD_HAS_T_OR_B(v4l_format_g_field(fmt)))
+		return height * 2;
+	return height;
+}
+
 static inline void v4l_format_s_colorspace(struct v4l2_format *fmt,
 					       unsigned colorspace)
 {
@@ -628,6 +644,126 @@ v4l_format_g_colorspace(const struct v4l2_format *fmt)
 	case V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE:
 	case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
 		return fmt->fmt.pix_mp.colorspace;
+	default:
+		return 0;
+	}
+}
+
+static inline void v4l_format_s_xfer_func(struct v4l2_format *fmt,
+					       unsigned xfer_func)
+{
+	switch (fmt->type) {
+	case V4L2_BUF_TYPE_VIDEO_CAPTURE:
+	case V4L2_BUF_TYPE_VIDEO_OUTPUT:
+		fmt->fmt.pix.xfer_func = xfer_func;
+		break;
+	case V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE:
+	case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
+		fmt->fmt.pix_mp.xfer_func = xfer_func;
+		break;
+	}
+}
+
+static inline unsigned
+v4l_format_g_xfer_func(const struct v4l2_format *fmt)
+{
+	switch (fmt->type) {
+	case V4L2_BUF_TYPE_VIDEO_CAPTURE:
+	case V4L2_BUF_TYPE_VIDEO_OUTPUT:
+		return fmt->fmt.pix.xfer_func;
+	case V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE:
+	case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
+		return fmt->fmt.pix_mp.xfer_func;
+	default:
+		return 0;
+	}
+}
+
+static inline void v4l_format_s_ycbcr_enc(struct v4l2_format *fmt,
+					       unsigned ycbcr_enc)
+{
+	switch (fmt->type) {
+	case V4L2_BUF_TYPE_VIDEO_CAPTURE:
+	case V4L2_BUF_TYPE_VIDEO_OUTPUT:
+		fmt->fmt.pix.ycbcr_enc = ycbcr_enc;
+		break;
+	case V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE:
+	case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
+		fmt->fmt.pix_mp.ycbcr_enc = ycbcr_enc;
+		break;
+	}
+}
+
+static inline unsigned
+v4l_format_g_ycbcr_enc(const struct v4l2_format *fmt)
+{
+	switch (fmt->type) {
+	case V4L2_BUF_TYPE_VIDEO_CAPTURE:
+	case V4L2_BUF_TYPE_VIDEO_OUTPUT:
+		return fmt->fmt.pix.ycbcr_enc;
+	case V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE:
+	case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
+		return fmt->fmt.pix_mp.ycbcr_enc;
+	default:
+		return 0;
+	}
+}
+
+static inline void v4l_format_s_quantization(struct v4l2_format *fmt,
+					       unsigned quantization)
+{
+	switch (fmt->type) {
+	case V4L2_BUF_TYPE_VIDEO_CAPTURE:
+	case V4L2_BUF_TYPE_VIDEO_OUTPUT:
+		fmt->fmt.pix.quantization = quantization;
+		break;
+	case V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE:
+	case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
+		fmt->fmt.pix_mp.quantization = quantization;
+		break;
+	}
+}
+
+static inline unsigned
+v4l_format_g_quantization(const struct v4l2_format *fmt)
+{
+	switch (fmt->type) {
+	case V4L2_BUF_TYPE_VIDEO_CAPTURE:
+	case V4L2_BUF_TYPE_VIDEO_OUTPUT:
+		return fmt->fmt.pix.quantization;
+	case V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE:
+	case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
+		return fmt->fmt.pix_mp.quantization;
+	default:
+		return 0;
+	}
+}
+
+static inline void v4l_format_s_flags(struct v4l2_format *fmt,
+					       unsigned flags)
+{
+	switch (fmt->type) {
+	case V4L2_BUF_TYPE_VIDEO_CAPTURE:
+	case V4L2_BUF_TYPE_VIDEO_OUTPUT:
+		fmt->fmt.pix.flags = flags;
+		break;
+	case V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE:
+	case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
+		fmt->fmt.pix_mp.flags = flags;
+		break;
+	}
+}
+
+static inline unsigned
+v4l_format_g_flags(const struct v4l2_format *fmt)
+{
+	switch (fmt->type) {
+	case V4L2_BUF_TYPE_VIDEO_CAPTURE:
+	case V4L2_BUF_TYPE_VIDEO_OUTPUT:
+		return fmt->fmt.pix.flags;
+	case V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE:
+	case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
+		return fmt->fmt.pix_mp.flags;
 	default:
 		return 0;
 	}
@@ -1449,9 +1585,14 @@ static inline int v4l_query_ext_ctrl(v4l_fd *f, struct v4l2_query_ext_ctrl *qec,
 	qec->type = qc.type;
 	memcpy(qec->name, qc.name, sizeof(qec->name));
 	qec->minimum = qc.minimum;
-	qec->maximum = qc.maximum;
+	if (qc.type == V4L2_CTRL_TYPE_BITMASK) {
+		qec->maximum = (__u32)qc.maximum;
+		qec->default_value = (__u32)qc.default_value;
+	} else {
+		qec->maximum = qc.maximum;
+		qec->default_value = qc.default_value;
+	}
 	qec->step = qc.step;
-	qec->default_value = qc.default_value;
 	qec->flags = qc.flags;
 	qec->elems = 1;
 	qec->nr_of_dims = 0;
@@ -1604,6 +1745,55 @@ static inline int v4l_s_selection(v4l_fd *f, struct v4l2_selection *sel)
 		return v4l_ioctl(f, VIDIOC_S_CROP, &crop);
 	}
 	return EINVAL;
+}
+
+static inline void v4l_frame_selection(struct v4l2_selection *sel, bool to_frame)
+{
+	switch (sel->target) {
+	case V4L2_SEL_TGT_CROP:
+	case V4L2_SEL_TGT_CROP_DEFAULT:
+	case V4L2_SEL_TGT_CROP_BOUNDS:
+		if (!V4L2_TYPE_IS_OUTPUT(sel->type))
+			return;
+		break;
+	case V4L2_SEL_TGT_COMPOSE:
+	case V4L2_SEL_TGT_COMPOSE_DEFAULT:
+	case V4L2_SEL_TGT_COMPOSE_BOUNDS:
+	case V4L2_SEL_TGT_COMPOSE_PADDED:
+		if (V4L2_TYPE_IS_OUTPUT(sel->type))
+			return;
+		break;
+	default:
+		return;
+	}
+	if (to_frame) {
+		sel->r.top *= 2;
+		sel->r.height *= 2;
+	} else {
+		sel->r.top /= 2;
+		sel->r.height /= 2;
+	}
+}
+
+static inline int v4l_g_frame_selection(v4l_fd *f, struct v4l2_selection *sel, __u32 field)
+{
+	int ret = v4l_g_selection(f, sel);
+
+	if (V4L2_FIELD_HAS_T_OR_B(field))
+		v4l_frame_selection(sel, true);
+	return ret;
+}
+
+static inline int v4l_s_frame_selection(v4l_fd *f, struct v4l2_selection *sel, __u32 field)
+{
+	int ret;
+
+	if (V4L2_FIELD_HAS_T_OR_B(field))
+		v4l_frame_selection(sel, false);
+	ret = v4l_s_selection(f, sel);
+	if (V4L2_FIELD_HAS_T_OR_B(field))
+		v4l_frame_selection(sel, true);
+	return ret;
 }
 
 #ifdef __cplusplus

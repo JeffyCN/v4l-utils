@@ -273,7 +273,7 @@ static const char *asus_board_vendor[] = {
 	NULL };
 
 static const char *asus_board_name[] = {
-	"A3[A-Z]*", "A6R*", "A7M", "A7Sn",
+	"A3[A-Z]*", "A6R*", "A7J", "A7M", "A7Sn",
 	"B50[A-Z]*",
 	"F[23579][A-Z]*", "F70[A-Z]*", "F[58]2[A-Z]*",
 	"G[12][A-Z]*", "G[57]0[A-Z]*",
@@ -362,7 +362,7 @@ static int v4lcontrol_get_usb_info(struct v4lcontrol_data *data,
 		int *speed)
 {
 	FILE *f;
-	int i, minor;
+	int i, minor_dev;
 	struct stat st;
 	char sysfs_name[512];
 	char c, *s, buf[32];
@@ -388,8 +388,8 @@ static int v4lcontrol_get_usb_info(struct v4lcontrol_data *data,
 		s = fgets(buf, sizeof(buf), f);
 		fclose(f);
 
-		if (s && sscanf(buf, "%*d:%d%c", &minor, &c) == 2 &&
-		    c == '\n' && minor == minor(st.st_rdev))
+		if (s && sscanf(buf, "%*d:%d%c", &minor_dev, &c) == 2 &&
+		    c == '\n' && minor_dev == minor(st.st_rdev))
 			break;
 	}
 	if (i == 256)
@@ -716,6 +716,7 @@ struct v4lcontrol_data *v4lcontrol_create(int fd, void *dev_ops_priv,
 		if (shm_name[i] == '/')
 			shm_name[i] = '-';
 
+#ifndef ANDROID
 	/* Open the shared memory object identified by shm_name */
 	shm_fd = shm_open(shm_name, (O_CREAT | O_EXCL | O_RDWR), (S_IREAD | S_IWRITE));
 	if (shm_fd >= 0)
@@ -738,6 +739,7 @@ struct v4lcontrol_data *v4lcontrol_create(int fd, void *dev_ops_priv,
 		}
 	} else
 		perror("libv4lcontrol: error creating shm segment failed");
+#endif
 
 	/* Fall back to malloc */
 	if (data->shm_values == NULL) {

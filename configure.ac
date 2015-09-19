@@ -3,7 +3,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.59)
-AC_INIT([v4l-utils],[1.6.3])
+AC_INIT([v4l-utils],[1.8.0])
 
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIR([m4])
@@ -24,6 +24,8 @@ AC_CONFIG_FILES([Makefile
 	utils/decode_tm6000/Makefile
 	utils/dvb/Makefile
 	utils/keytable/Makefile
+	utils/cx18-ctl/Makefile
+	utils/ivtv-ctl/Makefile
 	utils/media-ctl/Makefile
 	utils/rds/Makefile
 	utils/v4l2-compliance/Makefile
@@ -37,6 +39,11 @@ AC_CONFIG_FILES([Makefile
 	contrib/Makefile
 	contrib/freebsd/Makefile
 	contrib/test/Makefile
+	contrib/gconv/Makefile
+	contrib/cobalt/Makefile
+
+	v4l-utils-po/Makefile.in
+	libdvbv5-po/Makefile.in
 
 	v4l-utils.spec
 	lib/libv4lconvert/libv4lconvert.pc
@@ -48,12 +55,16 @@ AC_CONFIG_FILES([Makefile
 	utils/media-ctl/libv4l2subdev.pc
 
 	utils/qv4l2/qv4l2.1
+	utils/v4l2-compliance/v4l2-compliance.1
+	utils/v4l2-ctl/v4l2-ctl.1
 	utils/keytable/ir-keytable.1
 	utils/dvb/dvb-fe-tool.1
 	utils/dvb/dvbv5-scan.1
 	utils/dvb/dvb-format-convert.1
 	utils/dvb/dvbv5-zap.1
 ])
+
+AC_GNU_SOURCE
 
 AM_INIT_AUTOMAKE([1.9 subdir-objects no-dist-gzip dist-bzip2 -Wno-portability]) # 1.10 is needed for target_LIBTOOLFLAGS
 
@@ -70,6 +81,36 @@ AC_PROG_LN_S
 PKG_PROG_PKG_CONFIG
 DX_DOT_FEATURE(ON)
 DX_INIT_DOXYGEN($PACKAGE_NAME, doxygen_libdvbv5.cfg)
+ALL_LINGUAS=""
+AM_GNU_GETTEXT([external])
+
+LIBDVBV5_DOMAIN="libdvbv5"
+AC_DEFINE([LIBDVBV5_DOMAIN], "libdvbv5", [libdvbv5 domain])
+AC_SUBST(LIBDVBV5_DOMAIN)
+
+# Define localedir
+AC_DEFUN([V4L_EXPAND_PREFIX], [
+	$1=$2
+	dnl expanding twice, since from autoconf 2.60 on, $datadir refers to
+	dnl $datarootdir which in turn refers to $prefix
+	$1=`(	test "x$prefix" = xNONE && prefix="$ac_default_prefix"
+		eval tmp_v4l_prefix=\""[$]$1"\"
+		eval echo $tmp_v4l_prefix
+		)`
+])
+
+V4L_EXPAND_PREFIX(v4l_localedir, "$datadir/locale")
+localedir="\$(datadir)/locale"
+
+AC_ARG_WITH(localedir,
+	[  --with-localedir=PATH      Where the locale files are installed ])
+if test "x$with_localedir" != "x"; then
+	v4l_localedir="$with_localedir"
+	localedir="$with_localedir"
+fi
+
+AC_DEFINE_UNQUOTED(LOCALEDIR, "$v4l_localedir", [locale directory])
+AC_SUBST(localedir)
 
 # sync-with-kernel and keytable install could make use of them
 #AC_PROG_GREP
@@ -79,6 +120,22 @@ gl_VISIBILITY
 
 AC_CHECK_HEADERS([sys/klog.h])
 AC_CHECK_FUNCS([klogctl])
+
+AC_CACHE_CHECK([for ioctl with POSIX signature],
+  [gl_cv_func_ioctl_posix_signature],
+  [AC_COMPILE_IFELSE(
+     [AC_LANG_PROGRAM(
+        [[#include <sys/ioctl.h>]],
+        [[int ioctl (int, int, ...);]])
+     ],
+     [gl_cv_func_ioctl_posix_signature=yes],
+     [gl_cv_func_ioctl_posix_signature=no])
+  ])
+if test "x$gl_cv_func_ioctl_posix_signature" = xyes; then
+  AC_DEFINE([HAVE_POSIX_IOCTL], [1], [Have ioctl with POSIX signature])
+fi
+
+AC_CHECK_FUNCS([__secure_getenv secure_getenv])
 
 # Check host os
 case "$host_os" in
@@ -126,29 +183,51 @@ AS_IF([test "x$with_jpeg" != xno],
 
 AM_CONDITIONAL([HAVE_JPEG], [$have_jpeg])
 
-PKG_CHECK_MODULES(QT, [QtCore >= 4.4 QtGui >= 4.4], [qt_pkgconfig=true], [qt_pkgconfig=false])
+PKG_CHECK_MODULES(QT5, [Qt5Core >= 5.0 Qt5Gui >= 5.0 Qt5Widgets >= 5.0], [qt_pkgconfig=true], [qt_pkgconfig=false])
 if test "x$qt_pkgconfig" = "xtrue"; then
+   QT_CFLAGS="$QT5_CFLAGS -fPIC"
+   QT_LIBS="$QT5_LIBS"
    AC_SUBST(QT_CFLAGS)
    AC_SUBST(QT_LIBS)
-   MOC=`$PKG_CONFIG --variable=moc_location QtCore`
-   UIC=`$PKG_CONFIG --variable=uic_location QtCore`
-   RCC=`$PKG_CONFIG --variable=rcc_location QtCore`
-   if test -z "$RCC"; then
-      RCC="rcc"
-   fi
+   AC_CHECK_PROGS(MOC, [moc-qt5 moc])
+   AC_CHECK_PROGS(UIC, [uic-qt5 uic])
+   AC_CHECK_PROGS(RCC, [rcc-qt5 rcc])
    AC_SUBST(MOC)
    AC_SUBST(UIC)
    AC_SUBST(RCC)
+   PKG_CHECK_MODULES(QT5GL, [Qt5OpenGL >= 5.0 gl], [qt_pkgconfig_gl=true], [qt_pkgconfig_gl=false])
+   if test "x$qt_pkgconfig_gl" = "xtrue"; then
+      QTGL_CFLAGS="$QT5GL_CFLAGS -fPIC"
+      QTGL_LIBS="$QT5GL_LIBS"
+      AC_SUBST(QT_CFLAGS)
+      AC_SUBST(QT_LIBS)
+      AC_DEFINE([HAVE_QTGL], [1], [qt has opengl support])
+   else
+      AC_MSG_WARN(Qt5 OpenGL is not available)
+    fi
 else
-   AC_MSG_WARN(Qt4 or higher is not available)
+   PKG_CHECK_MODULES(QT, [QtCore >= 4.0 QtGui >= 4.0], [qt_pkgconfig=true], [qt_pkgconfig=false])
+   if test "x$qt_pkgconfig" = "xtrue"; then
+      MOC=`$PKG_CONFIG --variable=moc_location QtCore`
+      UIC=`$PKG_CONFIG --variable=uic_location QtCore`
+      RCC=`$PKG_CONFIG --variable=rcc_location QtCore`
+      if test -z "$RCC"; then
+         RCC="rcc"
+      fi
+      AC_SUBST(MOC)
+      AC_SUBST(UIC)
+      AC_SUBST(RCC)
+      PKG_CHECK_MODULES(QTGL, [QtOpenGL >= 4.8 gl], [qt_pkgconfig_gl=true], [qt_pkgconfig_gl=false])
+      if test "x$qt_pkgconfig_gl" = "xtrue"; then
+         AC_DEFINE([HAVE_QTGL], [1], [qt has opengl support])
+      else
+         AC_MSG_WARN(Qt4 OpenGL is not available)
+      fi
+   else
+      AC_MSG_WARN(Qt4 or higher is not available)
+   fi
 fi
 
-PKG_CHECK_MODULES(QTGL, [QtOpenGL >= 4.8 gl], [qt_pkgconfig_gl=true], [qt_pkgconfig_gl=false])
-if test "x$qt_pkgconfig_gl" = "xtrue"; then
-   AC_DEFINE([HAVE_QTGL], [1], [qt has opengl support])
-else
-   AC_MSG_WARN(Qt4 OpenGL or higher is not available)
-fi
 
 PKG_CHECK_MODULES(ALSA, [alsa], [alsa_pkgconfig=true], [alsa_pkgconfig=false])
 if test "x$alsa_pkgconfig" = "xtrue"; then
@@ -227,6 +306,13 @@ AC_ARG_WITH(udevdir,
    	[],
 	[with_udevdir=`$PKG_CONFIG --variable=udevdir udev || echo /lib/udev`])
 
+def_gconv_dir=`for i in /lib64 /usr/lib64 /usr/local/lib64 /lib /usr/lib /usr/local/lib; do if @<:@ -d \$i/gconv @:>@; then echo \$i/gconv; break; fi; done || echo /usr/lib/gconv`
+AC_ARG_WITH(gconvdir,
+	AS_HELP_STRING([--with-gconvdir=DIR],
+		       [set system's gconv directory (default=/usr/lib/gconv)]),
+	[],
+	[with_gconvdir=$def_gconv_dir])
+
 AC_SUBST([libv4l1subdir], [$with_libv4l1subdir])
 AC_SUBST([libv4l2subdir], [$with_libv4l2subdir])
 AC_SUBST([libv4l1privdir], [$libdir/$with_libv4l1subdir])
@@ -237,6 +323,7 @@ AC_SUBST([keytablesystemdir], [$with_udevdir/rc_keymaps])
 AC_SUBST([keytableuserdir], [$sysconfdir/rc_keymaps])
 AC_SUBST([udevrulesdir], [$with_udevdir/rules.d])
 AC_SUBST([pkgconfigdir], [$libdir/pkgconfig])
+AC_SUBST([gconvsysdir], [$with_gconvdir])
 
 AC_DEFINE_UNQUOTED([V4L_UTILS_VERSION], ["$PACKAGE_VERSION"], [v4l-utils version string])
 AC_DEFINE_DIR([LIBV4L1_PRIV_DIR], [libv4l1privdir], [libv4l1 private lib directory])
@@ -272,11 +359,35 @@ AC_ARG_ENABLE(v4l-utils,
    esac]
 )
 
+AC_ARG_ENABLE(v4l2-compliance-libv4l,
+  AS_HELP_STRING([--disable-v4l2-compliance-libv4l], [disable use of libv4l in v4l2-compliance]),
+  [case "${enableval}" in
+     yes | no ) ;;
+     *) AC_MSG_ERROR(bad value ${enableval} for --disable-v4l2-compliance-libv4l) ;;
+   esac]
+)
+
+AC_ARG_ENABLE(v4l2-ctl-libv4l,
+  AS_HELP_STRING([--disable-v4l2-ctl-libv4l], [disable use of libv4l in v4l2-ctl]),
+  [case "${enableval}" in
+     yes | no ) ;;
+     *) AC_MSG_ERROR(bad value ${enableval} for --disable-v4l2-ctl-libv4l) ;;
+   esac]
+)
+
 AC_ARG_ENABLE(qv4l2,
   AS_HELP_STRING([--disable-qv4l2], [disable qv4l2 compilation]),
   [case "${enableval}" in
      yes | no ) ;;
      *) AC_MSG_ERROR(bad value ${enableval} for --enable-qv4l2) ;;
+   esac]
+)
+
+AC_ARG_ENABLE(gconv,
+  AS_HELP_STRING([--enable-gconv], [enable compilation of gconv modules]),
+  [case "${enableval}" in
+    yes | no ) [test x$enable_shared == xno -o x$LIBICONV != x && enable_gconv = no] ;;
+    *) AC_MSG_ERROR(bad value ${enableval} for --enable-gconv) ;;
    esac]
 )
 
@@ -287,6 +398,9 @@ AM_CONDITIONAL([WITH_QV4L2],	    [test ${qt_pkgconfig}  = true -a x$enable_qv4l2
 AM_CONDITIONAL([WITH_V4L_PLUGINS],  [test x$enable_libv4l != xno -a x$enable_shared != xno])
 AM_CONDITIONAL([WITH_V4L_WRAPPERS], [test x$enable_libv4l != xno -a x$enable_shared != xno])
 AM_CONDITIONAL([WITH_QTGL],	    [test ${qt_pkgconfig_gl} = true])
+AM_CONDITIONAL([WITH_GCONV],        [test x${enable_gconv} = xyes])
+AM_CONDITIONAL([WITH_V4L2_CTL_LIBV4L], [test x${enable_v4l2_ctl_libv4l} != xno])
+AM_CONDITIONAL([WITH_V4L2_COMPLIANCE_LIBV4L], [test x${enable_v4l2_compliance_libv4l} != xno])
 
 # append -static to libtool compile and link command to enforce static libs
 AS_IF([test x$enable_libdvbv5 = xno], [AC_SUBST([ENFORCE_LIBDVBV5_STATIC], ["-static"])])

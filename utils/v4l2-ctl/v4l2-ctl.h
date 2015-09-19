@@ -147,6 +147,7 @@ enum Option {
 	OptSetEdid,
 	OptClearEdid,
 	OptGetEdid,
+	OptFixEdidChecksums,
 	OptFreqSeek,
 	OptEncoderCmd,
 	OptTryEncoderCmd,
@@ -227,7 +228,11 @@ typedef struct {
 #define FmtTop			(1L<<6)
 #define FmtField		(1L<<7)
 #define FmtColorspace		(1L<<8)
-#define FmtBytesPerLine		(1L<<9)
+#define FmtYCbCr		(1L<<9)
+#define FmtQuantization		(1L<<10)
+#define FmtFlags		(1L<<11)
+#define FmtBytesPerLine		(1L<<12)
+#define FmtXferFunc		(1L<<13)
 
 // v4l2-ctl.cpp
 int doioctl_name(int fd, unsigned long int request, void *parm, const char *name);
@@ -244,7 +249,8 @@ std::string field2s(int val);
 void print_v4lstd(v4l2_std_id std);
 __u32 parse_field(const char *s);
 int parse_fmt(char *optarg, __u32 &width, __u32 &height, __u32 &pixelformat,
-	      __u32 &field, __u32 &colorspace, __u32 *bytesperline);
+	      __u32 &field, __u32 &colorspace, __u32 &xfer, __u32 &ycbcr,
+	      __u32 &quantization, __u32 &flags, __u32 *bytesperline);
 __u32 find_pixel_format(int fd, unsigned index, bool output, bool mplane);
 void printfmt(const struct v4l2_format &vfmt);
 void print_video_formats(int fd, __u32 type);
@@ -342,4 +348,13 @@ void edid_cmd(int ch, char *optarg);
 void edid_set(int fd);
 void edid_get(int fd);
 
+/* v4l2-ctl-modes.cpp */
+bool calc_cvt_modeline(int image_width, int image_height,
+		       int refresh_rate, int reduced_blanking,
+		       bool interlaced, bool reduced_fps,
+		       struct v4l2_bt_timings *cvt);
+
+bool calc_gtf_modeline(int image_width, int image_height,
+		       int refresh_rate, bool reduced_blanking,
+		       bool interlaced, struct v4l2_bt_timings *gtf);
 #endif

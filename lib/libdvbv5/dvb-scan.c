@@ -62,6 +62,19 @@
 #include <libdvbv5/desc_t2_delivery.h>
 #include <libdvbv5/desc_sat.h>
 
+#include <config.h>
+
+#ifdef ENABLE_NLS
+# include "gettext.h"
+# include <libintl.h>
+# define _(string) dgettext(LIBDVBV5_DOMAIN, string)
+
+#else
+# define _(string) string
+#endif
+
+# define N_(string) string
+
 static int dvb_poll(struct dvb_v5_fe_parms_priv *parms, int fd, unsigned int seconds)
 {
 	fd_set set;
@@ -139,14 +152,14 @@ static int dvb_parse_section_alloc(struct dvb_v5_fe_parms_priv *parms,
 	struct dvb_table_filter_priv *priv;
 
 	if (!sect->table) {
-		dvb_logerr("%s: table memory pointer not filled",
+		dvb_logerr(_("%s: table memory pointer not filled"),
 				__func__);
 		return -4;
 	}
 	*sect->table = NULL;
 	priv = calloc(sizeof(struct dvb_table_filter_priv), 1);
 	if (!priv) {
-		dvb_logerr("%s: out of memory", __func__);
+		dvb_logerr(_("%s: out of memory"), __func__);
 		return -1;
 	}
 	priv->last_section = -1;
@@ -177,11 +190,11 @@ static int dvb_parse_section(struct dvb_v5_fe_parms_priv *parms,
 	dvb_table_header_init(&h);
 
 	if (parms->p.verbose)
-		dvb_log("%s: received table 0x%02x, TS ID 0x%04x, section %d/%d",
+		dvb_log(_("%s: received table 0x%02x, TS ID 0x%04x, section %d/%d"),
 			__func__, h.table_id, h.id, h.section_id, h.last_section);
 
 	if (sect->tid != h.table_id) {
-		dvb_logdbg("%s: couldn't match ID %d at the active section filters",
+		dvb_logdbg(_("%s: couldn't match ID %d at the active section filters"),
 			   __func__, h.table_id);
 		return -1;
 	}
@@ -202,7 +215,7 @@ static int dvb_parse_section(struct dvb_v5_fe_parms_priv *parms,
 			/* tables like EIT can increment sections by gaps > 1.
 			 * in this case, reading is done when a already read
 			 * table is reached. */
-			dvb_log("%s: section repeated, reading done", __func__);
+			dvb_log(_("%s: section repeated, reading done"), __func__);
 			priv->done = 1;
 			return 1;
 		}
@@ -224,7 +237,7 @@ static int dvb_parse_section(struct dvb_v5_fe_parms_priv *parms,
 					    buf_length - DVB_CRC_SIZE,
 					    sect->table);
 	else
-		dvb_logerr("%s: no initializer for table %d",
+		dvb_logerr(_("%s: no initializer for table %d"),
 			   __func__, tid);
 
 	if (!sect->allow_section_gaps && sect->ts_id == -1 &&
@@ -258,12 +271,12 @@ int dvb_read_sections(struct dvb_v5_fe_parms *__p, int dmx_fd,
 		return -1;
 	}
 	if (parms->p.verbose)
-		dvb_log("%s: waiting for table ID 0x%02x, program ID 0x%02x",
+		dvb_log(_("%s: waiting for table ID 0x%02x, program ID 0x%02x"),
 			__func__, sect->tid, sect->pid);
 
 	buf = calloc(DVB_MAX_PAYLOAD_PACKET_SIZE, 1);
 	if (!buf) {
-		dvb_logerr("%s: out of memory", __func__);
+		dvb_logerr(_("%s: out of memory"), __func__);
 		dvb_dmx_stop(dmx_fd);
 		dvb_table_filter_free(sect);
 		return -1;
@@ -284,26 +297,26 @@ int dvb_read_sections(struct dvb_v5_fe_parms *__p, int dmx_fd,
 			break;
 		}
 		if (available <= 0) {
-			dvb_logerr("%s: no data read on section filter", __func__);
+			dvb_logerr(_("%s: no data read on section filter"), __func__);
 			ret = -1;
 			break;
 		}
 		buf_length = read(dmx_fd, buf, DVB_MAX_PAYLOAD_PACKET_SIZE);
 
 		if (!buf_length) {
-			dvb_logerr("%s: buf returned an empty buffer", __func__);
+			dvb_logerr(_("%s: buf returned an empty buffer"), __func__);
 			ret = -1;
 			break;
 		}
 		if (buf_length < 0) {
-			dvb_perror("dvb_read_section: read error");
+			dvb_perror(_("dvb_read_section: read error"));
 			ret = -2;
 			break;
 		}
 
 		crc = dvb_crc32(buf, buf_length, 0xFFFFFFFF);
 		if (crc != 0) {
-			dvb_logerr("%s: crc error", __func__);
+			dvb_logerr(_("%s: crc error"), __func__);
 			ret = -3;
 			break;
 		}
@@ -352,6 +365,9 @@ struct dvb_v5_descriptors *dvb_scan_alloc_handler_table(uint32_t delivery_system
 void dvb_scan_free_handler_table(struct dvb_v5_descriptors *dvb_scan_handler)
 {
 	int i;
+
+	if (!dvb_scan_handler)
+		return;
 
 	if (dvb_scan_handler->pat)
 		dvb_table_pat_free(dvb_scan_handler->pat);
@@ -443,7 +459,7 @@ struct dvb_v5_descriptors *dvb_get_ts_tables(struct dvb_v5_fe_parms *__p,
 	if (parms->p.abort)
 		return dvb_scan_handler;
 	if (rc < 0) {
-		dvb_logerr("error while waiting for PAT table");
+		dvb_logerr(_("error while waiting for PAT table"));
 		dvb_scan_free_handler_table(dvb_scan_handler);
 		return NULL;
 	}
@@ -459,7 +475,7 @@ struct dvb_v5_descriptors *dvb_get_ts_tables(struct dvb_v5_fe_parms *__p,
 		if (parms->p.abort)
 			return dvb_scan_handler;
 		if (rc < 0)
-			dvb_logerr("error while waiting for VCT table");
+			dvb_logerr(_("error while waiting for VCT table"));
 		else if (parms->p.verbose)
 			atsc_table_vct_print(&parms->p, dvb_scan_handler->vct);
 	}
@@ -473,13 +489,13 @@ struct dvb_v5_descriptors *dvb_get_ts_tables(struct dvb_v5_fe_parms *__p,
 
 		if (!program->service_id) {
 			if (parms->p.verbose)
-				dvb_log("Program #%d is network PID: 0x%04x",
+				dvb_log(_("Program #%d is network PID: 0x%04x"),
 					num_pmt, program->pid);
 			num_pmt++;
 			continue;
 		}
 		if (parms->p.verbose)
-			dvb_log("Program #%d ID 0x%04x, service ID 0x%04x",
+			dvb_log(_("Program #%d ID 0x%04x, service ID 0x%04x"),
 				num_pmt, program->pid, program->service_id);
 		rc = dvb_read_section(&parms->p, dmx_fd,
 				      DVB_TABLE_PMT, program->pid,
@@ -490,7 +506,7 @@ struct dvb_v5_descriptors *dvb_get_ts_tables(struct dvb_v5_fe_parms *__p,
 			return dvb_scan_handler;
 		}
 		if (rc < 0) {
-			dvb_logerr("error while reading the PMT table for service 0x%04x",
+			dvb_logerr(_("error while reading the PMT table for service 0x%04x"),
 				   program->service_id);
 			dvb_scan_handler->program[num_pmt].pmt = NULL;
 		} else {
@@ -510,7 +526,7 @@ struct dvb_v5_descriptors *dvb_get_ts_tables(struct dvb_v5_fe_parms *__p,
 	if (parms->p.abort)
 		return dvb_scan_handler;
 	if (rc < 0)
-		dvb_logerr("error while reading the NIT table");
+		dvb_logerr(_("error while reading the NIT table"));
 	else if (parms->p.verbose)
 		dvb_table_nit_print(&parms->p, dvb_scan_handler->nit);
 
@@ -523,7 +539,7 @@ struct dvb_v5_descriptors *dvb_get_ts_tables(struct dvb_v5_fe_parms *__p,
 		if (parms->p.abort)
 			return dvb_scan_handler;
 		if (rc < 0)
-			dvb_logerr("error while reading the SDT table");
+			dvb_logerr(_("error while reading the SDT table"));
 		else if (parms->p.verbose)
 			dvb_table_sdt_print(&parms->p, dvb_scan_handler->sdt);
 	}
@@ -531,7 +547,7 @@ struct dvb_v5_descriptors *dvb_get_ts_tables(struct dvb_v5_fe_parms *__p,
 	/* NIT/SDT other tables */
 	if (other_nit) {
 		if (parms->p.verbose)
-			dvb_log("Parsing other NIT/SDT");
+			dvb_log(_("Parsing other NIT/SDT"));
 		rc = dvb_read_section(&parms->p, dmx_fd,
 				      DVB_TABLE_NIT2, DVB_TABLE_NIT_PID,
 				      (void **)&dvb_scan_handler->nit,
@@ -539,7 +555,7 @@ struct dvb_v5_descriptors *dvb_get_ts_tables(struct dvb_v5_fe_parms *__p,
 		if (parms->p.abort)
 			return dvb_scan_handler;
 		if (rc < 0)
-			dvb_logerr("error while reading the NIT table");
+			dvb_logerr(_("error while reading the NIT table"));
 		else if (parms->p.verbose)
 			dvb_table_nit_print(&parms->p, dvb_scan_handler->nit);
 
@@ -550,7 +566,7 @@ struct dvb_v5_descriptors *dvb_get_ts_tables(struct dvb_v5_fe_parms *__p,
 		if (parms->p.abort)
 			return dvb_scan_handler;
 		if (rc < 0)
-			dvb_logerr("error while reading the SDT table");
+			dvb_logerr(_("error while reading the SDT table"));
 		else if (parms->p.verbose)
 			dvb_table_sdt_print(&parms->p, dvb_scan_handler->sdt);
 	}
@@ -596,7 +612,7 @@ struct dvb_v5_descriptors *dvb_scan_transponder(struct dvb_v5_fe_parms *__p,
 
 	rc = dvb_fe_set_parms(&parms->p);
 	if (rc < 0) {
-		dvb_perror("dvb_fe_set_parms failed");
+		dvb_perror(_("dvb_fe_set_parms failed"));
 		return NULL;
 	}
 
@@ -635,7 +651,6 @@ int dvb_estimate_freq_shift(struct dvb_v5_fe_parms *__p)
 		rolloff = 115;
 		break;
 	case SYS_DVBS:
-	case SYS_ISDBS:	/* FIXME: not sure if this rollof is right for ISDB-S */
 		divisor = 100000;
 		rolloff = 135;
 		break;
@@ -662,6 +677,12 @@ int dvb_estimate_freq_shift(struct dvb_v5_fe_parms *__p)
 	case SYS_DVBC_ANNEX_B:
 		bw = 6000000;
 		break;
+	case SYS_ISDBS:
+		/* since ISDBS uses fixed symbol_rate & rolloff,
+		 * those parameters are not mandatory in channel config file.
+		 */
+		bw = 28860 * 135 / 100;
+		break;
 	default:
 		break;
 	}
@@ -676,7 +697,9 @@ int dvb_estimate_freq_shift(struct dvb_v5_fe_parms *__p)
 	}
 	if (!bw)
 		dvb_fe_retrieve_parm(&parms->p, DTV_BANDWIDTH_HZ, &bw);
-
+	if (!bw)
+		dvb_log(_("Cannot calc frequency shift. " \
+			  "Either bandwidth/symbol-rate is unavailable (yet)."));
 	/*
 	 * If the max frequency shift between two frequencies is below
 	 * than the used bandwidth / 8, it should be the same channel.
@@ -689,24 +712,8 @@ int dvb_estimate_freq_shift(struct dvb_v5_fe_parms *__p)
 int dvb_new_freq_is_needed(struct dvb_entry *entry, struct dvb_entry *last_entry,
 			   uint32_t freq, enum dvb_sat_polarization pol, int shift)
 {
-	int i;
-	uint32_t data;
-
-	for (; entry != last_entry; entry = entry->next) {
-		for (i = 0; i < entry->n_props; i++) {
-			data = entry->props[i].u.data;
-			if (entry->props[i].cmd == DTV_POLARIZATION) {
-				if (data != pol)
-					continue;
-			}
-			if (entry->props[i].cmd == DTV_FREQUENCY) {
-				if (( freq >= data - shift) && (freq <= data + shift))
-					return 0;
-			}
-		}
-	}
-
-	return 1;
+	return dvb_new_entry_is_needed(entry, last_entry, freq, shift,
+					 pol, NO_STREAM_ID_FILTER);
 }
 
 struct dvb_entry *dvb_scan_add_entry(struct dvb_v5_fe_parms *__p,
@@ -715,17 +722,65 @@ struct dvb_entry *dvb_scan_add_entry(struct dvb_v5_fe_parms *__p,
 			             uint32_t freq, uint32_t shift,
 			             enum dvb_sat_polarization pol)
 {
+	return dvb_scan_add_entry_ex(__p, first_entry, entry, freq, shift,
+					pol, NO_STREAM_ID_FILTER);
+}
+
+int dvb_new_entry_is_needed(struct dvb_entry *entry,
+			    struct dvb_entry *last_entry,
+			    uint32_t freq, int shift,
+			    enum dvb_sat_polarization pol, uint32_t stream_id)
+{
+	for (; entry != last_entry; entry = entry->next) {
+		int i;
+
+		for (i = 0; i < entry->n_props; i++) {
+			uint32_t data = entry->props[i].u.data;
+
+			if (entry->props[i].cmd == DTV_FREQUENCY) {
+				if (freq < data - shift || freq > data + shift)
+					break;
+			}
+			if (pol != POLARIZATION_OFF
+			    && entry->props[i].cmd == DTV_POLARIZATION) {
+				if (data != pol)
+					break;
+			}
+			/* NO_STREAM_ID_FILTER: stream_id is not used.
+			 * 0: unspecified/auto. libdvbv5 default value.
+			 */
+			if (stream_id != NO_STREAM_ID_FILTER && stream_id != 0
+			    && entry->props[i].cmd == DTV_STREAM_ID) {
+				if (data != stream_id)
+					break;
+			}
+		}
+		if (i == entry->n_props && entry->n_props > 0)
+			return 0;
+	}
+
+	return 1;
+}
+
+struct dvb_entry *dvb_scan_add_entry_ex(struct dvb_v5_fe_parms *__p,
+					struct dvb_entry *first_entry,
+					struct dvb_entry *entry,
+					uint32_t freq, uint32_t shift,
+					enum dvb_sat_polarization pol,
+					uint32_t stream_id)
+{
 	struct dvb_v5_fe_parms_priv *parms = (void *)__p;
 	struct dvb_entry *new_entry;
 	int i, n = 2;
 
-	if (!dvb_new_freq_is_needed(first_entry, NULL, freq, pol, shift))
+	if (!dvb_new_entry_is_needed(first_entry, NULL, freq, shift, pol,
+				     stream_id))
 		return NULL;
 
 	/* Clone the current entry into a new entry */
 	new_entry = calloc(sizeof(*new_entry), 1);
 	if (!new_entry) {
-		dvb_perror("not enough memory for a new scanning frequency");
+		dvb_perror(_("not enough memory for a new scanning frequency/TS"));
 		return NULL;
 	}
 
@@ -754,7 +809,7 @@ struct dvb_entry *dvb_scan_add_entry(struct dvb_v5_fe_parms *__p,
 				entry = entry->next;
 				n++;
 			}
-			dvb_log("New transponder/channel found: #%d: %d",
+			dvb_log(_("New transponder/channel found: #%d: %d"),
 			        n, freq);
 			entry->next = new_entry;
 			new_entry->next = NULL;
@@ -763,7 +818,7 @@ struct dvb_entry *dvb_scan_add_entry(struct dvb_v5_fe_parms *__p,
 	}
 
 	/* This should never happen */
-	dvb_logerr("BUG: Couldn't add %d to the scan frequency list.", freq);
+	dvb_logerr(_("BUG: Couldn't add %d to the scan frequency list."), freq);
 	free(new_entry);
 
 	return NULL;
@@ -905,11 +960,12 @@ static void add_update_nit_dvbt2(struct dvb_table_nit *nit,
 		return;
 
 	for (i = 0; i < t2->frequency_loop_length; i++) {
-		new = dvb_scan_add_entry(tr->parms, tr->first_entry, tr->entry,
-					 t2->centre_frequency[i] * 10,
-					 tr->shift, tr->pol);
+		new = dvb_scan_add_entry_ex(tr->parms,
+					    tr->first_entry, tr->entry,
+					    t2->centre_frequency[i] * 10,
+					    tr->shift, tr->pol, t2->plp_id);
 		if (!new)
-			return;
+			continue;
 
 		dvb_store_entry_prop(new, DTV_DELIVERY_SYSTEM,
 				     SYS_DVBT2);
@@ -998,6 +1054,44 @@ static void add_update_nit_dvbs(struct dvb_table_nit *nit,
 				     SYS_DVBS2);
 }
 
+static void add_update_nit_isdbs(struct dvb_table_nit *nit,
+				 struct dvb_table_nit_transport *tran,
+				 struct dvb_desc *desc,
+				 void *priv)
+{
+	struct update_transponders *tr = priv;
+	struct dvb_entry *new;
+	/* FIXME:
+	 * use the ISDB-S specific satellite delsys descriptor structure,
+	 * instead of overloading to the EN300-468's one, dvb_desc_sat.
+	 * The following members are incompatible:
+	 *  {.modulation_type, .modulation_system, .roll_off, .fec}
+	 */
+	struct dvb_desc_sat *d = (void *)desc;
+	uint32_t ts_id;
+
+	if (tr->update)
+		return;
+
+	ts_id = tran->transport_id;
+	new = dvb_scan_add_entry_ex(tr->parms, tr->first_entry, tr->entry,
+				    d->frequency, tr->shift, tr->pol, ts_id);
+	if (!new)
+		return;
+
+	/* Set (optional) ISDB-S props for the transponder */
+	/* FIXME: fill in other props like DTV_MODULATION, DTV_INNER_FEC.
+	 *   This requires extending the enum definitions in DVBv5 API
+	 *   to include the ISDB-S/T specific modulation/fec values,
+	 *   such as "BPSK" and "look TMCC".
+	 * Since even "AUTO" is not defined, skip setting them now.
+	 */
+	dvb_store_entry_prop(new, DTV_POLARIZATION,
+			     dvbs_polarization[d->polarization]);
+	dvb_store_entry_prop(new, DTV_SYMBOL_RATE,
+			     d->symbol_rate);
+}
+
 
 static void __dvb_add_update_transponders(struct dvb_v5_fe_parms_priv *parms,
 					  struct dvb_v5_descriptors *dvb_scan_handler,
@@ -1039,6 +1133,7 @@ static void __dvb_add_update_transponders(struct dvb_v5_fe_parms_priv *parms,
 		return;
 	case SYS_DVBT:
 	case SYS_DVBT2:
+	case SYS_DTMB:	/* FIXME: are DTMB nit tables equal to DVB-T? */
 		dvb_table_nit_descriptor_handler(
 				&parms->p, dvb_scan_handler->nit,
 				extension_descriptor,
@@ -1056,8 +1151,16 @@ static void __dvb_add_update_transponders(struct dvb_v5_fe_parms_priv *parms,
 				satellite_delivery_system_descriptor,
 				NULL, add_update_nit_dvbs, &tr);
 		return;
+	case SYS_ISDBS:
+		/* see the FIXME: in add_update_nit_isdbs() */
+		dvb_table_nit_descriptor_handler(
+				&parms->p, dvb_scan_handler->nit,
+				satellite_delivery_system_descriptor,
+				NULL, add_update_nit_isdbs, &tr);
+		return;
+
 	default:
-		dvb_log("Transponders detection not implemented for this standard yet.");
+		dvb_log(_("Transponders detection not implemented for this standard yet."));
 		return;
 	}
 }

@@ -42,6 +42,8 @@ void edid_usage(void)
 	       "                     carray: c-program struct\n"
 	       "                     If <file> is '-' or not the 'file' argument is not supplied, then the data\n"
 	       "                     is written to stdout.\n"
+	       "  --fix-edid-checksums\n"
+	       "                     If specified then any checksum errors will be fixed silently.\n"
 	       );
 }
 
@@ -79,14 +81,45 @@ static void read_edid_file(FILE *f, struct v4l2_edid *e)
 	e->blocks = i / 256;
 }
 
-static bool crc_ok(unsigned char *b)
+static unsigned char crc_calc(const unsigned char *b)
 {
 	unsigned char sum = 0;
 	int i;
 
-	for (i = 0; i < 128; i++)
+	for (i = 0; i < 127; i++)
 		sum += b[i];
-	return sum == 0;
+	return 256 - sum;
+}
+
+static bool crc_ok(const unsigned char *b)
+{
+	return crc_calc(b) == b[127];
+}
+
+static void fix_edid(struct v4l2_edid *e)
+{
+	for (unsigned b = 0; b < e->blocks; b++) {
+		unsigned char *buf = e->edid + 128 * b;
+
+		if (!crc_ok(buf))
+			buf[127] = crc_calc(buf);
+	}
+}
+
+static bool verify_edid(struct v4l2_edid *e)
+{
+	bool valid = true;
+
+	for (unsigned b = 0; b < e->blocks; b++) {
+		const unsigned char *buf = e->edid + 128 * b;
+
+		if (!crc_ok(buf)) {
+			fprintf(stderr, "Block %u has a checksum error (should be 0x%02x)\n",
+					b, crc_calc(buf));
+			valid = false;
+		}
+	}
+	return valid;
 }
 
 static void hexdumpedid(FILE *f, struct v4l2_edid *e)
@@ -94,6 +127,8 @@ static void hexdumpedid(FILE *f, struct v4l2_edid *e)
 	for (unsigned b = 0; b < e->blocks; b++) {
 		unsigned char *buf = e->edid + 128 * b;
 
+		if (b)
+			fprintf(f, "\n");
 		for (unsigned i = 0; i < 128; i += 0x10) {
 			fprintf(f, "%02x", buf[i]);
 			for (unsigned j = 1; j < 0x10; j++) {
@@ -102,7 +137,8 @@ static void hexdumpedid(FILE *f, struct v4l2_edid *e)
 			fprintf(f, "\n");
 		}
 		if (!crc_ok(buf))
-			fprintf(f, "Block has a checksum error\n");
+			fprintf(f, "Block %u has a checksum error (should be 0x%02x)\n",
+					b, crc_calc(buf));
 	}
 }
 
@@ -113,6 +149,9 @@ static void rawdumpedid(FILE *f, struct v4l2_edid *e)
 
 		for (unsigned i = 0; i < 128; i++)
 			fprintf(f, "%c", buf[i]);
+		if (!crc_ok(buf))
+			fprintf(stderr, "Block %u has a checksum error (should be %02x)\n",
+					b, crc_calc(buf));
 	}
 }
 
@@ -132,7 +171,8 @@ static void carraydumpedid(FILE *f, struct v4l2_edid *e)
 			fprintf(f, "\n");
 		}
 		if (!crc_ok(buf))
-			fprintf(f, "\t/* Block has a checksum error */\n");
+			fprintf(f, "\t/* Block %u has a checksum error (should be 0x%02x) */\n",
+					b, crc_calc(buf));
 	}
 	fprintf(f, "};\n");
 }
@@ -211,7 +251,7 @@ static uint8_t hdmi_edid[256] = {
 	0x02, 0x03, 0x1a, 0xc0, 0x48, 0xa2, 0x10, 0x04,
 	0x02, 0x01, 0x21, 0x14, 0x13, 0x23, 0x09, 0x07,
 	0x07, 0x65, 0x03, 0x0c, 0x00, 0x10, 0x00, 0xe2,
-	0x00, 0x2a, 0x01, 0x1d, 0x00, 0x80, 0x51, 0xd0,
+	0x00, 0xea, 0x01, 0x1d, 0x00, 0x80, 0x51, 0xd0,
 	0x1c, 0x20, 0x40, 0x80, 0x35, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x1e, 0x8c, 0x0a, 0xd0, 0x8a,
 	0x20, 0xe0, 0x2d, 0x10, 0x10, 0x3e, 0x96, 0x00,
@@ -223,7 +263,7 @@ static uint8_t hdmi_edid[256] = {
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xd7
+	0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x17
 };
 /******************************************************/
 
@@ -387,7 +427,12 @@ void edid_set(int fd)
 				exit(1);
 			}
 		}
-		doioctl(fd, VIDIOC_S_EDID, &sedid);
+		if (options[OptFixEdidChecksums])
+			fix_edid(&sedid);
+		if (verify_edid(&sedid))
+			doioctl(fd, VIDIOC_S_EDID, &sedid);
+		else
+			fprintf(stderr, "EDID not set due to checksum errors\n");
 		if (fin) {
 			if (sedid.edid) {
 				free(sedid.edid);
@@ -416,8 +461,11 @@ void edid_get(int fd)
 			}
 		}
 		gedid.edid = (unsigned char *)malloc(gedid.blocks * 128);
-		if (doioctl(fd, VIDIOC_G_EDID, &gedid) == 0)
+		if (doioctl(fd, VIDIOC_G_EDID, &gedid) == 0) {
+			if (options[OptFixEdidChecksums])
+				fix_edid(&gedid);
 			printedid(fout, &gedid, gformat);
+		}
 		if (file_out && fout != stdout)
 			fclose(fout);
 		free(gedid.edid);

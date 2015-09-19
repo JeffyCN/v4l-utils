@@ -36,9 +36,9 @@ public:
 	void stop();
 	bool hasNativeFormat(__u32 format);
 	static bool isSupported() { return true; }
-	void setColorspace(unsigned colorspace) {}
+	void setColorspace(unsigned colorspace, unsigned xfer_func,
+			unsigned ycbcr_enc, unsigned quantization, bool is_sdtv) {}
 	void setField(unsigned field) {}
-	void setDisplayColorspace(unsigned colorspace) {}
 	void setBlending(bool enable) {}
 	void setLinearFilter(bool enable) {}
 

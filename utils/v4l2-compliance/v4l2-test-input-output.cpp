@@ -63,7 +63,7 @@ static int checkEnumFreqBands(struct node *node, __u32 tuner, __u32 type, __u32 
 		fail_on_test(band.type != type);
 		fail_on_test(band.tuner != tuner);
 		fail_on_test((band.capability & V4L2_TUNER_CAP_FREQ_BANDS) == 0);
-		check_0(band.reserved, sizeof(band.reserved));
+		fail_on_test(check_0(band.reserved, sizeof(band.reserved)));
 		if (band.rangelow < low)
 			low = band.rangelow;
 		if (band.rangehigh > high)
@@ -365,6 +365,7 @@ int testTunerHwSeek(struct node *node)
 static int checkInput(struct node *node, const struct v4l2_input &descr, unsigned i)
 {
 	__u32 mask = (1 << node->audio_inputs) - 1;
+	struct v4l2_selection sel;
 
 	if (descr.index != i)
 		return fail("invalid index\n");
@@ -380,13 +381,22 @@ static int checkInput(struct node *node, const struct v4l2_input &descr, unsigne
 		return fail("invalid std\n");
 	if ((descr.capabilities & V4L2_IN_CAP_STD) && !descr.std)
 		return fail("std == 0\n");
+	memset(&sel, 0, sizeof(sel));
+	sel.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+	sel.target = V4L2_SEL_TGT_NATIVE_SIZE;
+	if (descr.capabilities & V4L2_IN_CAP_NATIVE_SIZE) {
+		fail_on_test(doioctl(node, VIDIOC_G_SELECTION, &sel));
+		fail_on_test(doioctl(node, VIDIOC_S_SELECTION, &sel));
+	} else if (!doioctl(node, VIDIOC_G_SELECTION, &sel)) {
+		fail_on_test(!doioctl(node, VIDIOC_S_SELECTION, &sel));
+	}
 	if (descr.capabilities & ~0x7)
 		return fail("invalid capabilities\n");
 	if (check_0(descr.reserved, sizeof(descr.reserved)))
 		return fail("non-zero reserved fields\n");
 	if (descr.status & ~0x07070337)
 		return fail("invalid status\n");
-	if (descr.status & 0x02070000)
+	if (descr.status & 0x02060000)
 		return fail("use of deprecated digital video status\n");
 	if (descr.audioset & ~mask)
 		return fail("invalid audioset\n");
@@ -404,6 +414,8 @@ int testInput(struct node *node)
 	int i = 0;
 
 	if (ret == ENOTTY) {
+		if (node->has_inputs)
+			return fail("G_INPUT not supported for a capture device\n");
 		descr.index = 0;
 		ret = doioctl(node, VIDIOC_ENUMINPUT, &descr);
 		if (ret != ENOTTY)
@@ -653,6 +665,7 @@ int testModulatorFreq(struct node *node)
 		struct v4l2_modulator modulator;
 		
 		modulator.index = m;
+		memset(modulator.reserved, 0, sizeof(modulator.reserved));
 		ret = doioctl(node, VIDIOC_G_MODULATOR, &modulator);
 		if (ret)
 			return fail("could not get modulator %d\n", m);
@@ -718,6 +731,7 @@ int testModulatorFreq(struct node *node)
 static int checkOutput(struct node *node, const struct v4l2_output &descr, unsigned o)
 {
 	__u32 mask = (1 << node->audio_outputs) - 1;
+	struct v4l2_selection sel;
 
 	if (descr.index != o)
 		return fail("invalid index\n");
@@ -733,6 +747,15 @@ static int checkOutput(struct node *node, const struct v4l2_output &descr, unsig
 		return fail("invalid std\n");
 	if ((descr.capabilities & V4L2_OUT_CAP_STD) && !descr.std)
 		return fail("std == 0\n");
+	memset(&sel, 0, sizeof(sel));
+	sel.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
+	sel.target = V4L2_SEL_TGT_NATIVE_SIZE;
+	if (descr.capabilities & V4L2_OUT_CAP_NATIVE_SIZE) {
+		fail_on_test(doioctl(node, VIDIOC_G_SELECTION, &sel));
+		fail_on_test(doioctl(node, VIDIOC_S_SELECTION, &sel));
+	} else if (!doioctl(node, VIDIOC_G_SELECTION, &sel)) {
+		fail_on_test(!doioctl(node, VIDIOC_S_SELECTION, &sel));
+	}
 	if (descr.capabilities & ~0x7)
 		return fail("invalid capabilities\n");
 	if (check_0(descr.reserved, sizeof(descr.reserved)))
@@ -753,6 +776,8 @@ int testOutput(struct node *node)
 	int o = 0;
 
 	if (ret == ENOTTY) {
+		if (node->has_outputs)
+			return fail("G_OUTPUT not supported for an output device\n");
 		descr.index = 0;
 		ret = doioctl(node, VIDIOC_ENUMOUTPUT, &descr);
 		if (ret != ENOTTY)
@@ -844,6 +869,7 @@ static int checkOutputAudioSet(struct node *node, __u32 audioset)
 	unsigned i;
 	int ret;
 
+	memset(output.reserved, 0, sizeof(output.reserved));
 	ret = doioctl(node, VIDIOC_G_AUDOUT, &output);
 	if (audioset == 0 && ret != EINVAL && ret != ENOTTY)
 		return fail("No audio outputs, but G_AUDOUT did not return EINVAL or ENOTTY\n");

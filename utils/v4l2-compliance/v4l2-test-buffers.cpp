@@ -31,6 +31,7 @@
 #include <errno.h>
 #include <sys/ioctl.h>
 #include <map>
+#include <vector>
 #include "v4l2-compliance.h"
 
 static struct cv4l_fmt cur_fmt;
@@ -69,6 +70,19 @@ enum QueryBufMode {
 
 typedef std::map<struct timeval, struct v4l2_buffer> buf_info_map;
 static buf_info_map buffer_info;
+
+std::string pixfmt2s(unsigned id)
+{
+	std::string pixfmt;
+
+	pixfmt += (char)(id & 0x7f);
+	pixfmt += (char)((id >> 8) & 0x7f);
+	pixfmt += (char)((id >> 16) & 0x7f);
+	pixfmt += (char)((id >> 24) & 0x7f);
+	if (id & (1 << 31))
+		pixfmt += "-BE";
+	return pixfmt;
+}
 
 static std::string num2s(unsigned num)
 {
@@ -118,8 +132,10 @@ public:
 	{
 		return node->querybuf(*this, index);
 	}
-	int prepare_buf(node *node)
+	int prepare_buf(node *node, bool fill_bytesused = true)
 	{
+		if (v4l_type_is_output(g_type()))
+			fill_output_buf(fill_bytesused);
 		return node->prepare_buf(*this);
 	}
 	int dqbuf(node *node)
@@ -269,7 +285,7 @@ int buffer::check(unsigned type, unsigned memory, unsigned index,
 
 	if (v4l_type_is_capture(g_type()) && !ts_copy &&
 	    (g_flags() & V4L2_BUF_FLAG_TIMECODE))
-		warn("V4L2_BUF_FLAG_TIMECODE was used!\n");
+		warn_once("V4L2_BUF_FLAG_TIMECODE was used!\n");
 
 	if (mode == Dequeued) {
 		for (unsigned p = 0; p < g_num_planes(); p++) {
@@ -279,6 +295,7 @@ int buffer::check(unsigned type, unsigned memory, unsigned index,
 		}
 		fail_on_test(!g_timestamp().tv_sec && !g_timestamp().tv_usec);
 		fail_on_test(!(g_flags() & (V4L2_BUF_FLAG_DONE | V4L2_BUF_FLAG_ERROR)));
+		fail_on_test((int)g_sequence() < seq.last_seq + 1);
 		if (v4l_type_is_video(g_type())) {
 			fail_on_test(g_field() == V4L2_FIELD_ALTERNATE);
 			fail_on_test(g_field() == V4L2_FIELD_ANY);
@@ -287,16 +304,25 @@ int buffer::check(unsigned type, unsigned memory, unsigned index,
 						g_field() != V4L2_FIELD_TOP);
 				fail_on_test(g_field() == seq.last_field);
 				seq.field_nr ^= 1;
-				if (seq.field_nr)
-					fail_on_test((int)g_sequence() != seq.last_seq);
-				else
-					fail_on_test((int)g_sequence() != seq.last_seq + 1);
+				if (seq.field_nr) {
+					if ((int)g_sequence() != seq.last_seq)
+						warn("got sequence number %u, expected %u\n",
+							g_sequence(), seq.last_seq + 1);
+				} else {
+					fail_on_test((int)g_sequence() == seq.last_seq + 1);
+					if ((int)g_sequence() != seq.last_seq + 1)
+						warn("got sequence number %u, expected %u\n",
+							g_sequence(), seq.last_seq + 1);
+				}
 			} else {
 				fail_on_test(g_field() != cur_fmt.g_field());
-				fail_on_test((int)g_sequence() != seq.last_seq + 1);
+				if ((int)g_sequence() != seq.last_seq + 1)
+					warn("got sequence number %u, expected %u\n",
+							g_sequence(), seq.last_seq + 1);
 			}
-		} else {
-			fail_on_test((int)g_sequence() != seq.last_seq + 1);
+		} else if ((int)g_sequence() != seq.last_seq + 1) {
+			warn("got sequence number %u, expected %u\n",
+					g_sequence(), seq.last_seq + 1);
 		}
 		seq.last_seq = (int)g_sequence();
 		seq.last_field = g_field();
@@ -355,8 +381,36 @@ static int testSetupVbi(struct node *node, int type)
 	return 0;
 }
 
+static int testCanSetSameTimings(struct node *node)
+{
+	if (node->cur_io_caps & V4L2_IN_CAP_STD) {
+		v4l2_std_id std;
+
+		fail_on_test(node->g_std(std));
+		fail_on_test(node->s_std(std));
+	}
+	if (node->cur_io_caps & V4L2_IN_CAP_DV_TIMINGS) {
+		v4l2_dv_timings timings;
+
+		fail_on_test(node->g_dv_timings(timings));
+		fail_on_test(node->s_dv_timings(timings));
+	}
+	if (node->cur_io_caps & V4L2_IN_CAP_NATIVE_SIZE) {
+		v4l2_selection sel = {
+			node->g_selection_type(),
+			V4L2_SEL_TGT_NATIVE_SIZE,
+		};
+
+		fail_on_test(node->g_selection(sel));
+		fail_on_test(node->s_selection(sel));
+	}
+	return 0;
+}
+
 int testReqBufs(struct node *node)
 {
+	struct v4l2_create_buffers crbufs = { };
+	struct v4l2_requestbuffers reqbufs = { };
 	bool can_stream = node->g_caps() & V4L2_CAP_STREAMING;
 	bool can_rw = node->g_caps() & V4L2_CAP_READWRITE;
 	bool mmap_valid;
@@ -443,6 +497,12 @@ int testReqBufs(struct node *node)
 			node->valid_memorytype |= 1 << V4L2_MEMORY_DMABUF;
 		}
 
+		/*
+		 * It should be possible to set the same std, timings or
+		 * native size even after reqbufs was called.
+		 */
+		fail_on_test(testCanSetSameTimings(node));
+
 		if (can_rw) {
 			char buf = 0;
 
@@ -469,7 +529,14 @@ int testReqBufs(struct node *node)
 				fail_on_test(q2.reqbufs(node->node2, 1));
 				fail_on_test(q2.reqbufs(node->node2));
 			}
-			fail_on_test(q.reqbufs(node));
+			memset(&reqbufs, 0xff, sizeof(reqbufs));
+			reqbufs.count = 0;
+			reqbufs.type = i;
+			reqbufs.memory = m;
+			fail_on_test(doioctl(node, VIDIOC_REQBUFS, &reqbufs));
+			fail_on_test(check_0(reqbufs.reserved, sizeof(reqbufs.reserved)));
+			q.reqbufs(node);
+
 			ret = q.create_bufs(node, 1);
 			if (ret == ENOTTY) {
 				warn("VIDIOC_CREATE_BUFS not supported\n");
@@ -483,6 +550,14 @@ int testReqBufs(struct node *node)
 			fail_on_test(testQueryBuf(node, i, q.g_buffers()));
 			if (!node->is_m2m)
 				fail_on_test(q2.create_bufs(node->node2, 1) != EBUSY);
+
+			memset(&crbufs, 0xff, sizeof(crbufs));
+			node->g_fmt(crbufs.format, i);
+			crbufs.count = 0;
+			crbufs.memory = m;
+			fail_on_test(doioctl(node, VIDIOC_CREATE_BUFS, &crbufs));
+			fail_on_test(check_0(crbufs.reserved, sizeof(crbufs.reserved)));
+			fail_on_test(crbufs.index != q.g_buffers());
 		}
 		fail_on_test(q.reqbufs(node));
 	}
@@ -579,6 +654,12 @@ static int captureBufs(struct node *node, const cv4l_queue &q,
 			use_poll ? " (polling)" : "");
 	}
 
+	/*
+	 * It should be possible to set the same std, timings or
+	 * native size even while streaming.
+	 */
+	fail_on_test(testCanSetSameTimings(node));
+
 	if (use_poll)
 		fcntl(node->g_fd(), F_SETFL, fd_flags | O_NONBLOCK);
 	for (;;) {
@@ -596,7 +677,8 @@ static int captureBufs(struct node *node, const cv4l_queue &q,
 				ret = select(node->g_fd() + 1, NULL, &fds, NULL, &tv);
 			else
 				ret = select(node->g_fd() + 1, &fds, NULL, NULL, &tv);
-			fail_on_test(ret <= 0);
+			fail_on_test(ret == 0);
+			fail_on_test(ret < 0);
 			fail_on_test(!FD_ISSET(node->g_fd(), &fds));
 		}
 
@@ -706,7 +788,7 @@ static int bufferOutputErrorTest(struct node *node, const buffer &orig_buf)
 		buf.s_bytesused(buf.g_length(p) + 1, p);
 		buf.s_data_offset(0, p);
 	}
-	ret = buf.prepare_buf(node);
+	ret = buf.prepare_buf(node, false);
 	fail_on_test(ret != EINVAL && ret != ENOTTY);
 	have_prepare = ret != ENOTTY;
 	fail_on_test(buf.qbuf(node, false) != EINVAL);
@@ -717,16 +799,16 @@ static int bufferOutputErrorTest(struct node *node, const buffer &orig_buf)
 			buf.s_data_offset(buf.g_bytesused(p), p);
 		}
 		if (have_prepare)
-			fail_on_test(buf.prepare_buf(node) != EINVAL);
+			fail_on_test(buf.prepare_buf(node, false) != EINVAL);
 		fail_on_test(buf.qbuf(node, false) != EINVAL);
 	}
 	buf.init(orig_buf);
 	for (unsigned p = 0; p < buf.g_num_planes(); p++) {
-		buf.s_bytesused(0, p);
+		buf.s_bytesused(buf.g_length(p), p);
 		buf.s_data_offset(0, p);
 	}
 	if (have_prepare) {
-		fail_on_test(buf.prepare_buf(node));
+		fail_on_test(buf.prepare_buf(node, false));
 		fail_on_test(buf.check(Prepared, 0));
 		buf.init(orig_buf);
 		for (unsigned p = 0; p < buf.g_num_planes(); p++) {
@@ -848,8 +930,7 @@ int testMmap(struct node *node, unsigned frame_count)
 		// Good check for whether all the internal vb2 calls are in
 		// balance.
 		fail_on_test(q.reqbufs(node, q.g_buffers()));
-		cur_fmt.s_type(q.g_type());
-		node->g_fmt(cur_fmt);
+		fail_on_test(node->g_fmt(cur_fmt, q.g_type()));
 
 		ret = q.create_bufs(node, 0);
 		fail_on_test(ret != ENOTTY && ret != 0);
@@ -871,6 +952,7 @@ int testMmap(struct node *node, unsigned frame_count)
 					fmt.s_sizeimage(fmt.g_sizeimage(p) * 2, p);
 			}
 			fail_on_test(q.create_bufs(node, 1, &fmt));
+			fail_on_test(q.reqbufs(node, 2));
 		}
 		fail_on_test(setupMmap(node, q));
 
@@ -886,6 +968,11 @@ int testMmap(struct node *node, unsigned frame_count)
 		fail_on_test(node->streamoff(q.g_type()));
 		q.munmap_bufs(node);
 		fail_on_test(q.reqbufs(node, 0));
+		if (node->is_m2m) {
+			fail_on_test(node->streamoff(m2m_q.g_type()));
+			m2m_q.munmap_bufs(node);
+			fail_on_test(m2m_q.reqbufs(node, 0));
+		}
 	}
 	return 0;
 }
@@ -973,7 +1060,8 @@ int testUserPtr(struct node *node, unsigned frame_count)
 
 		ret = q.reqbufs(node, 0);
 		if (ret) {
-			fail_on_test(ret != EINVAL);
+			fail_on_test(!can_stream && ret != ENOTTY);
+			fail_on_test(can_stream && ret != EINVAL);
 			return ENOTTY;
 		}
 		fail_on_test(!can_stream);
@@ -997,6 +1085,11 @@ int testUserPtr(struct node *node, unsigned frame_count)
 		fail_on_test(captureBufs(node, q, m2m_q, frame_count, true));
 		fail_on_test(node->streamoff(q.g_type()));
 		fail_on_test(node->streamoff(q.g_type()));
+		if (node->is_m2m) {
+			fail_on_test(node->streamoff(m2m_q.g_type()));
+			m2m_q.munmap_bufs(node);
+			fail_on_test(m2m_q.reqbufs(node, 0));
+		}
 	}
 	return 0;
 }
@@ -1081,7 +1174,8 @@ int testDmaBuf(struct node *expbuf_node, struct node *node, unsigned frame_count
 
 		ret = q.reqbufs(node, 0);
 		if (ret) {
-			fail_on_test(ret != EINVAL);
+			fail_on_test(!can_stream && ret != ENOTTY);
+			fail_on_test(can_stream && ret != EINVAL);
 			return ENOTTY;
 		}
 		fail_on_test(!can_stream);
@@ -1106,4 +1200,551 @@ int testDmaBuf(struct node *expbuf_node, struct node *node, unsigned frame_count
 		fail_on_test(node->streamoff(q.g_type()));
 	}
 	return 0;
+}
+
+static void restoreCropCompose(struct node *node, __u32 field,
+		v4l2_selection &crop, v4l2_selection &compose)
+{
+	if (node->has_inputs) {
+		/*
+		 * For capture restore the compose rectangle
+		 * before the crop rectangle.
+		 */
+		if (compose.r.width)
+			node->s_frame_selection(compose, field);
+		if (crop.r.width)
+			node->s_frame_selection(crop, field);
+	} else {
+		/*
+		 * For output the crop rectangle should be
+		 * restored before the compose rectangle.
+		 */
+		if (crop.r.width)
+			node->s_frame_selection(crop, field);
+		if (compose.r.width)
+			node->s_frame_selection(compose, field);
+	}
+}
+
+int restoreFormat(struct node *node)
+{
+	cv4l_fmt fmt;
+	unsigned h;
+
+	node->g_fmt(fmt);
+
+	h = fmt.g_frame_height();
+	if (node->cur_io_caps & V4L2_IN_CAP_STD) {
+		v4l2_std_id std;
+
+		fail_on_test(node->g_std(std));
+		fmt.s_width(720);
+		h = (std & V4L2_STD_525_60) ? 480 : 576;
+	}
+	if (node->cur_io_caps & V4L2_IN_CAP_DV_TIMINGS) {
+		v4l2_dv_timings timings;
+
+		fail_on_test(node->g_dv_timings(timings));
+		fmt.s_width(timings.bt.width);
+		h = timings.bt.height;
+	}
+	if (node->cur_io_caps & V4L2_IN_CAP_NATIVE_SIZE) {
+		v4l2_selection sel = {
+			node->g_selection_type(),
+			V4L2_SEL_TGT_NATIVE_SIZE,
+		};
+
+		fail_on_test(node->g_selection(sel));
+		fmt.s_width(sel.r.width);
+		h = sel.r.height;
+	}
+	fmt.s_frame_height(h);
+	/* First restore the format */
+	node->s_fmt(fmt);
+
+	v4l2_selection sel_compose = {
+		node->g_selection_type(),
+		V4L2_SEL_TGT_COMPOSE,
+	};
+	v4l2_selection sel_crop = {
+		node->g_selection_type(),
+		V4L2_SEL_TGT_CROP,
+	};
+	sel_compose.r.width = fmt.g_width();
+	sel_compose.r.height = fmt.g_frame_height();
+	sel_crop.r.width = fmt.g_width();
+	sel_crop.r.height = fmt.g_frame_height();
+	restoreCropCompose(node, fmt.g_field(), sel_crop, sel_compose);
+	return 0;
+}
+
+static int testStreaming(struct node *node, unsigned frame_count)
+{
+	int type = node->g_type();
+
+	if (!(node->valid_buftypes & (1 << type)))
+		return ENOTTY;
+
+	buffer_info.clear();
+
+	cur_fmt.s_type(type);
+	node->g_fmt(cur_fmt);
+
+	if (node->g_caps() & V4L2_CAP_STREAMING) {
+		cv4l_queue q(type, V4L2_MEMORY_MMAP);
+		bool alternate = cur_fmt.g_field() == V4L2_FIELD_ALTERNATE;
+		v4l2_std_id std = 0;
+
+		node->g_std(std);
+
+		unsigned field = cur_fmt.g_first_field(std);
+		cv4l_buffer buf(q);
+	
+		fail_on_test(q.reqbufs(node, 3));
+		fail_on_test(q.obtain_bufs(node));
+		for (unsigned i = 0; i < q.g_buffers(); i++) {
+			buf.init(q, i);
+			buf.s_field(field);
+			if (alternate)
+				field ^= 1;
+			fail_on_test(node->qbuf(buf));
+		}
+		fail_on_test(node->streamon());
+
+		while (node->dqbuf(buf) == 0) {
+			printf("\r\t\t%s: Frame #%03d Field %s   ",
+					buftype2s(q.g_type()).c_str(),
+					buf.g_sequence(), field2s(buf.g_field()).c_str());
+			fflush(stdout);
+			buf.s_field(field);
+			if (alternate)
+				field ^= 1;
+			fail_on_test(node->qbuf(buf));
+			if (frame_count-- == 0)
+				break;
+		}
+		q.free(node);
+		printf("\r\t\t                                                            ");
+		return 0;
+	}
+	fail_on_test(!(node->g_caps() & V4L2_CAP_READWRITE));
+
+	int size = cur_fmt.g_sizeimage();
+	void *tmp = malloc(size);
+
+	for (unsigned i = 0; i < frame_count; i++) {
+		int ret;
+
+		if (node->can_capture)
+			ret = node->read(tmp, size);
+		else
+			ret = node->write(tmp, size);
+		fail_on_test(ret != size);
+		printf("\r\t\t%s: Frame #%03d", buftype2s(type).c_str(), i);
+		fflush(stdout);
+	}
+	printf("\r\t\t                                                            ");
+	return 0;
+}
+
+/*
+ * Remember which combination of fmt, crop and compose rectangles have been
+ * used to test streaming.
+ * This helps prevent duplicate streaming tests.
+ */
+struct selTest {
+	unsigned fmt_w, fmt_h, fmt_field;
+	unsigned crop_w, crop_h;
+	unsigned compose_w, compose_h;
+};
+
+static std::vector<selTest> selTests;
+
+static selTest createSelTest(const cv4l_fmt &fmt,
+		const v4l2_selection &crop, const v4l2_selection &compose)
+{
+	selTest st = {
+		fmt.g_width(), fmt.g_height(), fmt.g_field(),
+		crop.r.width, crop.r.height,
+		compose.r.width, compose.r.height
+	};
+
+	return st;
+}
+
+static selTest createSelTest(struct node *node)
+{
+	v4l2_selection crop = {
+		node->g_selection_type(),
+		V4L2_SEL_TGT_CROP
+	};
+	v4l2_selection compose = {
+		node->g_selection_type(),
+		V4L2_SEL_TGT_COMPOSE
+	};
+	cv4l_fmt fmt;
+
+	node->g_fmt(fmt);
+	node->g_selection(crop);
+	node->g_selection(compose);
+	return createSelTest(fmt, crop, compose);
+}
+
+static bool haveSelTest(const selTest &test)
+{
+	for (unsigned i = 0; i < selTests.size(); i++)
+		if (!memcmp(&selTests[i], &test, sizeof(test)))
+			return true;
+	return false;
+}
+
+static void streamFmtRun(struct node *node, cv4l_fmt &fmt, unsigned frame_count,
+		bool testSelection = false)
+{
+	v4l2_selection crop = {
+		node->g_selection_type(),
+		V4L2_SEL_TGT_CROP
+	};
+	v4l2_selection compose = {
+		node->g_selection_type(),
+		V4L2_SEL_TGT_COMPOSE
+	};
+	bool has_compose = node->cur_io_has_compose();
+	bool has_crop = node->cur_io_has_crop();
+	char s_crop[32] = "";
+	char s_compose[32] = "";
+
+	if (has_crop) {
+		node->g_frame_selection(crop, fmt.g_field());
+		sprintf(s_crop, "Crop %ux%u@%ux%u, ",
+				crop.r.width, crop.r.height,
+				crop.r.left, crop.r.top);
+	}
+	if (has_compose) {
+		node->g_frame_selection(compose, fmt.g_field());
+		sprintf(s_compose, "Compose %ux%u@%ux%u, ",
+				compose.r.width, compose.r.height,
+				compose.r.left, compose.r.top);
+	}
+	printf("\r\t\t%s%sStride %u, Field %s%s: %s   \n",
+			s_crop, s_compose,
+			fmt.g_bytesperline(),
+			field2s(fmt.g_field()).c_str(),
+			testSelection ? ", SelTest" : "",
+			ok(testStreaming(node, frame_count)));
+	node->reopen();
+}
+
+static void streamFmt(struct node *node, __u32 pixelformat, __u32 w, __u32 h, v4l2_fract *f)
+{
+	const char *op = (node->g_caps() & V4L2_CAP_STREAMING) ? "MMAP" :
+		(node->can_capture ? "read()" : "write()");
+	unsigned frame_count = f ? 1.0 / fract2f(f) : 10;
+	bool has_compose = node->cur_io_has_compose();
+	bool has_crop = node->cur_io_has_crop();
+	__u32 default_field;
+	v4l2_selection crop = {
+		node->g_selection_type(),
+		V4L2_SEL_TGT_CROP
+	};
+	v4l2_selection min_crop, max_crop;
+	v4l2_selection compose = {
+		node->g_selection_type(),
+		V4L2_SEL_TGT_COMPOSE
+	};
+	v4l2_selection min_compose, max_compose;
+	cv4l_fmt fmt;
+	char hz[32] = "";
+
+	node->g_fmt(fmt);
+	fmt.s_pixelformat(pixelformat);
+	fmt.s_width(w);
+	fmt.s_field(V4L2_FIELD_ANY);
+	fmt.s_height(h);
+	node->try_fmt(fmt);
+	default_field = fmt.g_field();
+	fmt.s_frame_height(h);
+	node->s_fmt(fmt);
+	if (f) {
+		node->set_interval(*f);
+		sprintf(hz, "@%.2f Hz", 1.0 / fract2f(f));
+	}
+
+	printf("\ttest %s for Format %s, Frame Size %ux%u%s:\n", op,
+				pixfmt2s(pixelformat).c_str(),
+				fmt.g_width(), fmt.g_frame_height(), hz);
+
+	if (has_crop)
+		node->g_frame_selection(crop, fmt.g_field());
+	if (has_compose)
+		node->g_frame_selection(compose, fmt.g_field());
+
+	for (unsigned field = V4L2_FIELD_NONE;
+			field <= V4L2_FIELD_INTERLACED_BT; field++) {
+		node->g_fmt(fmt);
+		fmt.s_field(field);
+		fmt.s_width(w);
+		fmt.s_frame_height(h);
+		node->s_fmt(fmt);
+		if (fmt.g_field() != field)
+			continue;
+
+		restoreCropCompose(node, fmt.g_field(), crop, compose);
+		streamFmtRun(node, fmt, frame_count);
+
+		// Test if the driver allows for user-specified 'bytesperline' values
+		node->g_fmt(fmt);
+		unsigned bpl = fmt.g_bytesperline();
+		unsigned size = fmt.g_sizeimage();
+		fmt.s_bytesperline(bpl + 64);
+		node->s_fmt(fmt, false);
+		if (fmt.g_bytesperline() == bpl)
+			continue;
+		if (fmt.g_sizeimage() <= size)
+			fail("fmt.g_sizeimage() <= size\n");
+		streamFmtRun(node, fmt, frame_count);
+	}
+
+	fmt.s_field(default_field);
+	fmt.s_frame_height(h);
+	node->s_fmt(fmt);
+	restoreCropCompose(node, fmt.g_field(), crop, compose);
+
+	if (has_crop) {
+		min_crop = crop;
+		min_crop.r.width = 0;
+		min_crop.r.height = 0;
+		node->s_frame_selection(min_crop, fmt.g_field());
+		node->s_fmt(fmt);
+		node->g_frame_selection(min_crop, fmt.g_field());
+		max_crop = crop;
+		max_crop.r.width = ~0;
+		max_crop.r.height = ~0;
+		node->s_frame_selection(max_crop, fmt.g_field());
+		node->s_fmt(fmt);
+		node->g_frame_selection(max_crop, fmt.g_field());
+		restoreCropCompose(node, fmt.g_field(), crop, compose);
+	}
+
+	if (has_compose) {
+		min_compose = compose;
+		min_compose.r.width = 0;
+		min_compose.r.height = 0;
+		node->s_frame_selection(min_compose, fmt.g_field());
+		node->s_fmt(fmt);
+		node->g_frame_selection(min_compose, fmt.g_field());
+		max_compose = compose;
+		max_compose.r.width = ~0;
+		max_compose.r.height = ~0;
+		node->s_frame_selection(max_compose, fmt.g_field());
+		node->s_fmt(fmt);
+		node->g_frame_selection(max_compose, fmt.g_field());
+		restoreCropCompose(node, fmt.g_field(), crop, compose);
+	}
+
+	if (min_crop.r.width == max_crop.r.width &&
+	    min_crop.r.height == max_crop.r.height)
+		has_crop = false;
+	if (min_compose.r.width == max_compose.r.width &&
+	    min_compose.r.height == max_compose.r.height)
+		has_compose = false;
+
+	if (!has_crop && !has_compose)
+		return;
+
+	if (!has_compose) {
+		cv4l_fmt tmp;
+
+		node->s_frame_selection(min_crop, fmt.g_field());
+		node->g_fmt(tmp);
+		if (tmp.g_width() != fmt.g_width() ||
+		    tmp.g_height() != fmt.g_height())
+			fail("Format resolution changed after changing to min crop\n");
+		selTest test = createSelTest(node);
+		if (!haveSelTest(test)) {
+			selTests.push_back(test);
+			streamFmtRun(node, fmt, frame_count, true);
+		}
+		node->s_frame_selection(max_crop, fmt.g_field());
+		node->g_fmt(tmp);
+		if (tmp.g_width() != fmt.g_width() ||
+		    tmp.g_height() != fmt.g_height())
+			fail("Format resolution changed after changing to max crop\n");
+		test = createSelTest(node);
+		if (!haveSelTest(test)) {
+			selTests.push_back(test);
+			streamFmtRun(node, fmt, frame_count, true);
+		}
+		restoreCropCompose(node, fmt.g_field(), crop, compose);
+		return;
+	}
+	if (!has_crop) {
+		cv4l_fmt tmp;
+		node->s_frame_selection(min_compose, fmt.g_field());
+		node->g_fmt(tmp);
+		if (tmp.g_width() != fmt.g_width() ||
+		    tmp.g_height() != fmt.g_height())
+			fail("Format resolution changed after changing to min compose\n");
+		selTest test = createSelTest(node);
+		if (!haveSelTest(test)) {
+			selTests.push_back(test);
+			streamFmtRun(node, fmt, frame_count, true);
+		}
+		node->s_frame_selection(max_compose, fmt.g_field());
+		node->g_fmt(tmp);
+		if (tmp.g_width() != fmt.g_width() ||
+		    tmp.g_height() != fmt.g_height())
+			fail("Format resolution changed after changing to max compose\n");
+		test = createSelTest(node);
+		if (!haveSelTest(test)) {
+			selTests.push_back(test);
+			streamFmtRun(node, fmt, frame_count, true);
+		}
+		restoreCropCompose(node, fmt.g_field(), crop, compose);
+		return;
+	}
+
+	v4l2_selection *selections[2][4] = {
+		{ &min_crop, &max_crop, &min_compose, &max_compose },
+		{ &min_compose, &max_compose, &min_crop, &max_crop }
+	};
+
+	selTest test = createSelTest(node);
+	if (!haveSelTest(test)) 
+		selTests.push_back(createSelTest(node));
+
+	for (unsigned i = 0; i < 8; i++) {
+		v4l2_selection *sel1 = selections[node->can_output][i & 1];
+		v4l2_selection *sel2 = selections[node->can_output][2 + ((i & 2) >> 1)];
+		v4l2_selection *sel3 = selections[node->can_output][(i & 4) >> 2];
+		cv4l_fmt tmp;
+
+		restoreCropCompose(node, fmt.g_field(), crop, compose);
+		node->s_frame_selection(*sel1, fmt.g_field());
+		node->g_fmt(tmp);
+		if (tmp.g_width() != fmt.g_width() ||
+		    tmp.g_height() != fmt.g_height())
+			fail("Format resolution changed after changing first selection\n");
+		selTest test = createSelTest(node);
+		if (!haveSelTest(test)) {
+			selTests.push_back(test);
+			streamFmtRun(node, fmt, frame_count, true);
+		}
+
+		node->s_frame_selection(*sel2, fmt.g_field());
+		node->g_fmt(tmp);
+		if (tmp.g_width() != fmt.g_width() ||
+		    tmp.g_height() != fmt.g_height())
+			fail("Format resolution changed after changing second selection\n");
+		test = createSelTest(node);
+		if (!haveSelTest(test)) {
+			selTests.push_back(test);
+			streamFmtRun(node, fmt, frame_count, true);
+		}
+
+		node->s_frame_selection(*sel3, fmt.g_field());
+		node->g_fmt(tmp);
+		if (tmp.g_width() != fmt.g_width() ||
+		    tmp.g_height() != fmt.g_height())
+			fail("Format resolution changed after changing third selection\n");
+		test = createSelTest(node);
+		if (!haveSelTest(test)) {
+			selTests.push_back(test);
+			streamFmtRun(node, fmt, frame_count, true);
+		}
+	}
+	restoreCropCompose(node, fmt.g_field(), crop, compose);
+}
+
+static void streamIntervals(struct node *node, __u32 pixelformat, __u32 w, __u32 h)
+{
+	v4l2_frmivalenum frmival = { 0 };
+
+	if (node->enum_frameintervals(frmival, pixelformat, w, h)) {
+		streamFmt(node, pixelformat, w, h, NULL);
+		return;
+	}
+
+	if (frmival.type == V4L2_FRMIVAL_TYPE_DISCRETE) {
+		do {
+			streamFmt(node, pixelformat, w, h, &frmival.discrete);
+		} while (!node->enum_frameintervals(frmival));
+		return;
+	}
+	streamFmt(node, pixelformat, w, h, &frmival.stepwise.min);
+	streamFmt(node, pixelformat, w, h, &frmival.stepwise.max);
+}
+
+void streamAllFormats(struct node *node)
+{
+	v4l2_fmtdesc fmtdesc;
+
+	if (node->enum_fmt(fmtdesc, true))
+		return;
+	selTests.clear();
+	do {
+		v4l2_frmsizeenum frmsize;
+		cv4l_fmt fmt;
+
+		if (node->enum_framesizes(frmsize, fmtdesc.pixelformat)) {
+			cv4l_fmt min, max;
+
+			restoreFormat(node);
+			node->g_fmt(fmt);
+			min = fmt;
+			min.s_width(0);
+			min.s_height(0);
+			node->try_fmt(min);
+			max = fmt;
+			max.s_width(~0);
+			max.s_height(~0);
+			node->try_fmt(max);
+			if (min.g_width() != fmt.g_width() ||
+			    min.g_height() != fmt.g_height()) {
+				streamIntervals(node, fmtdesc.pixelformat,
+					min.g_width(), min.g_frame_height());
+				restoreFormat(node);
+			}
+			if (max.g_width() != fmt.g_width() ||
+			    max.g_height() != fmt.g_height()) {
+				streamIntervals(node, fmtdesc.pixelformat,
+					max.g_width(), max.g_frame_height());
+				restoreFormat(node);
+			}
+			streamIntervals(node, fmtdesc.pixelformat,
+					fmt.g_width(), fmt.g_frame_height());
+			continue;
+		}
+
+		v4l2_frmsize_stepwise &ss = frmsize.stepwise;
+
+		switch (frmsize.type) {
+		case V4L2_FRMSIZE_TYPE_DISCRETE:
+			do {
+				streamIntervals(node, fmtdesc.pixelformat,
+						frmsize.discrete.width,
+						frmsize.discrete.height);
+			} while (!node->enum_framesizes(frmsize));
+			break;
+		default:
+			restoreFormat(node);
+			streamIntervals(node, fmtdesc.pixelformat,
+					ss.min_width, ss.min_height);
+			restoreFormat(node);
+			if (ss.max_width != ss.min_width ||
+			    ss.max_height != ss.min_height) {
+				streamIntervals(node, fmtdesc.pixelformat,
+						ss.max_width, ss.max_height);
+				restoreFormat(node);
+			}	
+			node->g_fmt(fmt);
+			if (fmt.g_width() != ss.min_width ||
+			    fmt.g_frame_height() != ss.min_height) {
+				streamIntervals(node, fmtdesc.pixelformat,
+					fmt.g_width(), fmt.g_frame_height());
+				restoreFormat(node);
+			}
+			break;
+		}
+	} while (!node->enum_fmt(fmtdesc));
 }

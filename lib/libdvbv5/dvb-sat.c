@@ -26,6 +26,19 @@
 #include "dvb-fe-priv.h"
 #include <libdvbv5/dvb-v5-std.h>
 
+#include <config.h>
+
+#ifdef ENABLE_NLS
+# include "gettext.h"
+# include <libintl.h>
+# define _(string) dgettext(LIBDVBV5_DOMAIN, string)
+
+#else
+# define _(string) string
+#endif
+
+# define N_(string) string
+
 static const struct dvb_sat_lnb lnb[] = {
 	{
 		.name = "Europe",
@@ -91,6 +104,13 @@ static const struct dvb_sat_lnb lnb[] = {
 		.freqrange = {
 			{ 12200, 12700 }
 		}
+	}, {
+		.name = "Japan 110BS/CS LNBf",
+		.alias = "110BS",
+		.lowfreq = 10678,
+		.freqrange = {
+			{ 11710, 12751 }
+		}
 	},
 };
 
@@ -111,22 +131,22 @@ int dvb_print_lnb(int i)
 		return -1;
 
 	printf("%s\n\t%s\n", lnb[i].alias, lnb[i].name);
-	printf("\t%d to %d MHz",
+	printf(_("\t%d to %d MHz"),
 	       lnb[i].freqrange[0].low, lnb[i].freqrange[0].high);
 	if (lnb[i].freqrange[1].low)
-		printf(" and %d to %d MHz",
+		printf(_(" and %d to %d MHz"),
 		       lnb[i].freqrange[1].low, lnb[i].freqrange[1].high);
-	printf("\n\t%s LO, ", lnb[i].highfreq ? "Dual" : "Single");
+	printf("\n\t%s LO, ", lnb[i].highfreq ? _("Dual") : _("Single"));
 	if (!lnb[i].highfreq) {
 		printf("IF = %d MHz\n", lnb[i].lowfreq);
 		return 0;
 	}
 	if (!lnb[i].rangeswitch) {
-		printf("Bandstacking, LO POL_R %d MHZ, LO POL_L %d MHz\n",
+		printf(_("Bandstacking, LO POL_R %d MHZ, LO POL_L %d MHz\n"),
 		       lnb[i].lowfreq, lnb[i].highfreq);
 		return 0;
 	}
-	printf("IF = lowband %d MHz, highband %d MHz\n",
+	printf(_("IF = lowband %d MHz, highband %d MHz\n"),
 	       lnb[i].lowfreq, lnb[i].highfreq);
 
 	return 0;
@@ -304,6 +324,8 @@ static int dvbsat_diseqc_set_input(struct dvb_v5_fe_parms_priv *parms,
 		 */
 		pol_v = 0;
 		high_band = 1;
+		if (parms->p.current_sys == SYS_ISDBS)
+			vol_high = 1;
 	} else {
 		/* Adjust voltage/tone accordingly */
 		if (parms->p.sat_number < 2) {
@@ -332,7 +354,7 @@ static int dvbsat_diseqc_set_input(struct dvb_v5_fe_parms_priv *parms,
 							   pol_v, sat_number, t);
 
 		if (rc) {
-			dvb_logerr("sending diseq failed");
+			dvb_logerr(_("sending diseq failed"));
 			return rc;
 		}
 		usleep((15 + parms->p.diseqc_wait) * 1000);
@@ -366,7 +388,7 @@ int dvb_sat_set_parms(struct dvb_v5_fe_parms *p)
 	dvb_fe_retrieve_parm(&parms->p, DTV_FREQUENCY, &freq);
 
 	if (!lnb) {
-		dvb_logerr("Need a LNBf to work");
+		dvb_logerr(_("Need a LNBf to work"));
 		return -EINVAL;
 	}
 

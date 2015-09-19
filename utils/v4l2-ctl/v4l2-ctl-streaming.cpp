@@ -45,6 +45,7 @@ static char *file_cap;
 static char *file_out;
 static struct tpg_data tpg;
 static unsigned output_field = V4L2_FIELD_NONE;
+static bool output_field_alt;
 
 static void *test_mmap(void *start, size_t length, int prot, int flags,
 		int fd, int64_t offset)
@@ -160,6 +161,7 @@ static const flag_def flags_def[] = {
 	{ V4L2_BUF_FLAG_PREPARED, "prepared" },
 	{ V4L2_BUF_FLAG_NO_CACHE_INVALIDATE, "no-cache-invalidate" },
 	{ V4L2_BUF_FLAG_NO_CACHE_CLEAN, "no-cache-clean" },
+	{ V4L2_BUF_FLAG_LAST, "last" },
 	{ 0, NULL }
 };
 
@@ -594,6 +596,7 @@ static int do_setup_out_buffers(int fd, buffers &b, FILE *fin, bool qbuf)
 	struct v4l2_format fmt;
 	u32 field;
 	unsigned factor = 1;
+	unsigned p;
 	bool can_fill;
 
 	memset(&fmt, 0, sizeof(fmt));
@@ -623,6 +626,7 @@ static int do_setup_out_buffers(int fd, buffers &b, FILE *fin, bool qbuf)
 		field = fmt.fmt.pix.field;
 
 	output_field = field;
+	output_field_alt = field == V4L2_FIELD_ALTERNATE;
 	if (V4L2_FIELD_HAS_T_OR_B(field)) {
 		factor = 2;
 		output_field = (stream_out_std & V4L2_STD_525_60) ?
@@ -636,16 +640,22 @@ static int do_setup_out_buffers(int fd, buffers &b, FILE *fin, bool qbuf)
 		tpg_reset_source(&tpg, fmt.fmt.pix_mp.width,
 				 fmt.fmt.pix_mp.height * factor, field);
 		tpg_s_colorspace(&tpg, fmt.fmt.pix_mp.colorspace);
-		if (can_fill) {
-			tpg_s_bytesperline(&tpg, 0, fmt.fmt.pix_mp.plane_fmt[0].bytesperline);
-			tpg_s_bytesperline(&tpg, 1, fmt.fmt.pix_mp.plane_fmt[1].bytesperline);
-		}
+		tpg_s_xfer_func(&tpg, fmt.fmt.pix_mp.xfer_func);
+		tpg_s_ycbcr_enc(&tpg, fmt.fmt.pix_mp.ycbcr_enc);
+		tpg_s_quantization(&tpg, fmt.fmt.pix_mp.quantization);
+		if (can_fill)
+			for (p = 0; p < fmt.fmt.pix_mp.num_planes; p++)
+				tpg_s_bytesperline(&tpg, p,
+						fmt.fmt.pix_mp.plane_fmt[p].bytesperline);
 	} else {
 		tpg_alloc(&tpg, fmt.fmt.pix.width);
 		can_fill = tpg_s_fourcc(&tpg, fmt.fmt.pix.pixelformat);
 		tpg_reset_source(&tpg, fmt.fmt.pix.width,
 				 fmt.fmt.pix.height * factor, field);
 		tpg_s_colorspace(&tpg, fmt.fmt.pix.colorspace);
+		tpg_s_xfer_func(&tpg, fmt.fmt.pix.xfer_func);
+		tpg_s_ycbcr_enc(&tpg, fmt.fmt.pix.ycbcr_enc);
+		tpg_s_quantization(&tpg, fmt.fmt.pix.quantization);
 		tpg_s_bytesperline(&tpg, 0, fmt.fmt.pix.bytesperline);
 	}
 	tpg_s_pattern(&tpg, (tpg_pattern)stream_pat);
@@ -691,7 +701,7 @@ static int do_setup_out_buffers(int fd, buffers &b, FILE *fin, bool qbuf)
 			return -1;
 
 		buf.field = field;
-		tpg_s_field(&tpg, field);
+		tpg_s_field(&tpg, field, output_field_alt);
 		if (field == V4L2_FIELD_TOP)
 			field = V4L2_FIELD_BOTTOM;
 		else if (field == V4L2_FIELD_BOTTOM)
@@ -957,7 +967,7 @@ static int do_handle_out(int fd, buffers &b, FILE *fin, struct v4l2_buffer *cap,
 		return -1;
 	}
 	buf.field = output_field;
-	tpg_s_field(&tpg, output_field);
+	tpg_s_field(&tpg, output_field, output_field_alt);
 	if (output_field == V4L2_FIELD_TOP)
 		output_field = V4L2_FIELD_BOTTOM;
 	else if (output_field == V4L2_FIELD_BOTTOM)

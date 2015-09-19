@@ -129,7 +129,9 @@ static int testEnumFrameSizes(struct node *node, __u32 pixfmt)
 	struct v4l2_frmsizeenum frmsize;
 	struct v4l2_frmsize_stepwise *sw = &frmsize.stepwise;
 	bool found_stepwise = false;
+	__u64 cookie;
 	unsigned f = 0;
+	unsigned count = 0;
 	int ret;
 
 	for (;;) {
@@ -167,6 +169,11 @@ static int testEnumFrameSizes(struct node *node, __u32 pixfmt)
 				return ret;
 			if (ret == 0 && !(node->g_caps() & (V4L2_CAP_VIDEO_CAPTURE | V4L2_CAP_VIDEO_CAPTURE_MPLANE)))
 				return fail("found discrete framesizes when no video capture is supported\n");
+			cookie = ((__u64)pixfmt << 32) |
+				 (frmsize.discrete.width << 16) |
+				 frmsize.discrete.height;
+			node->frmsizes.insert(cookie);
+			count++;
 			break;
 		case V4L2_FRMSIZE_TYPE_CONTINUOUS:
 			if (frmsize.stepwise.step_width != 1 || frmsize.stepwise.step_height != 1)
@@ -206,6 +213,7 @@ static int testEnumFrameSizes(struct node *node, __u32 pixfmt)
 
 		f++;
 	}
+	node->frmsizes_count[pixfmt] = count;
 	info("found %d framesizes for pixel format %08x\n", f, pixfmt);
 	return 0;
 }
@@ -309,7 +317,7 @@ int testEnumFormats(struct node *node)
 	return supported ? 0 : ENOTTY;
 }
 
-static int testColorspace(__u32 pixelformat, __u32 colorspace)
+static int testColorspace(__u32 pixelformat, __u32 colorspace, __u32 ycbcr_enc, __u32 quantization)
 {
 	fail_on_test(!colorspace);
 	fail_on_test(colorspace == V4L2_COLORSPACE_BT878);
@@ -317,6 +325,9 @@ static int testColorspace(__u32 pixelformat, __u32 colorspace)
 		     colorspace != V4L2_COLORSPACE_JPEG);
 	fail_on_test(pixelformat != V4L2_PIX_FMT_JPEG &&
 		     colorspace == V4L2_COLORSPACE_JPEG);
+	fail_on_test(colorspace >= 0xff);
+	fail_on_test(ycbcr_enc >= 0xff);
+	fail_on_test(quantization >= 0xff);
 	return 0;
 }
 
@@ -361,7 +372,7 @@ int testFBuf(struct node *node)
 	}*/
 	fail_on_test(fbuf.fmt.bytesperline && fbuf.fmt.bytesperline < fbuf.fmt.width);
 	fail_on_test(fbuf.fmt.sizeimage && fbuf.fmt.sizeimage < fbuf.fmt.bytesperline * fbuf.fmt.height);
-	fail_on_test(testColorspace(fbuf.fmt.pixelformat, fbuf.fmt.colorspace));
+	fail_on_test(testColorspace(fbuf.fmt.pixelformat, fbuf.fmt.colorspace, 0, 0));
 	return 0;
 }
 
@@ -414,7 +425,9 @@ static int testFormatsType(struct node *node, int ret,  unsigned type, struct v4
 					pix.pixelformat, type);
 		fail_on_test(pix.bytesperline && pix.bytesperline < pix.width);
 		fail_on_test(!pix.sizeimage);
-		fail_on_test(testColorspace(pix.pixelformat, pix.colorspace));
+		if (!node->is_m2m)
+			fail_on_test(testColorspace(pix.pixelformat, pix.colorspace,
+					    pix.ycbcr_enc, pix.quantization));
 		fail_on_test(pix.field == V4L2_FIELD_ANY);
 		if (pix.priv && pix.priv != V4L2_PIX_FMT_PRIV_MAGIC)
 			return fail("priv is non-zero and non-magic!\n");
@@ -427,7 +440,9 @@ static int testFormatsType(struct node *node, int ret,  unsigned type, struct v4
 		    set_splane->find(pix_mp.pixelformat) == set_splane->end())
 			return fail("unknown pixelformat %08x for buftype %d\n",
 					pix_mp.pixelformat, type);
-		fail_on_test(testColorspace(pix_mp.pixelformat, pix_mp.colorspace));
+		if (!node->is_m2m)
+			fail_on_test(testColorspace(pix_mp.pixelformat, pix_mp.colorspace, 
+                                            pix_mp.ycbcr_enc, pix_mp.quantization));
 		fail_on_test(pix.field == V4L2_FIELD_ANY);
 		ret = check_0(pix_mp.reserved, sizeof(pix_mp.reserved));
 		if (ret)
@@ -585,12 +600,12 @@ static bool matchFormats(const struct v4l2_format &f1, const struct v4l2_format 
 	case V4L2_BUF_TYPE_VIDEO_OUTPUT:
 		if (!memcmp(&f1.fmt.pix, &f2.fmt.pix, sizeof(f1.fmt.pix)))
 			return true;
-		printf("\t\tG_FMT:     %dx%d, %x, %d, %d, %d, %d, %x\n",
+		printf("\t\tG_FMT:     %dx%d, %x, %d, %d, %d, %d, %d, %d, %x\n",
 			pix1.width, pix1.height, pix1.pixelformat, pix1.field, pix1.bytesperline,
-			pix1.sizeimage, pix1.colorspace, pix1.priv);
-		printf("\t\tTRY/S_FMT: %dx%d, %x, %d, %d, %d, %d, %x\n",
+			pix1.sizeimage, pix1.colorspace, pix1.ycbcr_enc, pix1.quantization, pix1.priv);
+		printf("\t\tTRY/S_FMT: %dx%d, %x, %d, %d, %d, %d, %d, %d, %x\n",
 			pix2.width, pix2.height, pix2.pixelformat, pix2.field, pix2.bytesperline,
-			pix2.sizeimage, pix2.colorspace, pix2.priv);
+			pix2.sizeimage, pix2.colorspace, pix2.ycbcr_enc, pix2.quantization, pix2.priv);
 		return false;
 	case V4L2_BUF_TYPE_VIDEO_OVERLAY:
 	case V4L2_BUF_TYPE_VIDEO_OUTPUT_OVERLAY:
@@ -615,6 +630,7 @@ int testTryFormats(struct node *node)
 {
 	struct v4l2_clip clip;
 	struct v4l2_format fmt, fmt_try;
+	int result = 0;
 	int type;
 	int ret;
 	
@@ -643,7 +659,7 @@ int testTryFormats(struct node *node)
 		if (ret)
 			return ret;
 		if (!matchFormats(fmt, fmt_try))
-			return fail("%s: TRY_FMT(G_FMT) != G_FMT\n",
+			result = fail("%s: TRY_FMT(G_FMT) != G_FMT\n",
 					buftype2s(type).c_str());
 	}
 
@@ -715,7 +731,7 @@ int testTryFormats(struct node *node)
 	ret = doioctl(node, VIDIOC_TRY_FMT, &fmt);
 	if (ret != ENOTTY && ret != EINVAL)
 		return fail("Buffer type PRIVATE allowed!\n");
-	return node->valid_buftypes ? 0 : ENOTTY;
+	return node->valid_buftypes ? result : ENOTTY;
 }
 
 static int testGlobalFormat(struct node *node, int type)
@@ -1128,4 +1144,360 @@ int testParm(struct node *node)
 	if (ret != ENOTTY && ret != EINVAL)
 		return fail("Buffer type PRIVATE allowed!\n");
 	return supported ? 0 : ENOTTY;
+}
+
+static bool rect_is_inside(const struct v4l2_rect *r1, const struct v4l2_rect *r2)
+{
+	return r1->left >= r2->left && r1->top >= r2->top &&
+	       r1->left + r1->width <= r2->left + r2->width &&
+	       r1->top + r1->height <= r2->top + r2->height;
+}
+
+static int testBasicSelection(struct node *node, unsigned type, unsigned target)
+{
+	struct v4l2_selection sel = {
+		type,
+		target,
+	};
+	int ret;
+	v4l2_format fmt;
+
+	memset(sel.reserved, 0xff, sizeof(sel.reserved));
+	ret = doioctl(node, VIDIOC_G_SELECTION, &sel);
+	if (ret == ENOTTY || ret == EINVAL) {
+		fail_on_test(!doioctl(node, VIDIOC_S_SELECTION, &sel));
+		return ENOTTY;
+	}
+	fail_on_test(ret);
+	fail_on_test(check_0(sel.reserved, sizeof(sel.reserved)));
+
+	// selection is not supported (for now) if there is more than one
+	// discrete frame size.
+	if (type == V4L2_BUF_TYPE_VIDEO_CAPTURE)
+		v4l_format_init(&fmt, node->is_planar ?
+			V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE :
+			V4L2_BUF_TYPE_VIDEO_CAPTURE);
+	else
+		v4l_format_init(&fmt, node->is_planar ?
+			V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE :
+			V4L2_BUF_TYPE_VIDEO_OUTPUT);
+	fail_on_test(doioctl(node, VIDIOC_G_FMT, &fmt));
+	__u32 pixfmt = v4l_format_g_pixelformat(&fmt);
+	if (node->frmsizes_count.find(pixfmt) != node->frmsizes_count.end())
+		fail_on_test(node->frmsizes_count[pixfmt] > 1);
+	return 0;
+}
+
+static int testBasicCrop(struct node *node, unsigned type)
+{
+	struct v4l2_selection sel_crop = {
+		type,
+		V4L2_SEL_TGT_CROP,
+	};
+	struct v4l2_selection sel_def;
+	struct v4l2_selection sel_bounds;
+
+	fail_on_test(doioctl(node, VIDIOC_G_SELECTION, &sel_crop));
+	fail_on_test(!sel_crop.r.width || !sel_crop.r.height);
+	sel_def = sel_crop;
+	sel_def.target = V4L2_SEL_TGT_CROP_DEFAULT;
+	fail_on_test(doioctl(node, VIDIOC_G_SELECTION, &sel_def));
+	fail_on_test(!sel_def.r.width || !sel_def.r.height);
+	if (type == V4L2_BUF_TYPE_VIDEO_OUTPUT)
+		fail_on_test(sel_def.r.left || sel_def.r.top);
+	sel_bounds = sel_crop;
+	sel_bounds.target = V4L2_SEL_TGT_CROP_BOUNDS;
+	fail_on_test(doioctl(node, VIDIOC_G_SELECTION, &sel_bounds));
+	fail_on_test(!sel_bounds.r.width || !sel_bounds.r.height);
+	if (type == V4L2_BUF_TYPE_VIDEO_OUTPUT)
+		fail_on_test(sel_bounds.r.left || sel_bounds.r.top);
+	fail_on_test(!rect_is_inside(&sel_crop.r, &sel_bounds.r));
+	fail_on_test(!rect_is_inside(&sel_def.r, &sel_bounds.r));
+	return 0;
+}
+
+static int testLegacyCrop(struct node *node)
+{
+	struct v4l2_cropcap cap = {
+		node->g_selection_type()
+	};
+	struct v4l2_crop crop = {
+		node->g_selection_type()
+	};
+	struct v4l2_selection sel = {
+		node->g_selection_type()
+	};
+
+	sel.target = node->can_capture ? V4L2_SEL_TGT_CROP_DEFAULT :
+					 V4L2_SEL_TGT_COMPOSE_DEFAULT;
+	/*
+	 * If either CROPCAP or G_CROP works, then G_SELECTION should
+	 * work as well.
+	 * If neither CROPCAP nor G_CROP work, then G_SELECTION shouldn't
+	 * work either.
+	 */
+	if (!doioctl(node, VIDIOC_CROPCAP, &cap))
+		fail_on_test(doioctl(node, VIDIOC_G_SELECTION, &sel));
+	else
+		fail_on_test(!doioctl(node, VIDIOC_G_SELECTION, &sel));
+	sel.target = node->can_capture ? V4L2_SEL_TGT_CROP :
+					 V4L2_SEL_TGT_COMPOSE;
+	if (!doioctl(node, VIDIOC_G_CROP, &crop))
+		fail_on_test(doioctl(node, VIDIOC_G_SELECTION, &sel));
+	else
+		fail_on_test(!doioctl(node, VIDIOC_G_SELECTION, &sel));
+	return 0;
+}
+
+int testCropping(struct node *node)
+{
+	int ret_cap, ret_out;
+
+	ret_cap = ENOTTY;
+	ret_out = ENOTTY;
+
+	fail_on_test(testLegacyCrop(node));
+	if (node->can_capture && node->is_video)
+		ret_cap = testBasicSelection(node, V4L2_BUF_TYPE_VIDEO_CAPTURE, V4L2_SEL_TGT_CROP);
+	if (node->can_output && node->is_video)
+		ret_out = testBasicSelection(node, V4L2_BUF_TYPE_VIDEO_OUTPUT, V4L2_SEL_TGT_CROP);
+	if ((!node->can_capture && !node->can_output) || !node->is_video) {
+		struct v4l2_selection sel = {
+			V4L2_BUF_TYPE_VIDEO_CAPTURE,
+			V4L2_SEL_TGT_CROP
+		};
+
+		if (node->can_output)
+			sel.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
+		fail_on_test(doioctl(node, VIDIOC_G_SELECTION, &sel) != ENOTTY);
+		fail_on_test(doioctl(node, VIDIOC_S_SELECTION, &sel) != ENOTTY);
+	}
+	if (ret_cap && ret_out)
+		return ret_cap;
+
+	if (!ret_cap)
+		fail_on_test(testBasicCrop(node, V4L2_BUF_TYPE_VIDEO_CAPTURE));
+	if (!ret_out)
+		fail_on_test(testBasicCrop(node, V4L2_BUF_TYPE_VIDEO_OUTPUT));
+
+	return 0;
+}
+
+static int testBasicCompose(struct node *node, unsigned type)
+{
+	struct v4l2_selection sel_compose = {
+		type,
+		V4L2_SEL_TGT_COMPOSE,
+	};
+	struct v4l2_selection sel_def;
+	struct v4l2_selection sel_bounds;
+	struct v4l2_selection sel_padded;
+	int ret;
+
+	fail_on_test(doioctl(node, VIDIOC_G_SELECTION, &sel_compose));
+	fail_on_test(!sel_compose.r.width || !sel_compose.r.height);
+	sel_def = sel_compose;
+	sel_def.target = V4L2_SEL_TGT_COMPOSE_DEFAULT;
+	fail_on_test(doioctl(node, VIDIOC_G_SELECTION, &sel_def));
+	fail_on_test(!sel_def.r.width || !sel_def.r.height);
+	if (type == V4L2_BUF_TYPE_VIDEO_CAPTURE)
+		fail_on_test(sel_def.r.left || sel_def.r.top);
+	sel_bounds = sel_compose;
+	sel_bounds.target = V4L2_SEL_TGT_COMPOSE_BOUNDS;
+	fail_on_test(doioctl(node, VIDIOC_G_SELECTION, &sel_bounds));
+	fail_on_test(!sel_bounds.r.width || !sel_bounds.r.height);
+	if (type == V4L2_BUF_TYPE_VIDEO_CAPTURE)
+		fail_on_test(sel_bounds.r.left || sel_bounds.r.top);
+	fail_on_test(!rect_is_inside(&sel_compose.r, &sel_bounds.r));
+	fail_on_test(!rect_is_inside(&sel_def.r, &sel_bounds.r));
+	sel_padded = sel_compose;
+	sel_padded.target = V4L2_SEL_TGT_COMPOSE_PADDED;
+	ret = doioctl(node, VIDIOC_G_SELECTION, &sel_padded);
+	fail_on_test(ret && ret != EINVAL);
+	if (!ret) {
+		fail_on_test(!rect_is_inside(&sel_padded.r, &sel_bounds.r));
+		fail_on_test(!sel_padded.r.width || !sel_padded.r.height);
+		if (type == V4L2_BUF_TYPE_VIDEO_CAPTURE)
+			fail_on_test(sel_padded.r.left || sel_padded.r.top);
+	}
+	return 0;
+}
+
+int testComposing(struct node *node)
+{
+	int ret_cap, ret_out;
+
+	ret_cap = ENOTTY;
+	ret_out = ENOTTY;
+
+	if (node->can_capture && node->is_video)
+		ret_cap = testBasicSelection(node, V4L2_BUF_TYPE_VIDEO_CAPTURE, V4L2_SEL_TGT_COMPOSE);
+	if (node->can_output && node->is_video)
+		ret_out = testBasicSelection(node, V4L2_BUF_TYPE_VIDEO_OUTPUT, V4L2_SEL_TGT_COMPOSE);
+	if ((!node->can_capture && !node->can_output) || !node->is_video) {
+		struct v4l2_selection sel = {
+			V4L2_BUF_TYPE_VIDEO_OUTPUT,
+			V4L2_SEL_TGT_COMPOSE
+		};
+
+		if (node->can_output)
+			sel.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
+		fail_on_test(doioctl(node, VIDIOC_G_SELECTION, &sel) != ENOTTY);
+		fail_on_test(doioctl(node, VIDIOC_S_SELECTION, &sel) != ENOTTY);
+	}
+	if (ret_cap && ret_out)
+		return ret_cap;
+
+	if (!ret_cap)
+		fail_on_test(testBasicCompose(node, V4L2_BUF_TYPE_VIDEO_CAPTURE));
+	if (!ret_out)
+		fail_on_test(testBasicCompose(node, V4L2_BUF_TYPE_VIDEO_OUTPUT));
+
+	return 0;
+}
+
+static int testBasicScaling(struct node *node, const struct v4l2_format &cur)
+{
+	struct v4l2_selection sel_crop = {
+		V4L2_BUF_TYPE_VIDEO_CAPTURE,
+		V4L2_SEL_TGT_CROP,
+		0,
+		{ 1, 1, 0, 0 }
+	};
+	struct v4l2_selection sel_compose = {
+		V4L2_BUF_TYPE_VIDEO_CAPTURE,
+		V4L2_SEL_TGT_COMPOSE,
+		0,
+		{ 1, 1, 0, 0 }
+	};
+	unsigned compose_w = 0, compose_h = 0;
+	unsigned crop_w = 0, crop_h = 0;
+	struct v4l2_format fmt = cur;
+	bool have_crop = false;
+	bool crop_is_fmt = false;
+	bool crop_is_const = false;
+	bool have_compose = false;
+	bool compose_is_fmt = false;
+	bool compose_is_const = false;
+	bool compose_is_crop = false;
+	__u64 cookie;
+	int ret;
+
+	if (node->can_output) {
+		sel_crop.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
+		sel_compose.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
+	}
+	doioctl(node, VIDIOC_S_SELECTION, &sel_crop);
+	doioctl(node, VIDIOC_S_SELECTION, &sel_compose);
+	v4l_format_s_width(&fmt, 1);
+	v4l_format_s_height(&fmt, 1);
+	v4l_format_s_field(&fmt, V4L2_FIELD_ANY);
+	fail_on_test(doioctl(node, VIDIOC_S_FMT, &fmt));
+	ret = doioctl(node, VIDIOC_G_SELECTION, &sel_crop);
+	have_crop = ret == 0;
+	if (ret == 0) {
+		crop_is_fmt = sel_crop.r.width == v4l_format_g_width(&fmt) &&
+			      sel_crop.r.height == v4l_format_g_height(&fmt);
+		crop_w = sel_crop.r.width;
+		crop_h = sel_crop.r.height;
+	}
+	ret = doioctl(node, VIDIOC_G_SELECTION, &sel_compose);
+	have_compose = ret == 0;
+	if (ret == 0) {
+		compose_is_fmt = sel_compose.r.width == v4l_format_g_width(&fmt) &&
+				 sel_compose.r.height == v4l_format_g_height(&fmt);
+		compose_w = sel_compose.r.width;
+		compose_h = sel_compose.r.height;
+	}
+	if (have_crop && have_compose)
+		compose_is_crop = compose_w == crop_w &&
+				  compose_h == crop_h;
+
+	cookie = ((__u64)v4l_format_g_pixelformat(&fmt) << 32) |
+		  (v4l_format_g_width(&fmt) << 16) |
+		  v4l_format_g_height(&fmt);
+	if (node->can_output) {
+		if (node->frmsizes.find(cookie) == node->frmsizes.end() && !compose_is_fmt &&
+		    (v4l_format_g_width(&fmt) != v4l_format_g_width(&cur) ||
+		     v4l_format_g_height(&fmt) != v4l_format_g_height(&cur)))
+			node->can_scale = true;
+	} else {
+		if (node->frmsizes.find(cookie) == node->frmsizes.end() && !crop_is_fmt &&
+		    (v4l_format_g_width(&fmt) != v4l_format_g_width(&cur) ||
+		     v4l_format_g_height(&fmt) != v4l_format_g_height(&cur)))
+			node->can_scale = true;
+	}
+	sel_crop.r.width = sel_compose.r.width = 0x4000;
+	sel_crop.r.height = sel_compose.r.height = 0x4000;
+	v4l_format_s_width(&fmt, 0x4000);
+	v4l_format_s_height(&fmt, 0x4000);
+	v4l_format_s_field(&fmt, V4L2_FIELD_ANY);
+	fail_on_test(doioctl(node, VIDIOC_S_FMT, &fmt));
+	doioctl(node, VIDIOC_S_SELECTION, &sel_crop);
+	doioctl(node, VIDIOC_S_SELECTION, &sel_compose);
+	crop_is_fmt = false;
+	ret = doioctl(node, VIDIOC_G_SELECTION, &sel_crop);
+	if (ret == 0) {
+		crop_is_fmt = sel_crop.r.width == v4l_format_g_width(&fmt) &&
+			      sel_crop.r.height == v4l_format_g_height(&fmt);
+		crop_is_const = sel_crop.r.width == crop_w &&
+				sel_crop.r.height == crop_h;
+	}
+	ret = doioctl(node, VIDIOC_G_SELECTION, &sel_compose);
+	if (ret == 0) {
+		compose_is_fmt = sel_compose.r.width == v4l_format_g_width(&fmt) &&
+				 sel_compose.r.height == v4l_format_g_height(&fmt);
+		compose_is_const = sel_compose.r.width == compose_w &&
+				   sel_compose.r.height == compose_h;
+	}
+	if (compose_is_crop)
+		compose_is_crop = sel_compose.r.width == sel_crop.r.width &&
+				  sel_compose.r.height == sel_crop.r.height;
+	cookie = ((__u64)v4l_format_g_pixelformat(&fmt) << 32) |
+		  (v4l_format_g_width(&fmt) << 16) |
+		  v4l_format_g_height(&fmt);
+	if (node->can_output) {
+		if (node->frmsizes.find(cookie) == node->frmsizes.end() && !compose_is_fmt &&
+		    (v4l_format_g_width(&fmt) != v4l_format_g_width(&cur) ||
+		     v4l_format_g_height(&fmt) != v4l_format_g_height(&cur)))
+			node->can_scale = true;
+		if (crop_is_const || compose_is_crop)
+			node->can_scale = false;
+	} else {
+		if (node->frmsizes.find(cookie) == node->frmsizes.end() && !crop_is_fmt &&
+		    (v4l_format_g_width(&fmt) != v4l_format_g_width(&cur) ||
+		     v4l_format_g_height(&fmt) != v4l_format_g_height(&cur)))
+			node->can_scale = true;
+		if (compose_is_const || compose_is_crop)
+			node->can_scale = false;
+	}
+	fail_on_test(node->can_scale &&
+		     node->frmsizes_count[v4l_format_g_pixelformat(&cur)]);
+	return 0;
+}
+
+int testScaling(struct node *node)
+{
+	struct v4l2_format fmt;
+
+	if (!node->is_video)
+		return ENOTTY;
+	node->can_scale = false;
+	if (node->can_capture) {
+		v4l_format_init(&fmt, node->is_planar ?
+			V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE :
+			V4L2_BUF_TYPE_VIDEO_CAPTURE);
+		fail_on_test(doioctl(node, VIDIOC_G_FMT, &fmt));
+		testBasicScaling(node, fmt);
+		fail_on_test(doioctl(node, VIDIOC_S_FMT, &fmt));
+	}
+	if (node->can_output) {
+		v4l_format_init(&fmt, node->is_planar ?
+			V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE :
+			V4L2_BUF_TYPE_VIDEO_OUTPUT);
+		fail_on_test(doioctl(node, VIDIOC_G_FMT, &fmt));
+		testBasicScaling(node, fmt);
+		fail_on_test(doioctl(node, VIDIOC_S_FMT, &fmt));
+	}
+	return node->can_scale ? 0 : ENOTTY;
 }

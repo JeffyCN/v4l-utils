@@ -30,6 +30,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdio.h>
+#include <time.h>
 #include <errno.h>
 
 #include <sys/ioctl.h>
@@ -39,6 +40,29 @@
 #include <stdlib.h> /* free */
 
 #include <libdvbv5/dvb-demux.h>
+
+#define MAX_TIME		10	/* 1.0 seconds */
+
+#define xioctl(fh, request, arg...) ({					\
+	int __rc;							\
+	struct timespec __start, __end;					\
+									\
+	clock_gettime(CLOCK_MONOTONIC, &__start);			\
+	do {								\
+		__rc = ioctl(fh, request, ##arg);			\
+		if (__rc != -1)						\
+			break;						\
+		if ((errno != EINTR) && (errno != EAGAIN))		\
+			break;						\
+		clock_gettime(CLOCK_MONOTONIC, &__end);			\
+		if (__end.tv_sec * 10 + __end.tv_nsec / 100000000 >	\
+		    __start.tv_sec * 10 + __start.tv_nsec / 100000000 +	\
+		    MAX_TIME)						\
+			break;						\
+	} while (1);							\
+									\
+	__rc;								\
+})
 
 int dvb_dmx_open(int adapter, int demux)
 {
@@ -56,13 +80,13 @@ int dvb_dmx_open(int adapter, int demux)
 
 void dvb_dmx_close(int dmx_fd)
 {
-	(void) ioctl(dmx_fd, DMX_STOP);
+	(void)xioctl(dmx_fd, DMX_STOP);
 	close( dmx_fd);
 }
 
 void dvb_dmx_stop(int dmx_fd)
 {
-	(void) ioctl(dmx_fd, DMX_STOP);
+	(void)xioctl(dmx_fd, DMX_STOP);
 }
 
 int dvb_set_pesfilter(int dmxfd, int pid, dmx_pes_type_t type,
@@ -71,7 +95,7 @@ int dvb_set_pesfilter(int dmxfd, int pid, dmx_pes_type_t type,
 	struct dmx_pes_filter_params pesfilter;
 
 	if (buffersize) {
-		if (ioctl(dmxfd, DMX_SET_BUFFER_SIZE, buffersize) == -1)
+		if (xioctl(dmxfd, DMX_SET_BUFFER_SIZE, buffersize) == -1)
 			perror("DMX_SET_BUFFER_SIZE failed");
 	}
 
@@ -83,7 +107,7 @@ int dvb_set_pesfilter(int dmxfd, int pid, dmx_pes_type_t type,
 	pesfilter.pes_type = type;
 	pesfilter.flags = DMX_IMMEDIATE_START;
 
-	if (ioctl(dmxfd, DMX_SET_PES_FILTER, &pesfilter) == -1) {
+	if (xioctl(dmxfd, DMX_SET_PES_FILTER, &pesfilter) == -1) {
 		fprintf(stderr, "DMX_SET_PES_FILTER failed "
 		"(PID = 0x%04x): %d %m\n", pid, errno);
 		return -1;
@@ -116,7 +140,7 @@ int dvb_set_section_filter(int dmxfd, int pid, unsigned filtsize,
 
 	sctfilter.flags = flags;
 
-	if (ioctl(dmxfd, DMX_SET_FILTER, &sctfilter) == -1) {
+	if (xioctl(dmxfd, DMX_SET_FILTER, &sctfilter) == -1) {
 		fprintf(stderr, "DMX_SET_FILTER failed (PID = 0x%04x): %d %m\n",
 			pid, errno);
 		return -1;
@@ -142,7 +166,7 @@ int dvb_get_pmt_pid(int patfd, int sid)
 	f.timeout = 0;
 	f.flags = DMX_IMMEDIATE_START | DMX_CHECK_CRC;
 
-	if (ioctl(patfd, DMX_SET_FILTER, &f) == -1) {
+	if (xioctl(patfd, DMX_SET_FILTER, &f) == -1) {
 		perror("ioctl DMX_SET_FILTER failed");
 		return -1;
 	}

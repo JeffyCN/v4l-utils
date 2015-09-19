@@ -198,6 +198,7 @@ static struct option long_options[] = {
 	{"set-edid", required_argument, 0, OptSetEdid},
 	{"clear-edid", optional_argument, 0, OptClearEdid},
 	{"get-edid", optional_argument, 0, OptGetEdid},
+	{"fix-edid-checksums", no_argument, 0, OptFixEdidChecksums},
 	{"tuner-index", required_argument, 0, OptTunerIndex},
 	{"list-buffers", no_argument, 0, OptListBuffers},
 	{"list-buffers-out", no_argument, 0, OptListBuffersOut},
@@ -326,10 +327,12 @@ std::string fcc2s(unsigned int val)
 {
 	std::string s;
 
-	s += val & 0xff;
-	s += (val >> 8) & 0xff;
-	s += (val >> 16) & 0xff;
-	s += (val >> 24) & 0xff;
+	s += val & 0x7f;
+	s += (val >> 8) & 0x7f;
+	s += (val >> 16) & 0x7f;
+	s += (val >> 24) & 0x7f;
+	if (val & (1 << 31))
+		s += "-BE";
 	return s;
 }
 
@@ -364,22 +367,90 @@ std::string field2s(int val)
 std::string colorspace2s(int val)
 {
 	switch (val) {
+	case V4L2_COLORSPACE_DEFAULT:
+		return "Default";
 	case V4L2_COLORSPACE_SMPTE170M:
-		return "Broadcast NTSC/PAL (SMPTE170M/ITU601)";
+		return "SMPTE 170M";
 	case V4L2_COLORSPACE_SMPTE240M:
-		return "1125-Line (US) HDTV (SMPTE240M)";
+		return "SMPTE 240M";
 	case V4L2_COLORSPACE_REC709:
-		return "HDTV and modern devices (ITU709)";
+		return "Rec. 709";
 	case V4L2_COLORSPACE_BT878:
 		return "Broken Bt878";
 	case V4L2_COLORSPACE_470_SYSTEM_M:
-		return "NTSC/M (ITU470/ITU601)";
+		return "470 System M";
 	case V4L2_COLORSPACE_470_SYSTEM_BG:
-		return "PAL/SECAM BG (ITU470/ITU601)";
+		return "470 System BG";
 	case V4L2_COLORSPACE_JPEG:
-		return "JPEG (JFIF/ITU601)";
+		return "JPEG";
 	case V4L2_COLORSPACE_SRGB:
-		return "SRGB";
+		return "sRGB";
+	case V4L2_COLORSPACE_ADOBERGB:
+		return "AdobeRGB";
+	case V4L2_COLORSPACE_BT2020:
+		return "BT.2020";
+	case V4L2_COLORSPACE_RAW:
+		return "Raw";
+	default:
+		return "Unknown (" + num2s(val) + ")";
+	}
+}
+
+static std::string xfer_func2s(int val)
+{
+	switch (val) {
+	case V4L2_XFER_FUNC_DEFAULT:
+		return "Default";
+	case V4L2_XFER_FUNC_709:
+		return "Rec. 709";
+	case V4L2_XFER_FUNC_SRGB:
+		return "sRGB";
+	case V4L2_XFER_FUNC_ADOBERGB:
+		return "AdobeRGB";
+	case V4L2_XFER_FUNC_SMPTE240M:
+		return "SMPTE 240M";
+	case V4L2_XFER_FUNC_NONE:
+		return "None";
+	default:
+		return "Unknown (" + num2s(val) + ")";
+	}
+}
+
+static std::string ycbcr_enc2s(int val)
+{
+	switch (val) {
+	case V4L2_YCBCR_ENC_DEFAULT:
+		return "Default";
+	case V4L2_YCBCR_ENC_601:
+		return "ITU-R 601";
+	case V4L2_YCBCR_ENC_709:
+		return "Rec. 709";
+	case V4L2_YCBCR_ENC_XV601:
+		return "xvYCC 601";
+	case V4L2_YCBCR_ENC_XV709:
+		return "xvYCC 709";
+	case V4L2_YCBCR_ENC_SYCC:
+		return "sYCC";
+	case V4L2_YCBCR_ENC_BT2020:
+		return "BT.2020";
+	case V4L2_YCBCR_ENC_BT2020_CONST_LUM:
+		return "BT.2020 Constant Luminance";
+	case V4L2_YCBCR_ENC_SMPTE240M:
+		return "SMPTE 240M";
+	default:
+		return "Unknown (" + num2s(val) + ")";
+	}
+}
+
+static std::string quantization2s(int val)
+{
+	switch (val) {
+	case V4L2_QUANTIZATION_DEFAULT:
+		return "Default";
+	case V4L2_QUANTIZATION_FULL_RANGE:
+		return "Full Range";
+	case V4L2_QUANTIZATION_LIM_RANGE:
+		return "Limited Range";
 	default:
 		return "Unknown (" + num2s(val) + ")";
 	}
@@ -440,14 +511,17 @@ void printfmt(const struct v4l2_format &vfmt)
 	switch (vfmt.type) {
 	case V4L2_BUF_TYPE_VIDEO_CAPTURE:
 	case V4L2_BUF_TYPE_VIDEO_OUTPUT:
-		printf("\tWidth/Height  : %u/%u\n", vfmt.fmt.pix.width, vfmt.fmt.pix.height);
-		printf("\tPixel Format  : '%s'\n", fcc2s(vfmt.fmt.pix.pixelformat).c_str());
-		printf("\tField         : %s\n", field2s(vfmt.fmt.pix.field).c_str());
-		printf("\tBytes per Line: %u\n", vfmt.fmt.pix.bytesperline);
-		printf("\tSize Image    : %u\n", vfmt.fmt.pix.sizeimage);
-		printf("\tColorspace    : %s\n", colorspace2s(vfmt.fmt.pix.colorspace).c_str());
+		printf("\tWidth/Height      : %u/%u\n", vfmt.fmt.pix.width, vfmt.fmt.pix.height);
+		printf("\tPixel Format      : '%s'\n", fcc2s(vfmt.fmt.pix.pixelformat).c_str());
+		printf("\tField             : %s\n", field2s(vfmt.fmt.pix.field).c_str());
+		printf("\tBytes per Line    : %u\n", vfmt.fmt.pix.bytesperline);
+		printf("\tSize Image        : %u\n", vfmt.fmt.pix.sizeimage);
+		printf("\tColorspace        : %s\n", colorspace2s(vfmt.fmt.pix.colorspace).c_str());
+		printf("\tTransfer Function : %s\n", xfer_func2s(vfmt.fmt.pix.xfer_func).c_str());
+		printf("\tYCbCr Encoding    : %s\n", ycbcr_enc2s(vfmt.fmt.pix.ycbcr_enc).c_str());
+		printf("\tQuantization      : %s\n", quantization2s(vfmt.fmt.pix.quantization).c_str());
 		if (vfmt.fmt.pix.priv == V4L2_PIX_FMT_PRIV_MAGIC)
-			printf("\tFlags         : %s\n", pixflags2s(vfmt.fmt.pix.flags).c_str());
+			printf("\tFlags             : %s\n", pixflags2s(vfmt.fmt.pix.flags).c_str());
 		break;
 	case V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE:
 	case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
@@ -457,6 +531,9 @@ void printfmt(const struct v4l2_format &vfmt)
 		printf("\tNumber of planes  : %u\n", vfmt.fmt.pix_mp.num_planes);
 		printf("\tFlags             : %s\n", pixflags2s(vfmt.fmt.pix_mp.flags).c_str());
 		printf("\tColorspace        : %s\n", colorspace2s(vfmt.fmt.pix_mp.colorspace).c_str());
+		printf("\tTransfer Function : %s\n", xfer_func2s(vfmt.fmt.pix_mp.xfer_func).c_str());
+		printf("\tYCbCr Encoding    : %s\n", ycbcr_enc2s(vfmt.fmt.pix_mp.ycbcr_enc).c_str());
+		printf("\tQuantization      : %s\n", quantization2s(vfmt.fmt.pix_mp.quantization).c_str());
 		for (int i = 0; i < vfmt.fmt.pix_mp.num_planes && i < VIDEO_MAX_PLANES; i++) {
 			printf("\tPlane %d           :\n", i);
 			printf("\t   Bytes per Line : %u\n", vfmt.fmt.pix_mp.plane_fmt[i].bytesperline);
@@ -728,17 +805,55 @@ static __u32 parse_colorspace(const char *s)
 	if (!strcmp(s, "470bg")) return V4L2_COLORSPACE_470_SYSTEM_BG;
 	if (!strcmp(s, "jpeg")) return V4L2_COLORSPACE_JPEG;
 	if (!strcmp(s, "srgb")) return V4L2_COLORSPACE_SRGB;
+	if (!strcmp(s, "adobergb")) return V4L2_COLORSPACE_ADOBERGB;
+	if (!strcmp(s, "bt2020")) return V4L2_COLORSPACE_BT2020;
 	return 0;
 }
 
+static __u32 parse_xfer_func(const char *s)
+{
+	if (!strcmp(s, "default")) return V4L2_XFER_FUNC_DEFAULT;
+	if (!strcmp(s, "smpte240m")) return V4L2_XFER_FUNC_SMPTE240M;
+	if (!strcmp(s, "rec709")) return V4L2_XFER_FUNC_709;
+	if (!strcmp(s, "srgb")) return V4L2_XFER_FUNC_SRGB;
+	if (!strcmp(s, "adobergb")) return V4L2_XFER_FUNC_ADOBERGB;
+	if (!strcmp(s, "none")) return V4L2_XFER_FUNC_NONE;
+	return 0;
+}
+
+static __u32 parse_ycbcr(const char *s)
+{
+	if (!strcmp(s, "default")) return V4L2_YCBCR_ENC_DEFAULT;
+	if (!strcmp(s, "601")) return V4L2_YCBCR_ENC_601;
+	if (!strcmp(s, "709")) return V4L2_YCBCR_ENC_709;
+	if (!strcmp(s, "xv601")) return V4L2_YCBCR_ENC_XV601;
+	if (!strcmp(s, "xv709")) return V4L2_YCBCR_ENC_XV709;
+	if (!strcmp(s, "sycc")) return V4L2_YCBCR_ENC_SYCC;
+	if (!strcmp(s, "bt2020")) return V4L2_YCBCR_ENC_BT2020;
+	if (!strcmp(s, "bt2020c")) return V4L2_YCBCR_ENC_BT2020_CONST_LUM;
+	if (!strcmp(s, "smpte240m")) return V4L2_YCBCR_ENC_SMPTE240M;
+	return V4L2_YCBCR_ENC_DEFAULT;
+}
+
+static __u32 parse_quantization(const char *s)
+{
+	if (!strcmp(s, "default")) return V4L2_QUANTIZATION_DEFAULT;
+	if (!strcmp(s, "full-range")) return V4L2_QUANTIZATION_FULL_RANGE;
+	if (!strcmp(s, "lim-range")) return V4L2_QUANTIZATION_LIM_RANGE;
+	return V4L2_QUANTIZATION_DEFAULT;
+}
+
 int parse_fmt(char *optarg, __u32 &width, __u32 &height, __u32 &pixelformat,
-	      __u32 &field, __u32 &colorspace, __u32 *bytesperline)
+	      __u32 &field, __u32 &colorspace, __u32 &xfer_func, __u32 &ycbcr,
+	      __u32 &quantization, __u32 &flags, __u32 *bytesperline)
 {
 	char *value, *subs;
 	int fmts = 0;
 	unsigned bpl_index = 0;
+	bool be_pixfmt;
 
 	field = V4L2_FIELD_ANY;
+	flags = 0;
 	subs = optarg;
 	while (*subs != '\0') {
 		static const char *const subopts[] = {
@@ -747,7 +862,11 @@ int parse_fmt(char *optarg, __u32 &width, __u32 &height, __u32 &pixelformat,
 			"pixelformat",
 			"field",
 			"colorspace",
+			"ycbcr",
 			"bytesperline",
+			"premul-alpha",
+			"quantization",
+			"xfer",
 			NULL
 		};
 
@@ -761,12 +880,18 @@ int parse_fmt(char *optarg, __u32 &width, __u32 &height, __u32 &pixelformat,
 			fmts |= FmtHeight;
 			break;
 		case 2:
-			if (strlen(value) == 4)
+			be_pixfmt = strlen(value) == 7 && !memcmp(value + 4, "-BE", 3);
+			if (be_pixfmt)
+				value[4] = 0;
+			if (strlen(value) == 4) {
 				pixelformat =
 					v4l2_fourcc(value[0], value[1],
 							value[2], value[3]);
-			else
+				if (be_pixfmt)
+					pixelformat |= 1 << 31;
+			} else {
 				pixelformat = strtol(value, 0L, 0);
+			}
 			fmts |= FmtPixelFormat;
 			break;
 		case 3:
@@ -781,6 +906,10 @@ int parse_fmt(char *optarg, __u32 &width, __u32 &height, __u32 &pixelformat,
 				fprintf(stderr, "unknown colorspace %s\n", value);
 			break;
 		case 5:
+			ycbcr = parse_ycbcr(value);
+			fmts |= FmtYCbCr;
+			break;
+		case 6:
 			bytesperline[bpl_index] = strtoul(value, 0L, 0);
 			if (bytesperline[bpl_index] > 0xffff) {
 				fprintf(stderr, "bytesperline can't be more than 65535\n");
@@ -788,6 +917,18 @@ int parse_fmt(char *optarg, __u32 &width, __u32 &height, __u32 &pixelformat,
 			}
 			bpl_index++;
 			fmts |= FmtBytesPerLine;
+			break;
+		case 7:
+			flags |= V4L2_PIX_FMT_FLAG_PREMUL_ALPHA;
+			fmts |= FmtFlags;
+			break;
+		case 8:
+			quantization = parse_quantization(value);
+			fmts |= FmtQuantization;
+			break;
+		case 9:
+			xfer_func = parse_xfer_func(value);
+			fmts |= FmtXferFunc;
 			break;
 		default:
 			return 0;

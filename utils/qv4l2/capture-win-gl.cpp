@@ -67,7 +67,8 @@ void CaptureWinGL::setRenderFrame()
 				m_crop.delta.width(), m_crop.delta.height(),
 				m_frame.format,
 				m_frame.planeData[0],
-				m_frame.planeData[1]);
+				m_frame.planeData[1],
+				m_frame.planeData[2]);
 #endif
 	m_frame.updated = false;
 	m_crop.updated = false;
@@ -91,17 +92,12 @@ bool CaptureWinGL::isSupported()
 #endif
 }
 
-void CaptureWinGL::setColorspace(unsigned colorspace)
+void CaptureWinGL::setColorspace(unsigned colorspace, unsigned xfer_func,
+		unsigned ycbcr_enc, unsigned quantization, bool is_sdtv)
 {
 #ifdef HAVE_QTGL
-	m_videoSurface.setColorspace(colorspace);
-#endif
-}
-
-void CaptureWinGL::setDisplayColorspace(unsigned colorspace)
-{
-#ifdef HAVE_QTGL
-	m_videoSurface.setDisplayColorspace(colorspace);
+	m_videoSurface.setColorspace(colorspace, xfer_func,
+			ycbcr_enc, quantization, is_sdtv);
 #endif
 }
 
@@ -133,8 +129,12 @@ CaptureWinGLEngine::CaptureWinGLEngine() :
 	m_WCrop(0),
 	m_HCrop(0),
 	m_colorspace(V4L2_COLORSPACE_REC709),
+	m_xfer_func(V4L2_XFER_FUNC_DEFAULT),
+	m_ycbcr_enc(V4L2_YCBCR_ENC_DEFAULT),
+	m_quantization(V4L2_QUANTIZATION_DEFAULT),
+	m_is_sdtv(false),
+	m_is_rgb(false),
 	m_field(V4L2_FIELD_NONE),
-	m_displayColorspace(V4L2_COLORSPACE_SRGB),
 	m_screenTextureCount(0),
 	m_formatChange(false),
 	m_frameFormat(0),
@@ -143,6 +143,7 @@ CaptureWinGLEngine::CaptureWinGLEngine() :
 	m_mag_filter(GL_NEAREST),
 	m_min_filter(GL_NEAREST)
 {
+	makeCurrent();
 	m_glfunction.initializeGLFunctions(context());
 }
 
@@ -151,8 +152,39 @@ CaptureWinGLEngine::~CaptureWinGLEngine()
 	clearShader();
 }
 
-void CaptureWinGLEngine::setColorspace(unsigned colorspace)
+void CaptureWinGLEngine::setColorspace(unsigned colorspace, unsigned xfer_func,
+		unsigned ycbcr_enc, unsigned quantization, bool is_sdtv)
 {
+	bool is_rgb = true;
+
+	switch (m_frameFormat) {
+	case V4L2_PIX_FMT_YUYV:
+	case V4L2_PIX_FMT_YVYU:
+	case V4L2_PIX_FMT_UYVY:
+	case V4L2_PIX_FMT_VYUY:
+	case V4L2_PIX_FMT_YUV422P:
+	case V4L2_PIX_FMT_YVU420:
+	case V4L2_PIX_FMT_YUV420:
+	case V4L2_PIX_FMT_YVU420M:
+	case V4L2_PIX_FMT_YUV420M:
+	case V4L2_PIX_FMT_NV12:
+	case V4L2_PIX_FMT_NV21:
+	case V4L2_PIX_FMT_NV12M:
+	case V4L2_PIX_FMT_NV21M:
+	case V4L2_PIX_FMT_NV16:
+	case V4L2_PIX_FMT_NV61:
+	case V4L2_PIX_FMT_NV16M:
+	case V4L2_PIX_FMT_NV61M:
+	case V4L2_PIX_FMT_NV24:
+	case V4L2_PIX_FMT_NV42:
+	case V4L2_PIX_FMT_YUV444:
+	case V4L2_PIX_FMT_YUV555:
+	case V4L2_PIX_FMT_YUV565:
+	case V4L2_PIX_FMT_YUV32:
+		is_rgb = false;
+		break;
+	}
+
 	switch (colorspace) {
 	case V4L2_COLORSPACE_SMPTE170M:
 	case V4L2_COLORSPACE_SMPTE240M:
@@ -160,48 +192,36 @@ void CaptureWinGLEngine::setColorspace(unsigned colorspace)
 	case V4L2_COLORSPACE_470_SYSTEM_M:
 	case V4L2_COLORSPACE_470_SYSTEM_BG:
 	case V4L2_COLORSPACE_SRGB:
+	case V4L2_COLORSPACE_ADOBERGB:
+	case V4L2_COLORSPACE_BT2020:
 		break;
 	default:
 		// If the colorspace was not specified, then guess
 		// based on the pixel format.
-		switch (m_frameFormat) {
-		case V4L2_PIX_FMT_YUYV:
-		case V4L2_PIX_FMT_YVYU:
-		case V4L2_PIX_FMT_UYVY:
-		case V4L2_PIX_FMT_VYUY:
-		case V4L2_PIX_FMT_YVU420:
-		case V4L2_PIX_FMT_YUV420:
-		case V4L2_PIX_FMT_NV16M:
-		case V4L2_PIX_FMT_NV61M:
-			// SDTV or HDTV?
-			if (m_frameWidth <= 720 && m_frameHeight <= 576)
-				colorspace = V4L2_COLORSPACE_SMPTE170M;
-			else
-				colorspace = V4L2_COLORSPACE_REC709;
-			break;
-		default:
+		if (is_rgb)
 			colorspace = V4L2_COLORSPACE_SRGB;
-			break;
-		}
+		else if (is_sdtv)
+			colorspace = V4L2_COLORSPACE_SMPTE170M;
+		else
+			colorspace = V4L2_COLORSPACE_REC709;
 		break;
 	}
-	if (m_colorspace == colorspace)
+	if (m_colorspace == colorspace && m_xfer_func == xfer_func &&
+	    m_ycbcr_enc == ycbcr_enc && m_quantization == quantization &&
+	    m_is_sdtv == is_sdtv && m_is_rgb == is_rgb)
 		return;
 	m_colorspace = colorspace;
-	m_formatChange = true;
-}
-
-void CaptureWinGLEngine::setDisplayColorspace(unsigned colorspace)
-{
-	if (colorspace == m_displayColorspace)
-		return;
-	m_displayColorspace = colorspace;
-	if (m_haveFramebufferSRGB) {
-		if (m_displayColorspace == V4L2_COLORSPACE_SRGB)
-			glEnable(GL_FRAMEBUFFER_SRGB);
-		else
-			glDisable(GL_FRAMEBUFFER_SRGB);
-	}
+	if (xfer_func == V4L2_XFER_FUNC_DEFAULT)
+		xfer_func = V4L2_MAP_XFER_FUNC_DEFAULT(colorspace);
+	if (ycbcr_enc == V4L2_YCBCR_ENC_DEFAULT)
+		ycbcr_enc = V4L2_MAP_YCBCR_ENC_DEFAULT(colorspace);
+	if (quantization == V4L2_QUANTIZATION_DEFAULT)
+		quantization = V4L2_MAP_QUANTIZATION_DEFAULT(is_rgb, colorspace, ycbcr_enc);
+	m_xfer_func = xfer_func;
+	m_ycbcr_enc = ycbcr_enc;
+	m_quantization = quantization;
+	m_is_sdtv = is_sdtv;
+	m_is_rgb = is_rgb;
 	m_formatChange = true;
 }
 
@@ -229,8 +249,10 @@ void CaptureWinGLEngine::setLinearFilter(bool enable)
 void CaptureWinGLEngine::clearShader()
 {
 	glDeleteTextures(m_screenTextureCount, m_screenTexture);
-	m_shaderProgram.release();
-	m_shaderProgram.removeAllShaders();
+	if (m_shaderProgram.isLinked()) {
+		m_shaderProgram.release();
+		m_shaderProgram.removeAllShaders();
+	}
 }
 
 void CaptureWinGLEngine::stop()
@@ -275,7 +297,8 @@ void CaptureWinGLEngine::resizeGL(int width, int height)
 }
 
 void CaptureWinGLEngine::setFrame(int width, int height, int WCrop, int HCrop,
-				  __u32 format, unsigned char *data, unsigned char *data2)
+				  __u32 format, unsigned char *data, unsigned char *data2,
+				  unsigned char *data3)
 {
 	if (format != m_frameFormat || width != m_frameWidth || height != m_frameHeight
 	    || WCrop != m_WCrop || HCrop != m_HCrop) {
@@ -289,6 +312,7 @@ void CaptureWinGLEngine::setFrame(int width, int height, int WCrop, int HCrop,
 
 	m_frameData = data;
 	m_frameData2 = data2 ? data2 : data;
+	m_frameData3 = data3 ? data3 : data;
 	updateGL();
 }
 
@@ -311,18 +335,47 @@ bool CaptureWinGLEngine::hasNativeFormat(__u32 format)
 		V4L2_PIX_FMT_BGR24,
 		V4L2_PIX_FMT_RGB565,
 		V4L2_PIX_FMT_RGB565X,
+		V4L2_PIX_FMT_RGB444,
+		V4L2_PIX_FMT_XRGB444,
+		V4L2_PIX_FMT_ARGB444,
 		V4L2_PIX_FMT_RGB555,
 		V4L2_PIX_FMT_XRGB555,
 		V4L2_PIX_FMT_ARGB555,
 		V4L2_PIX_FMT_RGB555X,
+		V4L2_PIX_FMT_XRGB555X,
+		V4L2_PIX_FMT_ARGB555X,
+		V4L2_PIX_FMT_RGB332,
+		V4L2_PIX_FMT_BGR666,
+		V4L2_PIX_FMT_SBGGR8,
+		V4L2_PIX_FMT_SGBRG8,
+		V4L2_PIX_FMT_SGRBG8,
+		V4L2_PIX_FMT_SRGGB8,
 		V4L2_PIX_FMT_YUYV,
 		V4L2_PIX_FMT_YVYU,
 		V4L2_PIX_FMT_UYVY,
 		V4L2_PIX_FMT_VYUY,
+		V4L2_PIX_FMT_YUV422P,
 		V4L2_PIX_FMT_YVU420,
 		V4L2_PIX_FMT_YUV420,
+		V4L2_PIX_FMT_NV12,
+		V4L2_PIX_FMT_NV21,
+		V4L2_PIX_FMT_NV16,
+		V4L2_PIX_FMT_NV61,
+		V4L2_PIX_FMT_NV24,
+		V4L2_PIX_FMT_NV42,
 		V4L2_PIX_FMT_NV16M,
 		V4L2_PIX_FMT_NV61M,
+		V4L2_PIX_FMT_YVU420M,
+		V4L2_PIX_FMT_YUV420M,
+		V4L2_PIX_FMT_NV12M,
+		V4L2_PIX_FMT_NV21M,
+		V4L2_PIX_FMT_YUV444,
+		V4L2_PIX_FMT_YUV555,
+		V4L2_PIX_FMT_YUV565,
+		V4L2_PIX_FMT_YUV32,
+		V4L2_PIX_FMT_GREY,
+		V4L2_PIX_FMT_Y16,
+		V4L2_PIX_FMT_Y16_BE,
 		0
 	};
 
@@ -355,20 +408,58 @@ void CaptureWinGLEngine::changeShader()
 		shader_YUY2(m_frameFormat);
 		break;
 
+	case V4L2_PIX_FMT_NV16:
+	case V4L2_PIX_FMT_NV61:
 	case V4L2_PIX_FMT_NV16M:
 	case V4L2_PIX_FMT_NV61M:
-		shader_NV16M(m_frameFormat);
+		shader_NV16(m_frameFormat);
 		break;
 
+	case V4L2_PIX_FMT_NV12:
+	case V4L2_PIX_FMT_NV21:
+	case V4L2_PIX_FMT_NV12M:
+	case V4L2_PIX_FMT_NV21M:
+		shader_NV12(m_frameFormat);
+		break;
+
+	case V4L2_PIX_FMT_NV24:
+	case V4L2_PIX_FMT_NV42:
+		shader_NV24(m_frameFormat);
+		break;
+
+	case V4L2_PIX_FMT_YUV444:
+	case V4L2_PIX_FMT_YUV555:
+	case V4L2_PIX_FMT_YUV565:
+	case V4L2_PIX_FMT_YUV32:
+		shader_YUV_packed(m_frameFormat);
+		break;
+
+	case V4L2_PIX_FMT_YUV422P:
 	case V4L2_PIX_FMT_YUV420:
 	case V4L2_PIX_FMT_YVU420:
-		shader_YUV();
+	case V4L2_PIX_FMT_YUV420M:
+	case V4L2_PIX_FMT_YVU420M:
+		shader_YUV(m_frameFormat);
 		break;
 
+	case V4L2_PIX_FMT_SBGGR8:
+	case V4L2_PIX_FMT_SGBRG8:
+	case V4L2_PIX_FMT_SGRBG8:
+	case V4L2_PIX_FMT_SRGGB8:
+		shader_Bayer(m_frameFormat);
+		break;
+
+	case V4L2_PIX_FMT_RGB332:
+	case V4L2_PIX_FMT_BGR666:
 	case V4L2_PIX_FMT_RGB555:
 	case V4L2_PIX_FMT_XRGB555:
 	case V4L2_PIX_FMT_ARGB555:
+	case V4L2_PIX_FMT_RGB444:
+	case V4L2_PIX_FMT_XRGB444:
+	case V4L2_PIX_FMT_ARGB444:
 	case V4L2_PIX_FMT_RGB555X:
+	case V4L2_PIX_FMT_XRGB555X:
+	case V4L2_PIX_FMT_ARGB555X:
 	case V4L2_PIX_FMT_RGB565:
 	case V4L2_PIX_FMT_RGB565X:
 	case V4L2_PIX_FMT_RGB24:
@@ -379,8 +470,11 @@ void CaptureWinGLEngine::changeShader()
 	case V4L2_PIX_FMT_XBGR32:
 	case V4L2_PIX_FMT_ARGB32:
 	case V4L2_PIX_FMT_ABGR32:
+	case V4L2_PIX_FMT_GREY:
+	case V4L2_PIX_FMT_Y16:
+	case V4L2_PIX_FMT_Y16_BE:
 	default:
-		shader_RGB();
+		shader_RGB(m_frameFormat);
 		break;
 	}
 }
@@ -441,23 +535,64 @@ void CaptureWinGLEngine::paintGL()
 	case V4L2_PIX_FMT_YVYU:
 	case V4L2_PIX_FMT_UYVY:
 	case V4L2_PIX_FMT_VYUY:
-		render_YUY2();
+		render_YUY2(m_frameFormat);
 		break;
 
+	case V4L2_PIX_FMT_NV16:
+	case V4L2_PIX_FMT_NV61:
 	case V4L2_PIX_FMT_NV16M:
 	case V4L2_PIX_FMT_NV61M:
-		render_NV16M(m_frameFormat);
+		render_NV16(m_frameFormat);
 		break;
 
+	case V4L2_PIX_FMT_NV12:
+	case V4L2_PIX_FMT_NV21:
+	case V4L2_PIX_FMT_NV12M:
+	case V4L2_PIX_FMT_NV21M:
+		render_NV12(m_frameFormat);
+		break;
+
+	case V4L2_PIX_FMT_NV24:
+	case V4L2_PIX_FMT_NV42:
+		render_NV24(m_frameFormat);
+		break;
+
+	case V4L2_PIX_FMT_YUV422P:
 	case V4L2_PIX_FMT_YUV420:
 	case V4L2_PIX_FMT_YVU420:
+	case V4L2_PIX_FMT_YUV420M:
+	case V4L2_PIX_FMT_YVU420M:
 		render_YUV(m_frameFormat);
 		break;
 
+	case V4L2_PIX_FMT_YUV444:
+	case V4L2_PIX_FMT_YUV555:
+	case V4L2_PIX_FMT_YUV565:
+	case V4L2_PIX_FMT_YUV32:
+		render_YUV_packed(m_frameFormat);
+		break;
+
+	case V4L2_PIX_FMT_SBGGR8:
+	case V4L2_PIX_FMT_SGBRG8:
+	case V4L2_PIX_FMT_SGRBG8:
+	case V4L2_PIX_FMT_SRGGB8:
+		render_Bayer(m_frameFormat);
+		break;
+
+	case V4L2_PIX_FMT_GREY:
+	case V4L2_PIX_FMT_Y16:
+	case V4L2_PIX_FMT_Y16_BE:
+	case V4L2_PIX_FMT_RGB332:
+	case V4L2_PIX_FMT_BGR666:
 	case V4L2_PIX_FMT_RGB555:
 	case V4L2_PIX_FMT_XRGB555:
 	case V4L2_PIX_FMT_ARGB555:
 	case V4L2_PIX_FMT_RGB555X:
+	case V4L2_PIX_FMT_XRGB555X:
+	case V4L2_PIX_FMT_ARGB555X:
+	case V4L2_PIX_FMT_RGB444:
+	case V4L2_PIX_FMT_XRGB444:
+	case V4L2_PIX_FMT_ARGB444:
 	case V4L2_PIX_FMT_RGB565:
 	case V4L2_PIX_FMT_RGB565X:
 	case V4L2_PIX_FMT_RGB24:
@@ -469,7 +604,7 @@ void CaptureWinGLEngine::paintGL()
 	case V4L2_PIX_FMT_ARGB32:
 	case V4L2_PIX_FMT_ABGR32:
 	default:
-		render_RGB();
+		render_RGB(m_frameFormat);
 		break;
 	}
 	paintFrame();
@@ -487,33 +622,86 @@ void CaptureWinGLEngine::configureTexture(size_t idx)
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP);
 }
 
+// Normalize y to [0...1] and uv to [-0.5...0.5], taking into account the
+// colorspace.
+QString CaptureWinGLEngine::codeYUVNormalize()
+{
+	switch (m_quantization) {
+	case V4L2_QUANTIZATION_FULL_RANGE:
+		if (m_ycbcr_enc != V4L2_YCBCR_ENC_XV601 &&
+		    m_ycbcr_enc != V4L2_YCBCR_ENC_XV709)
+			return "";
+		/*
+		 * xv709 and xv601 have full range quantization, but they still
+		 * need to be normalized as if they were limited range. But the
+		 * result are values outside the normal 0-1 range, which is the
+		 * point of these extended gamut encodings.
+		 */
+
+		/* fall-through */
+	default:
+		return QString("   y = (255.0 / 219.0) * (y - (16.0 / 255.0));"
+			       "   u = (255.0 / 224.0) * u;"
+			       "   v = (255.0 / 224.0) * v;"
+			       );
+	}
+}
+
+// Normalize r, g and b to [0...1]
+QString CaptureWinGLEngine::codeRGBNormalize()
+{
+	switch (m_quantization) {
+	case V4L2_QUANTIZATION_FULL_RANGE:
+		return "";
+	default:
+		return QString("   r = (255.0 / 219.0) * (r - (16.0 / 255.0));"
+			       "   g = (255.0 / 219.0) * (g - (16.0 / 255.0));"
+			       "   b = (255.0 / 219.0) * (b - (16.0 / 255.0));"
+			       );
+	}
+}
+
 // Convert Y'CbCr (aka YUV) to R'G'B', taking into account the
 // colorspace.
 QString CaptureWinGLEngine::codeYUV2RGB()
 {
-	switch (m_colorspace) {
-	case V4L2_COLORSPACE_SMPTE240M:
+	switch (m_ycbcr_enc) {
+	case V4L2_YCBCR_ENC_SMPTE240M:
 		// Old obsolete HDTV standard. Replaced by REC 709.
 		// SMPTE 240M has its own luma coefficients
-		return QString("   float r = y + 1.8007 * v;"
-			       "   float g = y - 0.2575 * u - 0.57143 * v;"
-			       "   float b = y + 2.088 * u;"
+		return QString("   float r = y + 1.5756 * v;"
+			       "   float g = y - 0.2253 * u - 0.4768 * v;"
+			       "   float b = y + 1.8270 * u;"
 			       );
-	case V4L2_COLORSPACE_SMPTE170M:
-	case V4L2_COLORSPACE_470_SYSTEM_M:
-	case V4L2_COLORSPACE_470_SYSTEM_BG:
-		// These SDTV colorspaces all use the BT.601 luma coefficients
-		return QString("   float r = y + 1.5958 * v;"
-			       "   float g = y - 0.39173 * u - 0.81290 * v;"
-			       "   float b = y + 2.017 * u;"
+	case V4L2_YCBCR_ENC_BT2020:
+		// BT.2020 luma coefficients
+		return QString("   float r = y + 1.4719 * v;"
+			       "   float g = y - 0.1646 * u - 0.5703 * v;"
+			       "   float b = y + 1.8814 * u;"
 			       );
-	case V4L2_COLORSPACE_REC709:
-	case V4L2_COLORSPACE_SRGB:
+	case V4L2_YCBCR_ENC_BT2020_CONST_LUM:
+		// BT.2020_CONST_LUM luma coefficients
+		return QString("   float b = u <= 0.0 ? y + 1.9404 * u : y + 1.5816 * u;"
+			       "   float r = v <= 0.0 ? y + 1.7184 * v : y + 0.9936 * v;"
+			       "   float lin_r = (r < 0.081) ? r / 4.5 : pow((r + 0.099) / 1.099, 1.0 / 0.45);"
+			       "   float lin_b = (b < 0.081) ? b / 4.5 : pow((b + 0.099) / 1.099, 1.0 / 0.45);"
+			       "   float lin_y = (y < 0.081) ? y / 4.5 : pow((y + 0.099) / 1.099, 1.0 / 0.45);"
+			       "   float lin_g = lin_y / 0.6780 - lin_r * 0.2627 / 0.6780 - lin_b * 0.0593 / 0.6780;"
+			       "   float g = (lin_g < 0.018) ? lin_g * 4.5 : 1.099 * pow(lin_g, 0.45) - 0.099;"
+			       );
+	case V4L2_YCBCR_ENC_601:
+	case V4L2_YCBCR_ENC_XV601:
+	case V4L2_YCBCR_ENC_SYCC:
+		// These colorspaces all use the BT.601 luma coefficients
+		return QString("   float r = y + 1.403 * v;"
+		       "   float g = y - 0.344 * u - 0.714 * v;"
+		       "   float b = y + 1.773 * u;"
+		       );
 	default:
-		// The HDTV/graphics colorspaces all use REC 709 luma coefficients
-		return QString("   float r = y + 1.79274 * v;"
-			       "   float g = y - 0.21325 * u - 0.53291 * v;"
-			       "   float b = y + 2.1124 * u;"
+		// The HDTV colorspaces all use REC 709 luma coefficients
+		return QString("   float r = y + 1.5701 * v;"
+			       "   float g = y - 0.1870 * u - 0.4664 * v;"
+			       "   float b = y + 1.8556 * u;"
 			       );
 	}
 }
@@ -522,26 +710,38 @@ QString CaptureWinGLEngine::codeYUV2RGB()
 // colorspace.
 QString CaptureWinGLEngine::codeTransformToLinear()
 {
-	switch (m_colorspace) {
-	case V4L2_COLORSPACE_SMPTE240M:
+	switch (m_xfer_func) {
+	case V4L2_XFER_FUNC_SMPTE240M:
 		// Old obsolete HDTV standard. Replaced by REC 709.
 		// This is the transfer function for SMPTE 240M
 		return QString("   r = (r < 0.0913) ? r / 4.0 : pow((r + 0.1115) / 1.1115, 1.0 / 0.45);"
 			       "   g = (g < 0.0913) ? g / 4.0 : pow((g + 0.1115) / 1.1115, 1.0 / 0.45);"
 			       "   b = (b < 0.0913) ? b / 4.0 : pow((b + 0.1115) / 1.1115, 1.0 / 0.45);"
 			       );
-	case V4L2_COLORSPACE_SRGB:
+	case V4L2_XFER_FUNC_SRGB:
 		// This is used for sRGB as specified by the IEC FDIS 61966-2-1 standard
-		return QString("   r = (r <= 0.03928) ? r / 12.92 : pow((r + 0.055) / 1.055, 2.4);"
-			       "   g = (g <= 0.03928) ? g / 12.92 : pow((g + 0.055) / 1.055, 2.4);"
-			       "   b = (b <= 0.03928) ? b / 12.92 : pow((b + 0.055) / 1.055, 2.4);"
+		return QString("   r = (r < -0.04045) ? -pow((-r + 0.055) / 1.055, 2.4) : "
+			       "        ((r <= 0.04045) ? r / 12.92 : pow((r + 0.055) / 1.055, 2.4));"
+			       "   g = (g < -0.04045) ? -pow((-g + 0.055) / 1.055, 2.4) : "
+			       "        ((g <= 0.04045) ? g / 12.92 : pow((g + 0.055) / 1.055, 2.4));"
+			       "   b = (b < -0.04045) ? -pow((-b + 0.055) / 1.055, 2.4) : "
+			       "        ((b <= 0.04045) ? b / 12.92 : pow((b + 0.055) / 1.055, 2.4));"
 			       );
-	case V4L2_COLORSPACE_REC709:
+	case V4L2_XFER_FUNC_ADOBERGB:
+		return QString("   r = pow(r, 2.19921875);"
+			       "   g = pow(g, 2.19921875);"
+			       "   b = pow(b, 2.19921875);");
+	case V4L2_XFER_FUNC_NONE:
+		return "";
+	case V4L2_XFER_FUNC_709:
 	default:
 		// All others use the transfer function specified by REC 709
-		return QString("   r = (r < 0.081) ? r / 4.5 : pow((r + 0.099) / 1.099, 1.0 / 0.45);"
-			       "   g = (g < 0.081) ? g / 4.5 : pow((g + 0.099) / 1.099, 1.0 / 0.45);"
-			       "   b = (b < 0.081) ? b / 4.5 : pow((b + 0.099) / 1.099, 1.0 / 0.45);"
+		return QString("   r = (r <= -0.081) ? -pow((r - 0.099) / -1.099, 1.0 / 0.45) : "
+			       "        ((r < 0.081) ? r / 4.5 : pow((r + 0.099) / 1.099, 1.0 / 0.45));"
+			       "   g = (g <= -0.081) ? -pow((g - 0.099) / -1.099, 1.0 / 0.45) : "
+			       "        ((g < 0.081) ? g / 4.5 : pow((g + 0.099) / 1.099, 1.0 / 0.45));"
+			       "   b = (b <= -0.081) ? -pow((b - 0.099) / -1.099, 1.0 / 0.45) : "
+			       "        ((b < 0.081) ? b / 4.5 : pow((b + 0.099) / 1.099, 1.0 / 0.45));"
 			       );
 	}
 }
@@ -552,19 +752,12 @@ QString CaptureWinGLEngine::codeColorspaceConversion()
 {
 	switch (m_colorspace) {
 	case V4L2_COLORSPACE_SMPTE170M:
+	case V4L2_COLORSPACE_SMPTE240M:
 		// Current SDTV standard, although slowly being replaced by REC 709.
 		// Use the SMPTE 170M aka SMPTE-C aka SMPTE RP 145 conversion matrix.
 		return QString("   float rr =  0.939536 * r + 0.050215 * g + 0.001789 * b;"
 			       "   float gg =  0.017743 * r + 0.965758 * g + 0.016243 * b;"
 			       "   float bb = -0.001591 * r - 0.004356 * g + 1.005951 * b;"
-			       "   r = rr; g = gg; b = bb;"
-			       );
-	case V4L2_COLORSPACE_SMPTE240M:
-		// Old obsolete HDTV standard. Replaced by REC 709.
-		// Use the SMPTE 240M conversion matrix.
-		return QString("   float rr =  1.4086 * r - 0.4086 * g;"
-			       "   float gg = -0.0257 * r + 1.0457 * g;"
-			       "   float bb = -0.0254 * r - 0.0440 * g + 1.0695 * b;"
 			       "   r = rr; g = gg; b = bb;"
 			       );
 	case V4L2_COLORSPACE_470_SYSTEM_M:
@@ -582,6 +775,17 @@ QString CaptureWinGLEngine::codeColorspaceConversion()
 			       "   float bb = -0.0119 * g + 1.0119 * b;"
 			       "   r = rr; b = bb;"
 			       );
+	case V4L2_COLORSPACE_ADOBERGB:
+		return QString("   float rr =  1.3982832 * r - 0.3982831 * g;"
+			       "   float bb = -0.0429383 * g + 1.0429383 * b;"
+			       "   r = rr; b = bb;"
+			       );
+	case V4L2_COLORSPACE_BT2020:
+		return QString("   float rr =  1.6603627 * r - 0.5875400 * g - 0.0728227 * b;"
+			       "   float gg = -0.1245635 * r + 1.1329114 * g - 0.0083478 * b;"
+			       "   float bb = -0.0181566 * r - 0.1006017 * g + 1.1187583 * b;"
+			       "   r = rr; g = gg; b = bb;"
+			       );
 	case V4L2_COLORSPACE_REC709:
 	case V4L2_COLORSPACE_SRGB:
 	default:
@@ -593,33 +797,17 @@ QString CaptureWinGLEngine::codeColorspaceConversion()
 // given display colorspace.
 QString CaptureWinGLEngine::codeTransformToNonLinear()
 {
-	switch (m_displayColorspace) {
-	case 0:	// Keep as linear RGB
+	// Use the sRGB transfer function. Do nothing if the GL_FRAMEBUFFER_SRGB
+	// is available.
+	if (m_haveFramebufferSRGB)
 		return "";
-
-	case V4L2_COLORSPACE_SMPTE240M:
-		// Use the SMPTE 240M transfer function
-		return QString("   r = (r < 0.0228) ? r * 4.0 : 1.1115 * pow(r, 0.45) - 0.1115;"
-			       "   g = (g < 0.0228) ? g * 4.0 : 1.1115 * pow(g, 0.45) - 0.1115;"
-			       "   b = (b < 0.0228) ? b * 4.0 : 1.1115 * pow(b, 0.45) - 0.1115;"
-			       );
-	case V4L2_COLORSPACE_SRGB:
-		// Use the sRGB transfer function. Do nothing if the GL_FRAMEBUFFER_SRGB
-		// is available.
-		if (m_haveFramebufferSRGB)
-			return "";
-		return QString("   r = (r <= 0.0031308) ? r * 12.92 : 1.055 * pow(r, 1.0 / 2.4) - 0.055;"
-			       "   g = (g <= 0.0031308) ? g * 12.92 : 1.055 * pow(g, 1.0 / 2.4) - 0.055;"
-			       "   b = (b <= 0.0031308) ? b * 12.92 : 1.055 * pow(b, 1.0 / 2.4) - 0.055;"
-			       );
-	case V4L2_COLORSPACE_REC709:
-	default:
-		// Use the REC 709 transfer function
-		return QString("   r = (r < 0.018) ? r * 4.5 : 1.099 * pow(r, 0.45) - 0.099;"
-			       "   g = (g < 0.018) ? g * 4.5 : 1.099 * pow(g, 0.45) - 0.099;"
-			       "   b = (b < 0.018) ? b * 4.5 : 1.099 * pow(b, 0.45) - 0.099;"
-			       );
-	}
+	return QString("   r = (r < -0.0031308) ? -1.055 * pow(-r, 1.0 / 2.4) + 0.055 : "
+		       "        ((r <= 0.0031308) ? r * 12.92 : 1.055 * pow(r, 1.0 / 2.4) - 0.055);"
+		       "   g = (g < -0.0031308) ? -1.055 * pow(-g, 1.0 / 2.4) + 0.055 : "
+		       "        ((g <= 0.0031308) ? g * 12.92 : 1.055 * pow(g, 1.0 / 2.4) - 0.055);"
+		       "   b = (b < -0.0031308) ? -1.055 * pow(-b, 1.0 / 2.4) + 0.055 : "
+		       "        ((b <= 0.0031308) ? b * 12.92 : 1.055 * pow(b, 1.0 / 2.4) - 0.055);"
+		       );
 }
 
 static const QString codeSuffix("   gl_FragColor = vec4(r, g, b, 0.0);"
@@ -628,8 +816,10 @@ static const QString codeSuffix("   gl_FragColor = vec4(r, g, b, 0.0);"
 static const QString codeSuffixWithAlpha("   gl_FragColor = vec4(r, g, b, a);"
 			  "}");
 
-void CaptureWinGLEngine::shader_YUV()
+void CaptureWinGLEngine::shader_YUV(__u32 format)
 {
+	unsigned vdiv = format == V4L2_PIX_FMT_YUV422P ? 1 : 2;
+
 	m_screenTextureCount = 3;
 	glGenTextures(m_screenTextureCount, m_screenTexture);
 
@@ -641,13 +831,13 @@ void CaptureWinGLEngine::shader_YUV()
 
 	glActiveTexture(GL_TEXTURE1);
 	configureTexture(1);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, m_frameWidth / 2, m_frameHeight / 2, 0,
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, m_frameWidth / 2, m_frameHeight / vdiv, 0,
 		     GL_LUMINANCE, GL_UNSIGNED_BYTE, NULL);
 	checkError("YUV shader texture 1");
 
 	glActiveTexture(GL_TEXTURE2);
 	configureTexture(2);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, m_frameWidth / 2, m_frameHeight / 2, 0,
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, m_frameWidth / 2, m_frameHeight / vdiv, 0,
 		     GL_LUMINANCE, GL_UNSIGNED_BYTE, NULL);
 	checkError("YUV shader texture 2");
 
@@ -665,11 +855,12 @@ void CaptureWinGLEngine::shader_YUV()
 	else if (m_field == V4L2_FIELD_SEQ_BT)
 		codeHead += "   xy.y = (mod(ycoord, 2.0) == 0.0) ? xy.y / 2.0 + 0.5 : xy.y / 2.0;";
 
-	codeHead += 		   "   float y = 1.1640625 * (texture2D(ytex, xy).r - 0.0625);"
-				   "   float u = texture2D(utex, xy).r - 0.5;"
-				   "   float v = texture2D(vtex, xy).r - 0.5;";
+	codeHead += "   float y = texture2D(ytex, xy).r;"
+		    "   float u = texture2D(utex, xy).r - 0.5;"
+		    "   float v = texture2D(vtex, xy).r - 0.5;";
 
-	QString codeTail = codeYUV2RGB() +
+	QString codeTail = codeYUVNormalize() +
+			   codeYUV2RGB() +
 			   codeTransformToLinear() +
 			   codeColorspaceConversion() +
 			   codeTransformToNonLinear() +
@@ -686,13 +877,18 @@ void CaptureWinGLEngine::shader_YUV()
 
 void CaptureWinGLEngine::render_YUV(__u32 format)
 {
-	int idxU;
-	int idxV;
+	unsigned vdiv = 2;
+	int idxU = 0;
+	int idxV = 0;
 
-	if (format == V4L2_PIX_FMT_YUV420) {
+	if (format == V4L2_PIX_FMT_YUV422P) {
+		idxU = m_frameWidth * m_frameHeight;
+		idxV = idxU + (idxU / 2);
+		vdiv = 1;
+	} else if (format == V4L2_PIX_FMT_YUV420) {
 		idxU = m_frameWidth * m_frameHeight;
 		idxV = idxU + (idxU / 4);
-	} else {
+	} else if (format == V4L2_PIX_FMT_YVU420) {
 		idxV = m_frameWidth * m_frameHeight;
 		idxU = idxV + (idxV / 4);
 	}
@@ -712,23 +908,52 @@ void CaptureWinGLEngine::render_YUV(__u32 format)
 	glBindTexture(GL_TEXTURE_2D, m_screenTexture[1]);
 	GLint U = m_glfunction.glGetUniformLocation(m_shaderProgram.programId(), "utex");
 	glUniform1i(U, 1);
-	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth / 2, m_frameHeight / 2,
+	switch (format) {
+	case V4L2_PIX_FMT_YUV422P:
+	case V4L2_PIX_FMT_YUV420:
+	case V4L2_PIX_FMT_YVU420:
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth / 2, m_frameHeight / vdiv,
 			GL_LUMINANCE, GL_UNSIGNED_BYTE, m_frameData == NULL ? NULL : &m_frameData[idxU]);
+		break;
+	case V4L2_PIX_FMT_YUV420M:
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth / 2, m_frameHeight / vdiv,
+			GL_LUMINANCE, GL_UNSIGNED_BYTE, m_frameData2);
+		break;
+	case V4L2_PIX_FMT_YVU420M:
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth / 2, m_frameHeight / vdiv,
+			GL_LUMINANCE, GL_UNSIGNED_BYTE, m_frameData3);
+		break;
+	}
 	checkError("YUV paint utex");
 
 	glActiveTexture(GL_TEXTURE2);
 	glBindTexture(GL_TEXTURE_2D, m_screenTexture[2]);
 	GLint V = m_glfunction.glGetUniformLocation(m_shaderProgram.programId(), "vtex");
 	glUniform1i(V, 2);
-	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth / 2, m_frameHeight / 2,
+	switch (format) {
+	case V4L2_PIX_FMT_YUV422P:
+	case V4L2_PIX_FMT_YUV420:
+	case V4L2_PIX_FMT_YVU420:
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth / 2, m_frameHeight / vdiv,
 			GL_LUMINANCE, GL_UNSIGNED_BYTE, m_frameData == NULL ? NULL : &m_frameData[idxV]);
+		break;
+	case V4L2_PIX_FMT_YUV420M:
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth / 2, m_frameHeight / vdiv,
+			GL_LUMINANCE, GL_UNSIGNED_BYTE, m_frameData3);
+		break;
+	case V4L2_PIX_FMT_YVU420M:
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth / 2, m_frameHeight / vdiv,
+			GL_LUMINANCE, GL_UNSIGNED_BYTE, m_frameData2);
+		break;
+	}
 	checkError("YUV paint vtex");
 }
 
-QString CaptureWinGLEngine::shader_NV16M_invariant(__u32 format)
+QString CaptureWinGLEngine::shader_NV12_invariant(__u32 format)
 {
 	switch (format) {
-	case V4L2_PIX_FMT_NV16M:
+	case V4L2_PIX_FMT_NV12:
+	case V4L2_PIX_FMT_NV12M:
 		return QString("if (mod(xcoord, 2.0) == 0.0) {"
 			       "   u = texture2D(uvtex, xy).r - 0.5;"
 			       "   v = texture2D(uvtex, vec2(xy.x + texl_w, xy.y)).r - 0.5;"
@@ -738,7 +963,8 @@ QString CaptureWinGLEngine::shader_NV16M_invariant(__u32 format)
 			       "}"
 			       );
 
-	case V4L2_PIX_FMT_NV61M:
+	case V4L2_PIX_FMT_NV21:
+	case V4L2_PIX_FMT_NV21M:
 		return QString("if (mod(xcoord, 2.0) == 0.0) {"
 			       "   u = texture2D(uvtex, vec2(xy.x + texl_w, xy.y)).r - 0.5;"
 			       "   v = texture2D(uvtex, xy).r - 0.5;"
@@ -753,7 +979,8 @@ QString CaptureWinGLEngine::shader_NV16M_invariant(__u32 format)
 	}
 }
 
-void CaptureWinGLEngine::shader_NV16M(__u32 format)
+
+void CaptureWinGLEngine::shader_NV12(__u32 format)
 {
 	m_screenTextureCount = 2;
 	glGenTextures(m_screenTextureCount, m_screenTexture);
@@ -762,13 +989,13 @@ void CaptureWinGLEngine::shader_NV16M(__u32 format)
 	configureTexture(0);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, m_frameWidth, m_frameHeight, 0,
 		     GL_LUMINANCE, GL_UNSIGNED_BYTE, NULL);
-	checkError("NV16M shader texture 0");
+	checkError("NV12 shader texture 0");
 
 	glActiveTexture(GL_TEXTURE1);
 	configureTexture(1);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, m_frameWidth, m_frameHeight, 0,
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, m_frameWidth, m_frameHeight / 2, 0,
 		     GL_LUMINANCE, GL_UNSIGNED_BYTE, NULL);
-	checkError("NV16M shader texture 1");
+	checkError("NV12 shader texture 1");
 
 	QString codeHead = QString("uniform sampler2D ytex;"
 				   "uniform sampler2D uvtex;"
@@ -785,15 +1012,236 @@ void CaptureWinGLEngine::shader_NV16M(__u32 format)
 	else if (m_field == V4L2_FIELD_SEQ_BT)
 		codeHead += "   xy.y = (mod(ycoord, 2.0) == 0.0) ? xy.y / 2.0 + 0.5 : xy.y / 2.0;";
 
-	codeHead +=		   "   float u, v;"
-				   "   float xcoord = floor(xy.x * tex_w);"
-				   "   float y = 1.1640625 * (texture2D(ytex, xy).r - 0.0625);";
+	codeHead += "   float u, v;"
+		    "   float xcoord = floor(xy.x * tex_w);"
+		    "   float y = texture2D(ytex, xy).r;";
 
+	QString codeBody = shader_NV12_invariant(format);
 
+	QString codeTail = codeYUVNormalize() +
+			   codeYUV2RGB() +
+			   codeTransformToLinear() +
+			   codeColorspaceConversion() +
+			   codeTransformToNonLinear() +
+			   codeSuffix;
 
-	QString codeBody = shader_NV16M_invariant(format);
+	bool src_c = m_shaderProgram.addShaderFromSourceCode(
+				QGLShader::Fragment,
+				QString("%1%2%3").arg(codeHead, codeBody, codeTail));
 
-	QString codeTail = codeYUV2RGB() +
+	if (!src_c)
+		fprintf(stderr, "OpenGL Error: YUV shader compilation failed.\n");
+
+	m_shaderProgram.bind();
+}
+
+void CaptureWinGLEngine::render_NV12(__u32 format)
+{
+	int idx;
+
+	idx = glGetUniformLocation(m_shaderProgram.programId(), "texl_w"); // Texel width
+	glUniform1f(idx, 1.0 / m_frameWidth);
+	idx = glGetUniformLocation(m_shaderProgram.programId(), "tex_w"); // Texture width
+	glUniform1f(idx, m_frameWidth);
+	idx = glGetUniformLocation(m_shaderProgram.programId(), "tex_h"); // Texture height
+	glUniform1f(idx, m_frameHeight);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, m_screenTexture[0]);
+	GLint Y = m_glfunction.glGetUniformLocation(m_shaderProgram.programId(), "ytex");
+	glUniform1i(Y, 0);
+	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth, m_frameHeight,
+			GL_LUMINANCE, GL_UNSIGNED_BYTE, m_frameData);
+	checkError("NV12 paint ytex");
+
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, m_screenTexture[1]);
+	GLint U = m_glfunction.glGetUniformLocation(m_shaderProgram.programId(), "uvtex");
+	glUniform1i(U, 1);
+	switch (format) {
+	case V4L2_PIX_FMT_NV12:
+	case V4L2_PIX_FMT_NV21:
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth, m_frameHeight / 2,
+				GL_LUMINANCE, GL_UNSIGNED_BYTE,
+				m_frameData ? m_frameData + m_frameWidth * m_frameHeight : NULL);
+		break;
+	case V4L2_PIX_FMT_NV12M:
+	case V4L2_PIX_FMT_NV21M:
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth, m_frameHeight / 2,
+				GL_LUMINANCE, GL_UNSIGNED_BYTE, m_frameData2);
+		break;
+	}
+	checkError("NV12 paint uvtex");
+}
+
+QString CaptureWinGLEngine::shader_NV24_invariant(__u32 format)
+{
+	switch (format) {
+	case V4L2_PIX_FMT_NV24:
+		return QString("   u = texture2D(uvtex, xy).r - 0.5;"
+			       "   v = texture2D(uvtex, xy).a - 0.5;"
+			       );
+
+	case V4L2_PIX_FMT_NV42:
+		return QString("   v = texture2D(uvtex, xy).r - 0.5;"
+			       "   u = texture2D(uvtex, xy).a - 0.5;"
+			       );
+
+	default:
+		return QString();
+	}
+}
+
+void CaptureWinGLEngine::shader_NV24(__u32 format)
+{
+	m_screenTextureCount = 2;
+	glGenTextures(m_screenTextureCount, m_screenTexture);
+
+	glActiveTexture(GL_TEXTURE0);
+	configureTexture(0);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, m_frameWidth, m_frameHeight, 0,
+		     GL_LUMINANCE, GL_UNSIGNED_BYTE, NULL);
+	checkError("NV24 shader texture 0");
+
+	glActiveTexture(GL_TEXTURE1);
+	configureTexture(1);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE_ALPHA, m_frameWidth, m_frameHeight, 0,
+		     GL_LUMINANCE_ALPHA, GL_UNSIGNED_BYTE, NULL);
+	checkError("NV24 shader texture 1");
+
+	QString codeHead = QString("uniform sampler2D ytex;"
+				   "uniform sampler2D uvtex;"
+				   "uniform float tex_w;"
+				   "uniform float tex_h;"
+				   "void main()"
+				   "{"
+				   "   vec2 xy = vec2(gl_TexCoord[0].xy);"
+				   "   float ycoord = floor(xy.y * tex_h);");
+
+	if (m_field == V4L2_FIELD_SEQ_TB)
+		codeHead += "   xy.y = (mod(ycoord, 2.0) == 0.0) ? xy.y / 2.0 : xy.y / 2.0 + 0.5;";
+	else if (m_field == V4L2_FIELD_SEQ_BT)
+		codeHead += "   xy.y = (mod(ycoord, 2.0) == 0.0) ? xy.y / 2.0 + 0.5 : xy.y / 2.0;";
+
+	codeHead += "   float u, v;"
+		    "   float y = texture2D(ytex, xy).r;";
+
+	QString codeBody = shader_NV24_invariant(format);
+
+	QString codeTail = codeYUVNormalize() +
+			   codeYUV2RGB() +
+			   codeTransformToLinear() +
+			   codeColorspaceConversion() +
+			   codeTransformToNonLinear() +
+			   codeSuffix;
+
+	bool src_c = m_shaderProgram.addShaderFromSourceCode(
+				QGLShader::Fragment,
+				QString("%1%2%3").arg(codeHead, codeBody, codeTail));
+
+	if (!src_c)
+		fprintf(stderr, "OpenGL Error: YUV shader compilation failed.\n");
+
+	m_shaderProgram.bind();
+}
+
+void CaptureWinGLEngine::render_NV24(__u32 format)
+{
+	int idx;
+
+	idx = glGetUniformLocation(m_shaderProgram.programId(), "tex_w"); // Texture width
+	glUniform1f(idx, m_frameWidth);
+	idx = glGetUniformLocation(m_shaderProgram.programId(), "tex_h"); // Texture height
+	glUniform1f(idx, m_frameHeight);
+
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, m_screenTexture[0]);
+	GLint Y = m_glfunction.glGetUniformLocation(m_shaderProgram.programId(), "ytex");
+	glUniform1i(Y, 0);
+	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth, m_frameHeight,
+			GL_LUMINANCE, GL_UNSIGNED_BYTE, m_frameData);
+	checkError("NV24 paint ytex");
+
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, m_screenTexture[1]);
+	GLint U = m_glfunction.glGetUniformLocation(m_shaderProgram.programId(), "uvtex");
+	glUniform1i(U, 1);
+	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth, m_frameHeight,
+			GL_LUMINANCE_ALPHA, GL_UNSIGNED_BYTE,
+			m_frameData ? m_frameData + m_frameWidth * m_frameHeight : NULL);
+	checkError("NV24 paint uvtex");
+}
+
+QString CaptureWinGLEngine::shader_NV16_invariant(__u32 format)
+{
+	switch (format) {
+	case V4L2_PIX_FMT_NV16:
+	case V4L2_PIX_FMT_NV16M:
+		return QString("if (mod(xcoord, 2.0) == 0.0) {"
+			       "   u = texture2D(uvtex, xy).r - 0.5;"
+			       "   v = texture2D(uvtex, vec2(xy.x + texl_w, xy.y)).r - 0.5;"
+			       "} else {"
+			       "   u = texture2D(uvtex, vec2(xy.x - texl_w, xy.y)).r - 0.5;"
+			       "   v = texture2D(uvtex, xy).r - 0.5;"
+			       "}"
+			       );
+
+	case V4L2_PIX_FMT_NV61:
+	case V4L2_PIX_FMT_NV61M:
+		return QString("if (mod(xcoord, 2.0) == 0.0) {"
+			       "   u = texture2D(uvtex, vec2(xy.x + texl_w, xy.y)).r - 0.5;"
+			       "   v = texture2D(uvtex, xy).r - 0.5;"
+			       "} else {"
+			       "   u = texture2D(uvtex, xy).r - 0.5;"
+			       "   v = texture2D(uvtex, vec2(xy.x - texl_w, xy.y)).r - 0.5;"
+			       "}"
+			       );
+
+	default:
+		return QString();
+	}
+}
+
+void CaptureWinGLEngine::shader_NV16(__u32 format)
+{
+	m_screenTextureCount = 2;
+	glGenTextures(m_screenTextureCount, m_screenTexture);
+
+	glActiveTexture(GL_TEXTURE0);
+	configureTexture(0);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, m_frameWidth, m_frameHeight, 0,
+		     GL_LUMINANCE, GL_UNSIGNED_BYTE, NULL);
+	checkError("NV16 shader texture 0");
+
+	glActiveTexture(GL_TEXTURE1);
+	configureTexture(1);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_LUMINANCE, m_frameWidth, m_frameHeight, 0,
+		     GL_LUMINANCE, GL_UNSIGNED_BYTE, NULL);
+	checkError("NV16 shader texture 1");
+
+	QString codeHead = QString("uniform sampler2D ytex;"
+				   "uniform sampler2D uvtex;"
+				   "uniform float texl_w;"
+				   "uniform float tex_w;"
+				   "uniform float tex_h;"
+				   "void main()"
+				   "{"
+				   "   vec2 xy = vec2(gl_TexCoord[0].xy);"
+				   "   float ycoord = floor(xy.y * tex_h);");
+
+	if (m_field == V4L2_FIELD_SEQ_TB)
+		codeHead += "   xy.y = (mod(ycoord, 2.0) == 0.0) ? xy.y / 2.0 : xy.y / 2.0 + 0.5;";
+	else if (m_field == V4L2_FIELD_SEQ_BT)
+		codeHead += "   xy.y = (mod(ycoord, 2.0) == 0.0) ? xy.y / 2.0 + 0.5 : xy.y / 2.0;";
+
+	codeHead += "   float u, v;"
+		    "   float xcoord = floor(xy.x * tex_w);"
+		    "   float y = texture2D(ytex, xy).r;";
+
+	QString codeBody = shader_NV16_invariant(format);
+
+	QString codeTail = codeYUVNormalize() +
+			   codeYUV2RGB() +
 			   codeTransformToLinear() +
 			   codeColorspaceConversion() +
 			   codeTransformToNonLinear() +
@@ -804,12 +1252,12 @@ void CaptureWinGLEngine::shader_NV16M(__u32 format)
 				);
 
 	if (!src_ok)
-		fprintf(stderr, "OpenGL Error: NV16M shader compilation failed.\n");
+		fprintf(stderr, "OpenGL Error: NV16 shader compilation failed.\n");
 
 	m_shaderProgram.bind();
 }
 
-void CaptureWinGLEngine::render_NV16M(__u32 format)
+void CaptureWinGLEngine::render_NV16(__u32 format)
 {
 	int idx;
 	idx = glGetUniformLocation(m_shaderProgram.programId(), "texl_w"); // Texel width
@@ -825,15 +1273,26 @@ void CaptureWinGLEngine::render_NV16M(__u32 format)
 	glUniform1i(Y, 0);
 	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth, m_frameHeight,
 			GL_LUMINANCE, GL_UNSIGNED_BYTE, m_frameData);
-	checkError("NV16M paint ytex");
+	checkError("NV16 paint ytex");
 
 	glActiveTexture(GL_TEXTURE1);
 	glBindTexture(GL_TEXTURE_2D, m_screenTexture[1]);
 	GLint UV = m_glfunction.glGetUniformLocation(m_shaderProgram.programId(), "uvtex");
 	glUniform1i(UV, 1);
-	glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth, m_frameHeight,
-			GL_LUMINANCE, GL_UNSIGNED_BYTE, m_frameData2);
-	checkError("NV16M paint");
+	switch (format) {
+	case V4L2_PIX_FMT_NV16:
+	case V4L2_PIX_FMT_NV61:
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth, m_frameHeight,
+				GL_LUMINANCE, GL_UNSIGNED_BYTE,
+				m_frameData ? m_frameData + m_frameWidth * m_frameHeight : NULL);
+		break;
+	case V4L2_PIX_FMT_NV16M:
+	case V4L2_PIX_FMT_NV61M:
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth, m_frameHeight,
+				GL_LUMINANCE, GL_UNSIGNED_BYTE, m_frameData2);
+		break;
+	}
+	checkError("NV16 paint");
 }
 
 QString CaptureWinGLEngine::shader_YUY2_invariant(__u32 format)
@@ -842,10 +1301,10 @@ QString CaptureWinGLEngine::shader_YUY2_invariant(__u32 format)
 	case V4L2_PIX_FMT_YUYV:
 		return QString("if (mod(xcoord, 2.0) == 0.0) {"
 			       "   luma_chroma = texture2D(tex, xy);"
-			       "   y = (luma_chroma.r - 0.0625) * 1.1643;"
+			       "   y = luma_chroma.r;"
 			       "} else {"
 			       "   luma_chroma = texture2D(tex, vec2(xy.x - texl_w, xy.y));"
-			       "   y = (luma_chroma.b - 0.0625) * 1.1643;"
+			       "   y = luma_chroma.b;"
 			       "}"
 			       "u = luma_chroma.g - 0.5;"
 			       "v = luma_chroma.a - 0.5;"
@@ -854,10 +1313,10 @@ QString CaptureWinGLEngine::shader_YUY2_invariant(__u32 format)
 	case V4L2_PIX_FMT_YVYU:
 		return QString("if (mod(xcoord, 2.0) == 0.0) {"
 			       "   luma_chroma = texture2D(tex, xy);"
-			       "   y = (luma_chroma.r - 0.0625) * 1.1643;"
+			       "   y = luma_chroma.r;"
 			       "} else {"
 			       "   luma_chroma = texture2D(tex, vec2(xy.x - texl_w, xy.y));"
-			       "   y = (luma_chroma.b - 0.0625) * 1.1643;"
+			       "   y = luma_chroma.b;"
 			       "}"
 			       "u = luma_chroma.a - 0.5;"
 			       "v = luma_chroma.g - 0.5;"
@@ -866,10 +1325,10 @@ QString CaptureWinGLEngine::shader_YUY2_invariant(__u32 format)
 	case V4L2_PIX_FMT_UYVY:
 		return QString("if (mod(xcoord, 2.0) == 0.0) {"
 			       "   luma_chroma = texture2D(tex, xy);"
-			       "   y = (luma_chroma.g - 0.0625) * 1.1643;"
+			       "   y = luma_chroma.g;"
 			       "} else {"
 			       "   luma_chroma = texture2D(tex, vec2(xy.x - texl_w, xy.y));"
-			       "   y = (luma_chroma.a - 0.0625) * 1.1643;"
+			       "   y = luma_chroma.a;"
 			       "}"
 			       "u = luma_chroma.r - 0.5;"
 			       "v = luma_chroma.b - 0.5;"
@@ -878,10 +1337,10 @@ QString CaptureWinGLEngine::shader_YUY2_invariant(__u32 format)
 	case V4L2_PIX_FMT_VYUY:
 		return QString("if (mod(xcoord, 2.0) == 0.0) {"
 			       "   luma_chroma = texture2D(tex, xy);"
-			       "   y = (luma_chroma.g - 0.0625) * 1.1643;"
+			       "   y = luma_chroma.g;"
 			       "} else {"
 			       "   luma_chroma = texture2D(tex, vec2(xy.x - texl_w, xy.y));"
-			       "   y = (luma_chroma.a - 0.0625) * 1.1643;"
+			       "   y = luma_chroma.a;"
 			       "}"
 			       "u = luma_chroma.b - 0.5;"
 			       "v = luma_chroma.r - 0.5;"
@@ -921,7 +1380,8 @@ void CaptureWinGLEngine::shader_YUY2(__u32 format)
 
 	QString codeBody = shader_YUY2_invariant(format);
 
-	QString codeTail = codeYUV2RGB() +
+	QString codeTail = codeYUVNormalize() +
+			   codeYUV2RGB() +
 			   codeTransformToLinear() +
 			   codeColorspaceConversion() +
 			   codeTransformToNonLinear() +
@@ -937,7 +1397,7 @@ void CaptureWinGLEngine::shader_YUY2(__u32 format)
 	m_shaderProgram.bind();
 }
 
-void CaptureWinGLEngine::render_YUY2()
+void CaptureWinGLEngine::render_YUY2(__u32 format)
 {
 	int idx;
 	idx = glGetUniformLocation(m_shaderProgram.programId(), "texl_w"); // Texel width
@@ -956,8 +1416,9 @@ void CaptureWinGLEngine::render_YUY2()
 	checkError("YUY2 paint");
 }
 
-void CaptureWinGLEngine::shader_RGB()
+void CaptureWinGLEngine::shader_RGB(__u32 format)
 {
+	bool manualTransform;
 	bool hasAlpha = false;
 
 	m_screenTextureCount = 1;
@@ -965,10 +1426,12 @@ void CaptureWinGLEngine::shader_RGB()
 	glActiveTexture(GL_TEXTURE0);
 	configureTexture(0);
 
-	GLint internalFmt = m_colorspace == V4L2_COLORSPACE_SRGB ?
-						GL_SRGB8_ALPHA8 : GL_RGBA8;
+	manualTransform = m_quantization == V4L2_QUANTIZATION_LIM_RANGE ||
+                          m_xfer_func != V4L2_XFER_FUNC_SRGB ||
+			  format == V4L2_PIX_FMT_BGR666;
+	GLint internalFmt = manualTransform ? GL_RGBA8 : GL_SRGB8_ALPHA8;
 
-	switch (m_frameFormat) {
+	switch (format) {
 	case V4L2_PIX_FMT_ARGB555:
 		hasAlpha = true;
 		/* fall-through */
@@ -978,10 +1441,33 @@ void CaptureWinGLEngine::shader_RGB()
 			     GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV, NULL);
 		break;
 
+	case V4L2_PIX_FMT_ARGB444:
+		hasAlpha = true;
+		/* fall-through */
+	case V4L2_PIX_FMT_RGB444:
+	case V4L2_PIX_FMT_XRGB444:
+		glTexImage2D(GL_TEXTURE_2D, 0, internalFmt, m_frameWidth, m_frameHeight, 0,
+			     GL_BGRA, GL_UNSIGNED_SHORT_4_4_4_4_REV, NULL);
+		break;
+
+	case V4L2_PIX_FMT_ARGB555X:
+		hasAlpha = true;
+		/* fall-through */
 	case V4L2_PIX_FMT_RGB555X:
+	case V4L2_PIX_FMT_XRGB555X:
 		glTexImage2D(GL_TEXTURE_2D, 0, internalFmt, m_frameWidth, m_frameHeight, 0,
 			     GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV, NULL);
 		hasAlpha = true;
+		break;
+
+	case V4L2_PIX_FMT_BGR666:
+		glTexImage2D(GL_TEXTURE_2D, 0, internalFmt, m_frameWidth, m_frameHeight, 0,
+				GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, NULL);
+		break;
+
+	case V4L2_PIX_FMT_RGB332:
+		glTexImage2D(GL_TEXTURE_2D, 0, internalFmt, m_frameWidth, m_frameHeight, 0,
+			     GL_RGB, GL_UNSIGNED_BYTE_3_3_2, NULL);
 		break;
 
 	case V4L2_PIX_FMT_RGB565:
@@ -1004,6 +1490,17 @@ void CaptureWinGLEngine::shader_RGB()
 	case V4L2_PIX_FMT_XBGR32:
 		glTexImage2D(GL_TEXTURE_2D, 0, internalFmt, m_frameWidth, m_frameHeight, 0,
 				GL_RGBA, GL_UNSIGNED_INT_8_8_8_8, NULL);
+		break;
+	case V4L2_PIX_FMT_GREY:
+		internalFmt = manualTransform ? GL_LUMINANCE : GL_SLUMINANCE;
+		glTexImage2D(GL_TEXTURE_2D, 0, internalFmt, m_frameWidth, m_frameHeight, 0,
+			     GL_LUMINANCE, GL_UNSIGNED_BYTE, NULL);
+		break;
+	case V4L2_PIX_FMT_Y16:
+	case V4L2_PIX_FMT_Y16_BE:
+		internalFmt = manualTransform ? GL_LUMINANCE : GL_SLUMINANCE;
+		glTexImage2D(GL_TEXTURE_2D, 0, internalFmt, m_frameWidth, m_frameHeight, 0,
+			     GL_LUMINANCE, GL_UNSIGNED_SHORT, NULL);
 		break;
 	case V4L2_PIX_FMT_RGB24:
 	case V4L2_PIX_FMT_BGR24:
@@ -1030,7 +1527,17 @@ void CaptureWinGLEngine::shader_RGB()
 	codeHead +=		   "   vec4 color = texture2D(tex, xy);"
 				   "   float a = color.a;";
 
-	if (m_frameFormat == V4L2_PIX_FMT_BGR24)
+	if (format == V4L2_PIX_FMT_BGR666)
+		codeHead += "   float ub = floor(color.b * 255.0);"
+			    "   float ug = floor(color.g * 255.0);"
+			    "   float ur = floor(color.r * 255.0);"
+			    "   ur = floor(ur / 64.0) + mod(ug, 16.0) * 4.0;"
+			    "   ug = floor(ug / 16.0) + mod(ub, 4.0) * 16.0;"
+			    "   ub = floor(ub / 4.0);"
+			    "   float b = ub / 63.0;"
+			    "   float g = ug / 63.0;"
+			    "   float r = ur / 63.0;";
+	else if (format == V4L2_PIX_FMT_BGR24)
 		codeHead += "   float r = color.b;"
 			    "   float g = color.g;"
 			    "   float b = color.r;";
@@ -1041,7 +1548,9 @@ void CaptureWinGLEngine::shader_RGB()
 
 	QString codeTail;
 	
-	if (m_colorspace != V4L2_COLORSPACE_SRGB)
+	if (m_quantization == V4L2_QUANTIZATION_LIM_RANGE)
+		codeTail += codeRGBNormalize();
+	if (manualTransform)
 		codeTail += codeTransformToLinear();
 
 	codeTail += codeColorspaceConversion() + 
@@ -1058,7 +1567,7 @@ void CaptureWinGLEngine::shader_RGB()
 	m_shaderProgram.bind();
 }
 
-void CaptureWinGLEngine::render_RGB()
+void CaptureWinGLEngine::render_RGB(__u32 format)
 {
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, m_screenTexture[0]);
@@ -1067,7 +1576,11 @@ void CaptureWinGLEngine::render_RGB()
 	int idx = glGetUniformLocation(m_shaderProgram.programId(), "tex_h"); // Texture height
 	glUniform1f(idx, m_frameHeight);
 
-	switch (m_frameFormat) {
+	switch (format) {
+	case V4L2_PIX_FMT_RGB332:
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth, m_frameHeight,
+				GL_RGB, GL_UNSIGNED_BYTE_3_3_2, m_frameData);
+		break;
 	case V4L2_PIX_FMT_RGB555:
 	case V4L2_PIX_FMT_XRGB555:
 	case V4L2_PIX_FMT_ARGB555:
@@ -1075,7 +1588,32 @@ void CaptureWinGLEngine::render_RGB()
 				GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV, m_frameData);
 		break;
 
+	case V4L2_PIX_FMT_RGB444:
+	case V4L2_PIX_FMT_XRGB444:
+	case V4L2_PIX_FMT_ARGB444:
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth, m_frameHeight,
+				GL_BGRA, GL_UNSIGNED_SHORT_4_4_4_4_REV, m_frameData);
+		break;
+
+	case V4L2_PIX_FMT_GREY:
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth, m_frameHeight,
+				GL_LUMINANCE, GL_UNSIGNED_BYTE, m_frameData);
+		break;
+
+	case V4L2_PIX_FMT_Y16:
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth, m_frameHeight,
+				GL_LUMINANCE, GL_UNSIGNED_SHORT, m_frameData);
+		break;
+	case V4L2_PIX_FMT_Y16_BE:
+		glPixelStorei(GL_UNPACK_SWAP_BYTES, GL_TRUE);
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth, m_frameHeight,
+				GL_LUMINANCE, GL_UNSIGNED_SHORT, m_frameData);
+		glPixelStorei(GL_UNPACK_SWAP_BYTES, GL_FALSE);
+		break;
+
 	case V4L2_PIX_FMT_RGB555X:
+	case V4L2_PIX_FMT_XRGB555X:
+	case V4L2_PIX_FMT_ARGB555X:
 		// Note: most likely for big-endian systems SWAP_BYTES should be true
 		// for the RGB555 format, and false for this format. This would have
 		// to be tested first, though.
@@ -1106,6 +1644,7 @@ void CaptureWinGLEngine::render_RGB()
 		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth, m_frameHeight,
 				GL_BGRA, GL_UNSIGNED_INT_8_8_8_8, m_frameData);
 		break;
+	case V4L2_PIX_FMT_BGR666:
 	case V4L2_PIX_FMT_BGR32:
 	case V4L2_PIX_FMT_XBGR32:
 	case V4L2_PIX_FMT_ABGR32:
@@ -1120,6 +1659,228 @@ void CaptureWinGLEngine::render_RGB()
 		break;
 	}
 	checkError("RGB paint");
+}
+
+void CaptureWinGLEngine::shader_Bayer(__u32 format)
+{
+	m_screenTextureCount = 1;
+	glGenTextures(m_screenTextureCount, m_screenTexture);
+	glActiveTexture(GL_TEXTURE0);
+	configureTexture(0);
+
+	GLint internalFmt = (m_quantization == V4L2_QUANTIZATION_LIM_RANGE ||
+			     m_xfer_func != V4L2_XFER_FUNC_SRGB) ?
+				GL_LUMINANCE : GL_SLUMINANCE;
+
+	switch (format) {
+	case V4L2_PIX_FMT_SBGGR8:
+	case V4L2_PIX_FMT_SGBRG8:
+	case V4L2_PIX_FMT_SGRBG8:
+	case V4L2_PIX_FMT_SRGGB8:
+		glTexImage2D(GL_TEXTURE_2D, 0, internalFmt, m_frameWidth, m_frameHeight, 0,
+			     GL_LUMINANCE, GL_UNSIGNED_BYTE, NULL);
+		break;
+	}
+
+	checkError("Bayer shader");
+
+	QString codeHead = QString("uniform sampler2D tex;"
+				   "uniform float tex_h;"
+				   "uniform float tex_w;"
+				   "uniform float texl_h;"
+				   "uniform float texl_w;"
+				   "void main()"
+				   "{"
+				   "   vec2 xy = vec2(gl_TexCoord[0].xy);"
+				   "   float xcoord = floor(xy.x * tex_w);"
+				   "   float ycoord = floor(xy.y * tex_h);");
+
+	if (m_field == V4L2_FIELD_SEQ_TB)
+		codeHead += "   xy.y = (mod(ycoord, 2.0) == 0.0) ? xy.y / 2.0 : xy.y / 2.0 + 0.5;";
+	else if (m_field == V4L2_FIELD_SEQ_BT)
+		codeHead += "   xy.y = (mod(ycoord, 2.0) == 0.0) ? xy.y / 2.0 + 0.5 : xy.y / 2.0;";
+
+	codeHead +=		   "   ycoord = floor(xy.y * tex_h);"
+				   "   float r, g, b;"
+				   "   vec2 cell;"
+				   "   cell.x = (mod(xcoord, 2.0) == 0.0) ? xy.x : xy.x - texl_w;"
+				   "   cell.y = (mod(ycoord, 2.0) == 0.0) ? xy.y : xy.y - texl_h;";
+
+	/* Poor quality Bayer to RGB conversion, but good enough for now */
+	switch (format) {
+	case V4L2_PIX_FMT_SBGGR8:
+		codeHead +=	   "   r = texture2D(tex, vec2(cell.x + texl_w, cell.y + texl_h)).y;"
+				   "   g = texture2D(tex, vec2((cell.y == xy.y) ? cell.x + texl_w : cell.x, xy.y)).y;"
+				   "   b = texture2D(tex, cell).y;";
+		break;
+	case V4L2_PIX_FMT_SGBRG8:
+		codeHead +=	   "   r = texture2D(tex, vec2(cell.x, cell.y + texl_h)).y;"
+				   "   g = texture2D(tex, vec2((cell.y == xy.y) ? cell.x : cell.x + texl_w, xy.y)).y;"
+				   "   b = texture2D(tex, vec2(cell.x + texl_w, cell.y)).y;";
+		break;
+	case V4L2_PIX_FMT_SGRBG8:
+		codeHead +=	   "   r = texture2D(tex, vec2(cell.x + texl_w, cell.y)).y;"
+				   "   g = texture2D(tex, vec2((cell.y == xy.y) ? cell.x : cell.x + texl_w, xy.y)).y;"
+				   "   b = texture2D(tex, vec2(cell.x, cell.y + texl_h)).y;";
+		break;
+	case V4L2_PIX_FMT_SRGGB8:
+		codeHead +=	   "   b = texture2D(tex, vec2(cell.x + texl_w, cell.y + texl_h)).y;"
+				   "   g = texture2D(tex, vec2((cell.y == xy.y) ? cell.x + texl_w : cell.x, xy.y)).y;"
+				   "   r = texture2D(tex, cell).y;";
+		break;
+	}
+
+	QString codeTail;
+
+	if (m_quantization == V4L2_QUANTIZATION_LIM_RANGE)
+		codeTail += codeRGBNormalize();
+	if (m_quantization == V4L2_QUANTIZATION_LIM_RANGE ||
+	    m_xfer_func != V4L2_XFER_FUNC_SRGB)
+		codeTail += codeTransformToLinear();
+
+	codeTail += codeColorspaceConversion() +
+		    codeTransformToNonLinear() +
+		    codeSuffix;
+
+	bool src_ok = m_shaderProgram.addShaderFromSourceCode(
+				QGLShader::Fragment, QString("%1%2").arg(codeHead, codeTail)
+				);
+
+	if (!src_ok)
+		fprintf(stderr, "OpenGL Error: Bayer shader compilation failed.\n");
+
+	m_shaderProgram.bind();
+}
+
+void CaptureWinGLEngine::render_Bayer(__u32 format)
+{
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, m_screenTexture[0]);
+	GLint Y = m_glfunction.glGetUniformLocation(m_shaderProgram.programId(), "tex");
+	glUniform1i(Y, 0);
+	int idx = glGetUniformLocation(m_shaderProgram.programId(), "tex_h"); // Texture height
+	glUniform1f(idx, m_frameHeight);
+	idx = glGetUniformLocation(m_shaderProgram.programId(), "tex_w"); // Texture width
+	glUniform1f(idx, m_frameWidth);
+	idx = glGetUniformLocation(m_shaderProgram.programId(), "texl_h"); // Texture width
+	glUniform1f(idx, 1.0 / m_frameHeight);
+	idx = glGetUniformLocation(m_shaderProgram.programId(), "texl_w"); // Texture width
+	glUniform1f(idx, 1.0 / m_frameWidth);
+
+	switch (format) {
+	case V4L2_PIX_FMT_SBGGR8:
+	case V4L2_PIX_FMT_SGBRG8:
+	case V4L2_PIX_FMT_SGRBG8:
+	case V4L2_PIX_FMT_SRGGB8:
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth, m_frameHeight,
+				GL_LUMINANCE, GL_UNSIGNED_BYTE, m_frameData);
+		break;
+	}
+	checkError("Bayer paint");
+}
+
+void CaptureWinGLEngine::shader_YUV_packed(__u32 format)
+{
+	bool hasAlpha = false;
+
+	m_screenTextureCount = 1;
+	glGenTextures(m_screenTextureCount, m_screenTexture);
+	glActiveTexture(GL_TEXTURE0);
+	configureTexture(0);
+
+	switch (format) {
+	case V4L2_PIX_FMT_YUV555:
+		hasAlpha = true;
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, m_frameWidth, m_frameHeight, 0,
+			     GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV, NULL);
+		break;
+
+	case V4L2_PIX_FMT_YUV444:
+		hasAlpha = true;
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, m_frameWidth, m_frameHeight, 0,
+			     GL_BGRA, GL_UNSIGNED_SHORT_4_4_4_4_REV, NULL);
+		break;
+
+	case V4L2_PIX_FMT_YUV565:
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, m_frameWidth, m_frameHeight, 0,
+			     GL_RGB, GL_UNSIGNED_SHORT_5_6_5, NULL);
+		break;
+	case V4L2_PIX_FMT_YUV32:
+		hasAlpha = true;
+		glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, m_frameWidth, m_frameHeight, 0,
+				GL_BGRA, GL_UNSIGNED_INT_8_8_8_8, NULL);
+		break;
+	}
+
+	checkError("Packed YUV shader");
+
+	QString codeHead = QString("uniform sampler2D tex;"
+				   "uniform float tex_h;"
+				   "void main()"
+				   "{"
+				   "   vec2 xy = vec2(gl_TexCoord[0].xy);"
+				   "   float ycoord = floor(xy.y * tex_h);");
+
+	if (m_field == V4L2_FIELD_SEQ_TB)
+		codeHead += "   xy.y = (mod(ycoord, 2.0) == 0.0) ? xy.y / 2.0 : xy.y / 2.0 + 0.5;";
+	else if (m_field == V4L2_FIELD_SEQ_BT)
+		codeHead += "   xy.y = (mod(ycoord, 2.0) == 0.0) ? xy.y / 2.0 + 0.5 : xy.y / 2.0;";
+
+	codeHead +=		   "   vec4 color = texture2D(tex, xy);"
+				   "   float a = color.a;";
+
+	codeHead += "   float y = color.r;"
+		    "   float u = color.g - 0.5;"
+		    "   float v = color.b - 0.5;";
+
+	QString codeTail = codeYUVNormalize() +
+			   codeYUV2RGB() +
+			   codeTransformToLinear() +
+			   codeColorspaceConversion() +
+			   codeTransformToNonLinear() +
+			   (hasAlpha ? codeSuffixWithAlpha : codeSuffix);
+
+	bool src_ok = m_shaderProgram.addShaderFromSourceCode(
+				QGLShader::Fragment, QString("%1%2").arg(codeHead, codeTail)
+				);
+
+	if (!src_ok)
+		fprintf(stderr, "OpenGL Error: Packed YUV shader compilation failed.\n");
+
+	m_shaderProgram.bind();
+}
+
+void CaptureWinGLEngine::render_YUV_packed(__u32 format)
+{
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, m_screenTexture[0]);
+	GLint Y = m_glfunction.glGetUniformLocation(m_shaderProgram.programId(), "tex");
+	glUniform1i(Y, 0);
+	int idx = glGetUniformLocation(m_shaderProgram.programId(), "tex_h"); // Texture height
+	glUniform1f(idx, m_frameHeight);
+
+	switch (format) {
+	case V4L2_PIX_FMT_YUV555:
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth, m_frameHeight,
+				GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV, m_frameData);
+		break;
+
+	case V4L2_PIX_FMT_YUV444:
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth, m_frameHeight,
+				GL_BGRA, GL_UNSIGNED_SHORT_4_4_4_4_REV, m_frameData);
+		break;
+
+	case V4L2_PIX_FMT_YUV565:
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth, m_frameHeight,
+				GL_RGB, GL_UNSIGNED_SHORT_5_6_5, m_frameData);
+		break;
+
+	case V4L2_PIX_FMT_YUV32:
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth, m_frameHeight,
+				GL_BGRA, GL_UNSIGNED_INT_8_8_8_8, m_frameData);
+		break;
+	}
+	checkError("Packed YUV paint");
 }
 
 #endif

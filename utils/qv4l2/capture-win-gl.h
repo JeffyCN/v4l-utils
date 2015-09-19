@@ -43,11 +43,12 @@ public:
 
 	void stop();
 	void setFrame(int width, int height, int cropWidth, int cropHeight,
-		      __u32 format, unsigned char *data, unsigned char *data2);
+		      __u32 format, unsigned char *data, unsigned char *data2,
+		      unsigned char *data3);
 	bool hasNativeFormat(__u32 format);
 	void lockSize(QSize size);
-	void setColorspace(unsigned colorspace);
-	void setDisplayColorspace(unsigned colorspace);
+	void setColorspace(unsigned colorspace, unsigned xfer_func,
+			unsigned ycbcr_enc, unsigned quantization, bool is_sdtv);
 	void setField(unsigned field);
 	void setBlending(bool enable) { m_blending = enable; }
 	void setLinearFilter(bool enable);
@@ -59,22 +60,34 @@ protected:
 
 private:
 	// Colorspace conversion shaders
-	void shader_YUV();
-	void shader_NV16M(__u32 format);
-	QString shader_NV16M_invariant(__u32 format);
-	void shader_RGB();
+	void shader_YUV(__u32 format);
+	QString shader_NV12_invariant(__u32 format);
+	void shader_NV12(__u32 format);
+	void shader_NV16(__u32 format);
+	QString shader_NV16_invariant(__u32 format);
+	void shader_NV24(__u32 format);
+	QString shader_NV24_invariant(__u32 format);
+	void shader_RGB(__u32 format);
+	void shader_Bayer(__u32 format);
+	void shader_YUV_packed(__u32 format);
 	void shader_YUY2(__u32 format);
 	QString shader_YUY2_invariant(__u32 format);
+	QString codeYUVNormalize();
+	QString codeRGBNormalize();
 	QString codeYUV2RGB();
 	QString codeTransformToLinear();
 	QString codeColorspaceConversion();
 	QString codeTransformToNonLinear();
 
 	// Colorspace conversion render
-	void render_RGB();
-	void render_YUY2();
+	void render_RGB(__u32 format);
+	void render_Bayer(__u32 format);
+	void render_YUY2(__u32 format);
 	void render_YUV(__u32 format);
-	void render_NV16M(__u32 format);
+	void render_YUV_packed(__u32 format);
+	void render_NV12(__u32 format);
+	void render_NV16(__u32 format);
+	void render_NV24(__u32 format);
 
 	void clearShader();
 	void changeShader();
@@ -88,8 +101,12 @@ private:
 	int m_WCrop;
 	int m_HCrop;
 	unsigned m_colorspace;
+	unsigned m_xfer_func;
+	unsigned m_ycbcr_enc;
+	unsigned m_quantization;
+	bool m_is_sdtv;
+	bool m_is_rgb;
 	unsigned m_field;
-	unsigned m_displayColorspace;
 	int m_screenTextureCount;
 	bool m_formatChange;
 	__u32 m_frameFormat;
@@ -97,6 +114,7 @@ private:
 	QGLFunctions m_glfunction;
 	unsigned char *m_frameData;
 	unsigned char *m_frameData2;
+	unsigned char *m_frameData3;
 	QGLShaderProgram m_shaderProgram;
 	bool m_haveFramebufferSRGB;
 	bool m_blending;
@@ -115,9 +133,9 @@ public:
 	void stop();
 	bool hasNativeFormat(__u32 format);
 	static bool isSupported();
-	void setColorspace(unsigned colorspace);
+	void setColorspace(unsigned colorspace, unsigned xfer_func,
+			unsigned ycbcr_enc, unsigned quantization, bool is_sdtv);
 	void setField(unsigned field);
-	void setDisplayColorspace(unsigned colorspace);
 	void setBlending(bool enable);
 	void setLinearFilter(bool enable);
 

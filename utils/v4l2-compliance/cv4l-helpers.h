@@ -129,6 +129,16 @@ public:
 		return v4l_s_selection(this, &sel);
 	}
 
+	int g_frame_selection(v4l2_selection &sel, __u32 field)
+	{
+		return v4l_g_frame_selection(this, &sel, field);
+	}
+
+	int s_frame_selection(v4l2_selection &sel, __u32 field)
+	{
+		return v4l_s_frame_selection(this, &sel, field);
+	}
+
 	int g_tuner(v4l2_tuner &tuner, unsigned index = 0)
 	{
 		memset(&tuner, 0, sizeof(tuner));
@@ -144,9 +154,10 @@ public:
 		return cv4l_ioctl(VIDIOC_S_TUNER, &tuner);
 	}
 
-	int g_modulator(v4l2_modulator &modulator)
+	int g_modulator(v4l2_modulator &modulator, unsigned index = 0)
 	{
 		memset(&modulator, 0, sizeof(modulator));
+		modulator.index = index;
 		return cv4l_ioctl(VIDIOC_G_MODULATOR, &modulator);
 	}
 
@@ -644,24 +655,34 @@ public:
 
 	__u32 g_type() { return type; }
 	void s_type(unsigned type) { v4l_format_init(this, type); }
-	__u32 g_width() { return v4l_format_g_width(this); }
+	__u32 g_width() const { return v4l_format_g_width(this); }
 	void s_width(__u32 width) { v4l_format_s_width(this, width); }
-	__u32 g_height() { return v4l_format_g_height(this); }
+	__u32 g_height() const { return v4l_format_g_height(this); }
 	void s_height(__u32 height) { v4l_format_s_height(this, height); }
-	__u32 g_pixelformat() { return v4l_format_g_pixelformat(this); }
+	__u32 g_frame_height() const { return v4l_format_g_frame_height(this); }
+	void s_frame_height(__u32 height) { v4l_format_s_frame_height(this, height); }
+	__u32 g_pixelformat() const { return v4l_format_g_pixelformat(this); }
 	void s_pixelformat(__u32 pixelformat) { v4l_format_s_pixelformat(this, pixelformat); }
-	unsigned g_colorspace() { return v4l_format_g_colorspace(this); }
+	unsigned g_colorspace() const { return v4l_format_g_colorspace(this); }
 	void s_colorspace(unsigned colorspace) { v4l_format_s_colorspace(this, colorspace); }
-	__u8 g_num_planes() { return v4l_format_g_num_planes(this); }
+	unsigned g_xfer_func() const { return v4l_format_g_xfer_func(this); }
+	void s_xfer_func(unsigned xfer_func) { v4l_format_s_xfer_func(this, xfer_func); }
+	unsigned g_ycbcr_enc() const { return v4l_format_g_ycbcr_enc(this); }
+	void s_ycbcr_enc(unsigned ycbcr_enc) { v4l_format_s_ycbcr_enc(this, ycbcr_enc); }
+	unsigned g_quantization() const { return v4l_format_g_quantization(this); }
+	void s_quantization(unsigned quantization) { v4l_format_s_quantization(this, quantization); }
+	unsigned g_flags() const { return v4l_format_g_flags(this); }
+	void s_flags(unsigned flags) { v4l_format_s_flags(this, flags); }
+	__u8 g_num_planes() const { return v4l_format_g_num_planes(this); }
 	void s_num_planes(__u8 num_planes) { v4l_format_s_num_planes(this, num_planes); }
-	__u32 g_bytesperline(unsigned plane = 0) { return v4l_format_g_bytesperline(this, plane); }
+	__u32 g_bytesperline(unsigned plane = 0) const { return v4l_format_g_bytesperline(this, plane); }
 	void s_bytesperline(__u32 bytesperline, unsigned plane = 0) { v4l_format_s_bytesperline(this, plane, bytesperline); }
-	__u32 g_sizeimage(unsigned plane = 0) { return v4l_format_g_sizeimage(this, plane); }
+	__u32 g_sizeimage(unsigned plane = 0) const { return v4l_format_g_sizeimage(this, plane); }
 	void s_sizeimage(__u32 sizeimage, unsigned plane = 0) { v4l_format_s_sizeimage(this, plane, sizeimage); }
-	unsigned g_field() { return v4l_format_g_field(this); }
+	unsigned g_field() const { return v4l_format_g_field(this); }
 	void s_field(unsigned field) { v4l_format_s_field(this, field); }
-	unsigned g_first_field(v4l2_std_id std) { return v4l_format_g_first_field(this, std); }
-	unsigned g_flds_per_frm() { return v4l_format_g_flds_per_frm(this); }
+	unsigned g_first_field(v4l2_std_id std) const { return v4l_format_g_first_field(this, std); }
+	unsigned g_flds_per_frm() const { return v4l_format_g_flds_per_frm(this); }
 };
 
 class cv4l_buffer;

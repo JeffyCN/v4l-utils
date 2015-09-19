@@ -26,28 +26,44 @@
 #include <stdio.h>
 #include <unistd.h>
 
+#ifdef ENABLE_NLS
+# define _(string) gettext(string)
+# include "gettext.h"
+# include <locale.h>
+# include <langinfo.h>
+# include <iconv.h>
+#else
+# define _(string) string
+#endif
+
+# define N_(string) string
+
 #define PROGRAM_NAME	"dvb-fe-tool"
 
 const char *argp_program_version = PROGRAM_NAME " version " V4L_UTILS_VERSION;
 const char *argp_program_bug_address = "Mauro Carvalho Chehab <m.chehab@samsung.com>";
 
-static const char doc[] = "\nA DVB frontend tool using API version 5\n"
-	"\nOn the options bellow, the arguments are:\n"
+static const char doc[] = N_(
+	"\nA DVB frontend tool using API version 5\n"
+	"\nOn the options below, the arguments are:\n"
 	"  ADAPTER      - the dvb adapter to control\n"
-	"  FRONTEND     - the dvb frontend to control";
+	"  FRONTEND     - the dvb frontend to control");
 
 static const struct argp_option options[] = {
-	{"verbose",	'v',	0,		0,	"enables debug messages", 0},
-	{"adapter",	'a',	"ADAPTER",	0,	"dvb adapter", 0},
-	{"frontend",	'f',	"FRONTEND",	0,	"dvb frontend", 0},
-	{"set-delsys",	'd',	"PARAMS",	0,	"set delivery system", 0},
-	{"femon",	'm',	0,		0,	"monitors frontend stats on an streaming frontend", 0},
-	{"acoustical",	'A',	0,		0,	"bips if signal quality is good. Also enables femon mode. Please notice that console bip should be enabled on your wm.", 0},
+	{"verbose",	'v',	0,		0,	N_("enables debug messages"), 0},
+	{"adapter",	'a',	N_("ADAPTER"),	0,	N_("dvb adapter"), 0},
+	{"frontend",	'f',	N_("FRONTEND"),	0,	N_("dvb frontend"), 0},
+	{"set-delsys",	'd',	N_("PARAMS"),	0,	N_("set delivery system"), 0},
+	{"femon",	'm',	0,		0,	N_("monitors frontend stats on an streaming frontend"), 0},
+	{"acoustical",	'A',	0,		0,	N_("bips if signal quality is good. Also enables femon mode. Please notice that console bip should be enabled on your wm."), 0},
 #if 0 /* Currently not implemented */
-	{"set",		's',	"PARAMS",	0,	"set frontend", 0},
+	{"set",		's',	N_("PARAMS"),	0,	N_("set frontend"), 0},
 #endif
-	{"get",		'g',	0,		0,	"get frontend", 0},
-	{"dvbv3",	'3',	0,		0,	"Use DVBv3 only", 0},
+	{"get",		'g',	0,		0,	N_("get frontend"), 0},
+	{"dvbv3",	'3',	0,		0,	N_("Use DVBv3 only"), 0},
+	{"help",        '?',	0,		0,	N_("Give this help list"), -1},
+	{"usage",	-3,	0,		0,	N_("Give a short usage message")},
+	{"version",	'V',	0,		0,	N_("Print program version"), -1},
 	{ 0, 0, 0, 0, 0, 0 }
 };
 
@@ -78,7 +94,7 @@ static void do_timeout(int x)
 
 #define PERROR(x...)                                                    \
 	do {                                                            \
-		fprintf(stderr, "ERROR: ");                             \
+		fprintf(stderr, _("ERROR: "));                          \
 		fprintf(stderr, x);                                     \
 		fprintf(stderr, " (%s)\n", strerror(errno));		\
 	} while (0)
@@ -118,6 +134,18 @@ static error_t parse_opt(int k, char *arg, struct argp_state *state)
 	case 'v':
 		verbose	++;
 		break;
+	case '?':
+		argp_state_help(state, state->out_stream,
+				ARGP_HELP_SHORT_USAGE | ARGP_HELP_LONG
+				| ARGP_HELP_DOC);
+		fprintf(state->out_stream, _("\nReport bugs to %s.\n"), argp_program_bug_address);
+		exit(0);
+	case 'V':
+		fprintf (state->out_stream, "%s\n", argp_program_version);
+		exit(0);
+	case -3:
+		argp_state_help(state, state->out_stream, ARGP_HELP_USAGE);
+		exit(0);
 	default:
 		return ARGP_ERR_UNKNOWN;
 	}
@@ -138,7 +166,7 @@ static int print_frontend_stats(FILE *fd,
 
 	rc = dvb_fe_get_stats(parms);
 	if (rc) {
-		PERROR("dvb_fe_get_stats failed");
+		PERROR(_("dvb_fe_get_stats failed"));
 		return -1;
 	}
 
@@ -149,25 +177,25 @@ static int print_frontend_stats(FILE *fd,
 	for (i = 0; i < MAX_DTV_STATS; i++) {
 		show = 1;
 
-		dvb_fe_snprintf_stat(parms, DTV_QUALITY, "Quality",
+		dvb_fe_snprintf_stat(parms, DTV_QUALITY, _("Quality"),
 				     i, &p, &len, &show);
 
-		dvb_fe_snprintf_stat(parms, DTV_STAT_SIGNAL_STRENGTH, "Signal",
+		dvb_fe_snprintf_stat(parms, DTV_STAT_SIGNAL_STRENGTH, _("Signal"),
 				     i, &p, &len, &show);
 
-		dvb_fe_snprintf_stat(parms, DTV_STAT_CNR, "C/N",
+		dvb_fe_snprintf_stat(parms, DTV_STAT_CNR, _("C/N"),
 				     i, &p, &len, &show);
 
-		dvb_fe_snprintf_stat(parms, DTV_STAT_ERROR_BLOCK_COUNT, "UCB",
+		dvb_fe_snprintf_stat(parms, DTV_STAT_ERROR_BLOCK_COUNT, _("UCB"),
 				     i,  &p, &len, &show);
 
-		dvb_fe_snprintf_stat(parms, DTV_BER, "postBER",
+		dvb_fe_snprintf_stat(parms, DTV_BER, _("postBER"),
 				     i,  &p, &len, &show);
 
-		dvb_fe_snprintf_stat(parms, DTV_PRE_BER, "preBER",
+		dvb_fe_snprintf_stat(parms, DTV_PRE_BER, _("preBER"),
 				     i,  &p, &len, &show);
 
-		dvb_fe_snprintf_stat(parms, DTV_PER, "PER",
+		dvb_fe_snprintf_stat(parms, DTV_PER, _("PER"),
 				     i,  &p, &len, &show);
 		if (p != buf) {
 			if (isatty(fileno(fd))) {
@@ -248,7 +276,11 @@ int main(int argc, char *argv[])
 	struct dvb_v5_fe_parms *parms;
 	int fe_flags = O_RDWR;
 
-	argp_parse(&argp, argc, argv, 0, 0, 0);
+	setlocale (LC_ALL, "");
+	bindtextdomain (PACKAGE, LOCALEDIR);
+	textdomain (PACKAGE);
+
+	argp_parse(&argp, argc, argv, ARGP_NO_HELP | ARGP_NO_EXIT, 0, 0);
 
 	/*
 	 * If called without any option, be verbose, to print the
@@ -266,7 +298,7 @@ int main(int argc, char *argv[])
 		return -1;
 
 	if (delsys) {
-		printf("Changing delivery system to: %s\n",
+		printf(_("Changing delivery system to: %s\n"),
 			delivery_system_name[delsys]);
 		dvb_set_sys(parms, delsys);
 		goto ret;
