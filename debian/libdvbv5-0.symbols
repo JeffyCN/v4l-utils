@@ -21,6 +21,11 @@ libdvbv5.so.0 libdvbv5-0 #MINVER#
  dvb_bcd@Base 1.4.0
  dvb_c_cnr_2_qual@Base 1.4.0
  dvb_cmd_name@Base 1.4.0
+ dvb_country_a2_to_id@Base 1.8.0
+ dvb_country_a3_to_id@Base 1.8.0
+ dvb_country_to_2letters@Base 1.8.0
+ dvb_country_to_3letters@Base 1.8.0
+ dvb_country_to_name@Base 1.8.0
  dvb_crc32@Base 1.4.0
  dvb_default_log@Base 1.4.0
  dvb_desc_ca_free@Base 1.4.0
@@ -102,12 +107,14 @@ libdvbv5.so.0 libdvbv5-0 #MINVER#
  dvb_fe_retrieve_stats_layer@Base 1.4.0
  dvb_fe_sec_tone@Base 1.4.0
  dvb_fe_sec_voltage@Base 1.4.0
+ dvb_fe_set_default_country@Base 1.8.0
  dvb_fe_set_parms@Base 1.4.0
  dvb_fe_snprintf_eng@Base 1.4.0
  dvb_fe_snprintf_stat@Base 1.4.0
  dvb_fe_store_parm@Base 1.4.0
  dvb_get_pmt_pid@Base 1.4.0
  dvb_get_ts_tables@Base 1.4.0
+ dvb_guess_user_country@Base 1.8.0
  dvb_hexdump@Base 1.4.0
  dvb_mpeg_es_frame_names@Base 1.4.0
  dvb_mpeg_es_pic_start_init@Base 1.4.0
@@ -120,6 +127,7 @@ libdvbv5.so.0 libdvbv5-0 #MINVER#
  dvb_mpeg_ts_free@Base 1.4.0
  dvb_mpeg_ts_init@Base 1.4.0
  dvb_mpeg_ts_print@Base 1.4.0
+ dvb_new_entry_is_needed@Base 1.8.0
  dvb_new_freq_is_needed@Base 1.4.0
  dvb_parse_delsys@Base 1.4.0
  dvb_parse_format@Base 1.4.0
@@ -139,6 +147,7 @@ libdvbv5.so.0 libdvbv5-0 #MINVER#
  dvb_sat_search_lnb@Base 1.4.0
  dvb_sat_set_parms@Base 1.4.0
  dvb_scan_add_entry@Base 1.4.0
+ dvb_scan_add_entry_ex@Base 1.8.0
  dvb_scan_alloc_handler_table@Base 1.4.0
  dvb_scan_free_handler_table@Base 1.4.0
  dvb_scan_transponder@Base 1.4.0
@@ -222,6 +231,7 @@ libdvbv5.so.0 libdvbv5-0 #MINVER#
  pmt_stream_name@Base 1.4.0
  sys_atsc_props@Base 1.4.0
  sys_atscmh_props@Base 1.4.0
+ sys_dtmb_props@Base 1.8.0
  sys_dvbc_annex_ac_props@Base 1.4.0
  sys_dvbc_annex_b_props@Base 1.4.0
  sys_dvbs2_props@Base 1.4.0
