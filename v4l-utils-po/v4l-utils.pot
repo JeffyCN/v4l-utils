@@ -6,9 +6,9 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: v4l-utils 1.8.0\n"
+"Project-Id-Version: v4l-utils 1.10.0\n"
 "Report-Msgid-Bugs-To: linux-media@vger.Kernel.org\n"
-"POT-Creation-Date: 2015-09-19 21:28+0200\n"
+"POT-Creation-Date: 2016-01-24 08:42+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -454,61 +454,61 @@ msgstr ""
 msgid "\tExtra capabilities: <access denied>\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1481
+#: utils/keytable/keytable.c:1483
 msgid "Can't open device"
 msgstr ""
 
-#: utils/keytable/keytable.c:1495
+#: utils/keytable/keytable.c:1497
 #, c-format
 msgid "Auto-mode can be used only with --read, --debug and --sysdev options\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1529
+#: utils/keytable/keytable.c:1531
 #, c-format
 msgid "Table for %s, %s not found. Keep as-is\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1534
+#: utils/keytable/keytable.c:1536
 #, c-format
 msgid "Table for %s, %s is on %s file.\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1541
+#: utils/keytable/keytable.c:1543
 #, c-format
 msgid "Can't load %s table\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1558
+#: utils/keytable/keytable.c:1560
 #, c-format
 msgid "Can't load %s table from %s or %s\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1563
+#: utils/keytable/keytable.c:1565
 #, c-format
 msgid "Empty table %s\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1570
+#: utils/keytable/keytable.c:1572
 #, c-format
 msgid "Opening %s\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1586
+#: utils/keytable/keytable.c:1588
 #, c-format
 msgid "Old keytable cleared\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1594
+#: utils/keytable/keytable.c:1596
 #, c-format
 msgid "Wrote %d keycode(s) to driver\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1602
+#: utils/keytable/keytable.c:1604
 #, c-format
 msgid "Couldn't change the IR protocols\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1604
+#: utils/keytable/keytable.c:1606
 #, c-format
 msgid "Protocols changed to "
 msgstr ""
@@ -617,7 +617,7 @@ msgstr ""
 msgid "PER"
 msgstr ""
 
-#: utils/dvb/dvb-fe-tool.c:301
+#: utils/dvb/dvb-fe-tool.c:303
 #, c-format
 msgid "Changing delivery system to: %s\n"
 msgstr ""
@@ -666,27 +666,27 @@ msgstr ""
 msgid "<input file> <output file>"
 msgstr ""
 
-#: utils/dvb/dvb-format-convert.c:148
+#: utils/dvb/dvb-format-convert.c:150
 #, c-format
 msgid "ERROR: Please specify a valid input format\n"
 msgstr ""
 
-#: utils/dvb/dvb-format-convert.c:151
+#: utils/dvb/dvb-format-convert.c:153
 #, c-format
 msgid "ERROR: Please specify a valid input file\n"
 msgstr ""
 
-#: utils/dvb/dvb-format-convert.c:154
+#: utils/dvb/dvb-format-convert.c:156
 #, c-format
 msgid "ERROR: Please specify a valid output format\n"
 msgstr ""
 
-#: utils/dvb/dvb-format-convert.c:157
+#: utils/dvb/dvb-format-convert.c:159
 #, c-format
 msgid "ERROR: Please specify a valid output file\n"
 msgstr ""
 
-#: utils/dvb/dvb-format-convert.c:162
+#: utils/dvb/dvb-format-convert.c:164
 #, c-format
 msgid "ERROR: Please specify a valid delivery system for ZAP format\n"
 msgstr ""
@@ -804,7 +804,7 @@ msgid "country_code"
 msgstr ""
 
 #: utils/dvb/dvbv5-scan.c:92 utils/dvb/dvbv5-zap.c:106
-msgid "Set the default country to be used (in ISO 3316-1 two letter code)"
+msgid "Set the default country to be used (in ISO 3166-1 two letter code)"
 msgstr ""
 
 #: utils/dvb/dvbv5-scan.c:254
@@ -820,33 +820,33 @@ msgstr ""
 msgid "<initial file>"
 msgstr ""
 
-#: utils/dvb/dvbv5-scan.c:489 utils/dvb/dvbv5-zap.c:795
+#: utils/dvb/dvbv5-scan.c:491 utils/dvb/dvbv5-zap.c:797
 #, c-format
 msgid "Please select one of the LNBf's below:\n"
 msgstr ""
 
-#: utils/dvb/dvbv5-scan.c:493 utils/dvb/dvbv5-zap.c:799
+#: utils/dvb/dvbv5-scan.c:495 utils/dvb/dvbv5-zap.c:801
 #, c-format
 msgid "Using LNBf "
 msgstr ""
 
-#: utils/dvb/dvbv5-scan.c:508 utils/dvb/dvbv5-zap.c:781
+#: utils/dvb/dvbv5-scan.c:510 utils/dvb/dvbv5-zap.c:783
 #, c-format
 msgid "ERROR: Please specify a valid format\n"
 msgstr ""
 
-#: utils/dvb/dvbv5-scan.c:516 utils/dvb/dvbv5-zap.c:807
-#: utils/dvb/dvbv5-zap.c:814
+#: utils/dvb/dvbv5-scan.c:518 utils/dvb/dvbv5-zap.c:809
+#: utils/dvb/dvbv5-zap.c:816
 #, c-format
 msgid "asprintf error\n"
 msgstr ""
 
-#: utils/dvb/dvbv5-scan.c:521 utils/dvb/dvbv5-zap.c:819
+#: utils/dvb/dvbv5-scan.c:523 utils/dvb/dvbv5-zap.c:821
 #, c-format
 msgid "using demux '%s'\n"
 msgstr ""
 
-#: utils/dvb/dvbv5-scan.c:539 utils/dvb/dvbv5-zap.c:847
+#: utils/dvb/dvbv5-scan.c:541 utils/dvb/dvbv5-zap.c:849
 #, c-format
 msgid "Failed to set the country code:%s\n"
 msgstr ""
@@ -973,13 +973,13 @@ msgid "copied %lld bytes (%lld Kbytes/sec)\n"
 msgstr ""
 
 #: utils/dvb/dvbv5-zap.c:608 utils/dvb/dvbv5-zap.c:616
-#: utils/dvb/dvbv5-zap.c:925 utils/dvb/dvbv5-zap.c:949
-#: utils/dvb/dvbv5-zap.c:997
+#: utils/dvb/dvbv5-zap.c:927 utils/dvb/dvbv5-zap.c:951
+#: utils/dvb/dvbv5-zap.c:999
 #, c-format
 msgid "failed opening '%s'"
 msgstr ""
 
-#: utils/dvb/dvbv5-zap.c:613 utils/dvb/dvbv5-zap.c:933
+#: utils/dvb/dvbv5-zap.c:613 utils/dvb/dvbv5-zap.c:935
 msgid "DMX_SET_BUFFER_SIZE failed"
 msgstr ""
 
@@ -1019,74 +1019,74 @@ msgstr ""
 msgid "<channel name> [or <frequency> if in monitor mode]"
 msgstr ""
 
-#: utils/dvb/dvbv5-zap.c:787
+#: utils/dvb/dvbv5-zap.c:789
 #, c-format
 msgid "ERROR: search string can be used only on monitor mode\n"
 msgstr ""
 
-#: utils/dvb/dvbv5-zap.c:823
+#: utils/dvb/dvbv5-zap.c:825
 msgid "$HOME not set"
 msgstr ""
 
-#: utils/dvb/dvbv5-zap.c:832
+#: utils/dvb/dvbv5-zap.c:834
 #, c-format
 msgid "reading channels from file '%s'\n"
 msgstr ""
 
-#: utils/dvb/dvbv5-zap.c:875
+#: utils/dvb/dvbv5-zap.c:877
 #, c-format
 msgid "Service id 0x%04x was not specified at the file\n"
 msgstr ""
 
-#: utils/dvb/dvbv5-zap.c:882 utils/dvb/dvbv5-zap.c:895
+#: utils/dvb/dvbv5-zap.c:884 utils/dvb/dvbv5-zap.c:897
 msgid "opening pat demux failed"
 msgstr ""
 
-#: utils/dvb/dvbv5-zap.c:888
+#: utils/dvb/dvbv5-zap.c:890
 #, c-format
 msgid "couldn't find pmt-pid for sid %04x\n"
 msgstr ""
 
-#: utils/dvb/dvbv5-zap.c:904
+#: utils/dvb/dvbv5-zap.c:906
 msgid "opening pmt demux failed"
-msgstr ""
-
-#: utils/dvb/dvbv5-zap.c:920
-#, c-format
-msgid "pass all PID's to TS\n"
 msgstr ""
 
 #: utils/dvb/dvbv5-zap.c:922
 #, c-format
+msgid "pass all PID's to TS\n"
+msgstr ""
+
+#: utils/dvb/dvbv5-zap.c:924
+#, c-format
 msgid "video pid %d\n"
 msgstr ""
 
-#: utils/dvb/dvbv5-zap.c:930 utils/dvb/dvbv5-zap.c:953
+#: utils/dvb/dvbv5-zap.c:932 utils/dvb/dvbv5-zap.c:955
 #, c-format
 msgid "  dvb_set_pesfilter %d\n"
 msgstr ""
 
-#: utils/dvb/dvbv5-zap.c:947
+#: utils/dvb/dvbv5-zap.c:949
 #, c-format
 msgid "audio pid %d\n"
 msgstr ""
 
-#: utils/dvb/dvbv5-zap.c:969
+#: utils/dvb/dvbv5-zap.c:971
 #, c-format
 msgid "frontend doesn't lock\n"
 msgstr ""
 
-#: utils/dvb/dvbv5-zap.c:985
+#: utils/dvb/dvbv5-zap.c:987
 #, c-format
 msgid "open of '%s' failed"
 msgstr ""
 
-#: utils/dvb/dvbv5-zap.c:1001
+#: utils/dvb/dvbv5-zap.c:1003
 #, c-format
 msgid "Record to file '%s' started\n"
 msgstr ""
 
-#: utils/dvb/dvbv5-zap.c:1005
+#: utils/dvb/dvbv5-zap.c:1007
 #, c-format
 msgid "DVR interface '%s' can now be opened\n"
 msgstr ""

@@ -103,7 +103,7 @@ static const struct argp_option options[] = {
 	{"wait",	'W', N_("time"),		0, N_("adds additional wait time for DISEqC command completion"), 0},
 	{"exit",	'x', NULL,			0, N_("exit after tuning"), 0},
 	{"low_traffic",	'X', NULL,			0, N_("also shows DVB traffic with less then 1 packet per second"), 0},
-	{"cc",		'C', N_("country_code"),	0, N_("Set the default country to be used (in ISO 3316-1 two letter code)"), 0},
+	{"cc",		'C', N_("country_code"),	0, N_("Set the default country to be used (in ISO 3166-1 two letter code)"), 0},
 	{"help",        '?',	0,		0,	N_("Give this help list"), -1},
 	{"usage",	-3,	0,		0,	N_("Give a short usage message")},
 	{"version",	-4,	0,		0,	N_("Print program version"), -1},
@@ -758,9 +758,11 @@ int main(int argc, char **argv)
 		.args_doc = N_("<channel name> [or <frequency> if in monitor mode]"),
 	};
 
+#ifdef ENABLE_NLS
 	setlocale (LC_ALL, "");
 	bindtextdomain (PACKAGE, LOCALEDIR);
 	textdomain (PACKAGE);
+#endif
 
 	memset(&args, 0, sizeof(args));
 	args.sat_number = -1;

@@ -748,6 +748,7 @@ void GeneralTab::formatSection(v4l2_fmtdesc fmt)
 		m_colorspace->addItem("sRGB", QVariant(V4L2_COLORSPACE_SRGB));
 		m_colorspace->addItem("Adobe RGB", QVariant(V4L2_COLORSPACE_ADOBERGB));
 		m_colorspace->addItem("BT.2020", QVariant(V4L2_COLORSPACE_BT2020));
+		m_colorspace->addItem("DCI-P3", QVariant(V4L2_COLORSPACE_DCI_P3));
 		m_colorspace->addItem("SMPTE 240M", QVariant(V4L2_COLORSPACE_SMPTE240M));
 		m_colorspace->addItem("470 System M", QVariant(V4L2_COLORSPACE_470_SYSTEM_M));
 		m_colorspace->addItem("470 System BG", QVariant(V4L2_COLORSPACE_470_SYSTEM_BG));
@@ -761,6 +762,8 @@ void GeneralTab::formatSection(v4l2_fmtdesc fmt)
 		m_xferFunc->addItem("Rec. 709", QVariant(V4L2_XFER_FUNC_709));
 		m_xferFunc->addItem("sRGB", QVariant(V4L2_XFER_FUNC_SRGB));
 		m_xferFunc->addItem("Adobe RGB", QVariant(V4L2_XFER_FUNC_ADOBERGB));
+		m_xferFunc->addItem("DCI-P3", QVariant(V4L2_XFER_FUNC_DCI_P3));
+		m_xferFunc->addItem("SMPTE 2084", QVariant(V4L2_XFER_FUNC_SMPTE2084));
 		m_xferFunc->addItem("SMPTE 240M", QVariant(V4L2_XFER_FUNC_SMPTE240M));
 		m_xferFunc->addItem("None", QVariant(V4L2_XFER_FUNC_NONE));
 
@@ -1034,14 +1037,14 @@ int GeneralTab::addAudioDevice(void *hint, int deviceNum)
 	}
 
 	if ((iotype == NULL || strncmp(iotype, "Input", 5) == 0) && filterAudioDevice(deviceName)) {
+		m_audioInDeviceMap[m_audioInDevice->count()] = snd_device_name_get_hint(hint, "NAME");
 		m_audioInDevice->addItem(listName);
-		m_audioInDeviceMap[listName] = snd_device_name_get_hint(hint, "NAME");
 		added += AUDIO_ADD_READ;
 	}
 
 	if ((iotype == NULL || strncmp(iotype, "Output", 6) == 0)  && filterAudioDevice(deviceName)) {
+		m_audioOutDeviceMap[m_audioOutDevice->count()] = snd_device_name_get_hint(hint, "NAME");
 		m_audioOutDevice->addItem(listName);
-		m_audioOutDeviceMap[listName] = snd_device_name_get_hint(hint, "NAME");
 		added += AUDIO_ADD_WRITE;
 	}
 #endif
@@ -1061,8 +1064,8 @@ bool GeneralTab::createAudioDeviceList()
 
 	m_audioInDevice->addItem("None");
 	m_audioOutDevice->addItem("Default");
-	m_audioInDeviceMap["None"] = "None";
-	m_audioOutDeviceMap["Default"] = "default";
+	m_audioInDeviceMap[0] = "None";
+	m_audioOutDeviceMap[0] = "default";
 
 	int deviceNum = -1;
 	int audioDevices = 0;
@@ -1912,7 +1915,8 @@ void GeneralTab::sourceChange(const v4l2_event &ev)
 		m_qryStandard->click();
 	else if (m_qryTimings && m_qryTimings->isEnabled())
 		m_qryTimings->click();
-	updateColorspace();
+	if (has_vid_cap() || has_vid_out())
+		updateColorspace();
 }
 
 void GeneralTab::updateFreq()
@@ -2338,7 +2342,7 @@ QString GeneralTab::getAudioInDevice()
 	if (m_audioInDevice == NULL)
 		return NULL;
 
-	return m_audioInDeviceMap[m_audioInDevice->currentText()];
+	return m_audioInDeviceMap[m_audioInDevice->currentIndex()];
 }
 
 QString GeneralTab::getAudioOutDevice()
@@ -2346,7 +2350,7 @@ QString GeneralTab::getAudioOutDevice()
 	if (m_audioOutDevice == NULL)
 		return NULL;
 
-	return m_audioOutDeviceMap[m_audioOutDevice->currentText()];
+	return m_audioOutDeviceMap[m_audioOutDevice->currentIndex()];
 }
 
 void GeneralTab::setAudioDeviceBufferSize(int size)

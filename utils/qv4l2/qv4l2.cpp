@@ -192,6 +192,7 @@ ApplicationWindow::ApplicationWindow() :
 	addSubMenuItem(grp, menu, "sRGB", V4L2_COLORSPACE_SRGB);
 	addSubMenuItem(grp, menu, "Adobe RGB", V4L2_COLORSPACE_ADOBERGB);
 	addSubMenuItem(grp, menu, "BT.2020", V4L2_COLORSPACE_BT2020);
+	addSubMenuItem(grp, menu, "DCI-P3", V4L2_COLORSPACE_DCI_P3);
 	addSubMenuItem(grp, menu, "SMPTE 240M", V4L2_COLORSPACE_SMPTE240M);
 	addSubMenuItem(grp, menu, "470 System M", V4L2_COLORSPACE_470_SYSTEM_M);
 	addSubMenuItem(grp, menu, "470 System BG", V4L2_COLORSPACE_470_SYSTEM_BG);
@@ -205,6 +206,8 @@ ApplicationWindow::ApplicationWindow() :
 	addSubMenuItem(grp, menu, "Rec. 709", V4L2_XFER_FUNC_709);
 	addSubMenuItem(grp, menu, "sRGB", V4L2_XFER_FUNC_SRGB);
 	addSubMenuItem(grp, menu, "Adobe RGB", V4L2_XFER_FUNC_ADOBERGB);
+	addSubMenuItem(grp, menu, "DCI-P3", V4L2_XFER_FUNC_DCI_P3);
+	addSubMenuItem(grp, menu, "SMPTE 2084", V4L2_XFER_FUNC_SMPTE2084);
 	addSubMenuItem(grp, menu, "SMPTE 240M", V4L2_XFER_FUNC_SMPTE240M);
 	addSubMenuItem(grp, menu, "None", V4L2_XFER_FUNC_NONE);
 	connect(grp, SIGNAL(triggered(QAction *)), this, SLOT(overrideXferFuncChanged(QAction *)));
@@ -499,14 +502,9 @@ void ApplicationWindow::ctrlEvent()
 			continue;
 		m_ctrlMap[ev.id].flags = ev.u.ctrl.flags;
 		m_ctrlMap[ev.id].minimum = ev.u.ctrl.minimum;
-		if (m_ctrlMap[ev.id].type == V4L2_CTRL_TYPE_BITMASK) {
-			m_ctrlMap[ev.id].maximum = (__u32)ev.u.ctrl.maximum;
-			m_ctrlMap[ev.id].default_value = (__u32)ev.u.ctrl.default_value;
-		} else {
-			m_ctrlMap[ev.id].maximum = ev.u.ctrl.maximum;
-			m_ctrlMap[ev.id].default_value = ev.u.ctrl.default_value;
-		}
+		m_ctrlMap[ev.id].maximum = ev.u.ctrl.maximum;
 		m_ctrlMap[ev.id].step = ev.u.ctrl.step;
+		m_ctrlMap[ev.id].default_value = ev.u.ctrl.default_value;
 
 		bool disabled = m_ctrlMap[ev.id].flags & CTRL_FLAG_DISABLED;
 
@@ -544,7 +542,7 @@ void ApplicationWindow::ctrlEvent()
 		c.string = (char *)malloc(c.size);
 		memset(&ctrls, 0, sizeof(ctrls));
 		ctrls.count = 1;
-		ctrls.ctrl_class = 0;
+		ctrls.which = 0;
 		ctrls.controls = &c;
 		if (!g_ext_ctrls(ctrls))
 			setString(ev.id, c.string);
@@ -618,7 +616,10 @@ bool ApplicationWindow::startStreaming()
 				cv4l_buffer buf;
 
 				m_queue.buffer_init(buf, i);
-				qbuf(buf); 
+				if (qbuf(buf)) {
+					error("Couldn't queue buffer\n");
+					goto error;
+				}
 			}
 		} else {
 			for (unsigned i = 0; i < m_queue.g_buffers(); i++) {
@@ -635,7 +636,10 @@ bool ApplicationWindow::startStreaming()
 					tpg_fillbuffer(&m_tpg, m_tpgStd, p, (u8 *)m_queue.g_dataptr(i, p));
 					buf.s_bytesused(buf.g_length(p), p);
 				}
-				qbuf(buf); 
+				if (qbuf(buf)) {
+					error("Couldn't queue buffer\n");
+					goto error;
+				}
 				tpg_update_mv_count(&m_tpg, V4L2_FIELD_HAS_T_OR_B(m_tpgField));
 			}
 		}
@@ -650,6 +654,7 @@ bool ApplicationWindow::startStreaming()
 		return true;
 	}
 
+error:
 	m_queue.free(this);
 	delete m_ctrlNotifier;
 	reopen(true);
@@ -662,6 +667,32 @@ bool ApplicationWindow::startStreaming()
 	m_useGLAct->setEnabled(CaptureWinGL::isSupported());
 #endif
 	return false;
+}
+
+void ApplicationWindow::calculateFps()
+{
+	static unsigned last_sec;
+
+	if (m_frame == 0) {
+		clock_gettime(CLOCK_MONOTONIC, &m_startTimestamp);
+		last_sec = 0;
+	} else {
+		struct timespec ts_cur, res;
+
+		clock_gettime(CLOCK_MONOTONIC, &ts_cur);
+		res.tv_sec = ts_cur.tv_sec - m_startTimestamp.tv_sec;
+		res.tv_nsec = ts_cur.tv_nsec - m_startTimestamp.tv_nsec;
+		if (res.tv_nsec < 0) {
+			res.tv_sec--;
+			res.tv_nsec += 1000000000;
+		}
+		if (res.tv_sec > last_sec) {
+			m_fps = (10000 * m_frame) /
+				(res.tv_sec * 100 + res.tv_nsec / 10000000);
+			m_fps /= 100.0;
+			last_sec = res.tv_sec;
+		}
+	}
 }
 
 void ApplicationWindow::capVbiFrame()
@@ -696,7 +727,10 @@ void ApplicationWindow::capVbiFrame()
 			return;
 		}
 		if (buf.g_flags() & V4L2_BUF_FLAG_ERROR) {
-			qbuf(buf);
+			if (qbuf(buf)) {
+				error("Couldn't queue buffer\n");
+				m_capStartAct->setChecked(false);
+			}
 			return;
 		}
 		data = (__u8 *)m_queue.g_dataptr(buf.g_index(), 0);
@@ -733,25 +767,20 @@ void ApplicationWindow::capVbiFrame()
 		p = sdata;
 	}
 
-	if (m_capMethod != methodRead)
-		qbuf(buf);
+	if (m_capMethod != methodRead) {
+		if (qbuf(buf)) {
+			error("Couldn't queue buffer\n");
+			m_capStartAct->setChecked(false);
+			return;
+		}
+	}
 
 	m_vbiTab->slicedData(p, s / sizeof(p[0]));
 
 	QString status, curStatus;
-	struct timeval tv, res;
 
-	if (m_frame == 0)
-		gettimeofday(&m_tv, NULL);
-	gettimeofday(&tv, NULL);
-	timersub(&tv, &m_tv, &res);
-	if (res.tv_sec) {
-		m_fps = (100 * (m_frame - m_lastFrame)) /
-			(res.tv_sec * 100 + res.tv_usec / 10000);
-		m_lastFrame = m_frame;
-		m_tv = tv;
-	}
-	status = QString("Frame: %1 Fps: %2").arg(++m_frame).arg(m_fps);
+	calculateFps();
+	status = QString("Frame: %1 Fps: %2").arg(++m_frame).arg(m_fps, 0, 'f', 2, '0');
 	if (showFrames() && g_type() == V4L2_BUF_TYPE_VBI_CAPTURE)
 		m_capture->setFrame(m_capImage->width(), m_capImage->height(),
 				    m_capDestFormat.fmt.pix.pixelformat, m_capImage->bits(),
@@ -796,7 +825,10 @@ void ApplicationWindow::capSdrFrame()
 			return;
 		}
 		if (buf.g_flags() & V4L2_BUF_FLAG_ERROR) {
-			qbuf(buf);
+			if (qbuf(buf)) {
+				error("Couldn't queue buffer\n");
+				m_capStartAct->setChecked(false);
+			}
 			return;
 		}
 		data = (__u8 *)m_queue.g_dataptr(buf.g_index(), 0);
@@ -840,23 +872,18 @@ void ApplicationWindow::capSdrFrame()
 		}
 	}
 
-	if (m_capMethod != methodRead)
-		qbuf(buf);
+	if (m_capMethod != methodRead) {
+		if (qbuf(buf)) {
+			error("Couldn't queue buffer\n");
+			m_capStartAct->setChecked(false);
+			return;
+		}
+	}
 
 	QString status, curStatus;
-	struct timeval tv, res;
 
-	if (m_frame == 0)
-		gettimeofday(&m_tv, NULL);
-	gettimeofday(&tv, NULL);
-	timersub(&tv, &m_tv, &res);
-	if (res.tv_sec) {
-		m_fps = (100 * (m_frame - m_lastFrame)) /
-			(res.tv_sec * 100 + res.tv_usec / 10000);
-		m_lastFrame = m_frame;
-		m_tv = tv;
-	}
-	status = QString("Frame: %1 Fps: %2").arg(++m_frame).arg(m_fps);
+	calculateFps();
+	status = QString("Frame: %1 Fps: %2").arg(++m_frame).arg(m_fps, 0, 'f', 2, '0');
 	if (showFrames())
 		m_capture->setFrame(m_capImage->width(), m_capImage->height(),
 				    m_capDestFormat.fmt.pix.pixelformat, m_capImage->bits(),
@@ -914,20 +941,9 @@ void ApplicationWindow::outFrame()
 	}
 
 	QString status, curStatus;
-	struct timeval tv, res;
 
-	if (m_frame == 0)
-		gettimeofday(&m_tv, NULL);
-	gettimeofday(&tv, NULL);
-	timersub(&tv, &m_tv, &res);
-	if (res.tv_sec) {
-		m_fps = (100 * (m_frame - m_lastFrame)) /
-			(res.tv_sec * 100 + res.tv_usec / 10000);
-		m_lastFrame = m_frame;
-		m_tv = tv;
-	}
-
-	status = QString("Frame: %1 Fps: %2").arg(++m_frame).arg(m_fps);
+	calculateFps();
+	status = QString("Frame: %1 Fps: %2").arg(++m_frame).arg(m_fps, 0, 'f', 2, '0');
 
 	if (m_capMethod == methodMmap || m_capMethod == methodUser) {
 		if (m_clear[buf.g_index()]) {
@@ -936,7 +952,11 @@ void ApplicationWindow::outFrame()
 			m_clear[buf.g_index()] = false;
 		}
 			
-		qbuf(buf);
+		if (qbuf(buf)) {
+			error("Couldn't queue buffer\n");
+			m_capStartAct->setChecked(false);
+			return;
+		}
 	}
 
 	curStatus = statusBar()->currentMessage();
@@ -1001,7 +1021,10 @@ void ApplicationWindow::capFrame()
 		}
 		if (buf.g_flags() & V4L2_BUF_FLAG_ERROR) {
 			printf("error\n");
-			qbuf(buf);
+			if (qbuf(buf)) {
+				error("Couldn't queue buffer\n");
+				m_capStartAct->setChecked(false);
+			}
 			return;
 		}
 
@@ -1042,22 +1065,13 @@ void ApplicationWindow::capFrame()
 		error(v4lconvert_get_error_message(m_convertData));
 
 	QString status, curStatus;
-	struct timeval tv, res;
 
-	if (m_frame == 0)
-		gettimeofday(&m_tv, NULL);
-	gettimeofday(&tv, NULL);
-	timersub(&tv, &m_tv, &res);
-	if (res.tv_sec) {
-		m_fps = (100 * (m_frame - m_lastFrame)) /
-			(res.tv_sec * 100 + res.tv_usec / 10000);
-		m_lastFrame = m_frame;
-		m_tv = tv;
-	}
+	calculateFps();
 
 	float wscale = m_capture->getHorScaleFactor();
 	float hscale = m_capture->getVertScaleFactor();
-	status = QString("Frame: %1 Fps: %2 Scale Factors: %3x%4").arg(++m_frame).arg(m_fps).arg(wscale).arg(hscale);
+	status = QString("Frame: %1 Fps: %2 Scale Factors: %3x%4").arg(++m_frame)
+			 .arg(m_fps, 0, 'f', 2, '0').arg(wscale).arg(hscale);
 	if (m_capMethod != methodRead)
 		status.append(QString(" SeqNr: %1").arg(buf.g_sequence()));
 #ifdef HAVE_ALSA
@@ -1089,7 +1103,11 @@ void ApplicationWindow::capFrame()
 			m_clear[buf.g_index()] = false;
 		}
 			
-		qbuf(buf);
+		if (qbuf(buf)) {
+			error("Couldn't queue buffer\n");
+			m_capStartAct->setChecked(false);
+			return;
+		}
 	}
 
 	curStatus = statusBar()->currentMessage();
@@ -1238,7 +1256,7 @@ void ApplicationWindow::outStart(bool start)
 
 		g_output(out.index);
 		enum_output(out, true, out.index);
-		m_frame = m_lastFrame = m_fps = 0;
+		m_frame = m_fps = 0;
 		m_capMethod = m_genTab->capMethod();
 		g_fmt(fmt);
 		fmt.s_flags(0);
@@ -1345,7 +1363,7 @@ void ApplicationWindow::capStart(bool start)
 		m_capImage = NULL;
 		return;
 	}
-	m_frame = m_lastFrame = m_fps = 0;
+	m_frame = m_fps = 0;
 	m_capMethod = m_genTab->capMethod();
 
 	if (m_genTab->isSlicedVbi()) {
@@ -1396,6 +1414,7 @@ void ApplicationWindow::capStart(bool start)
 			error("no services possible\n");
 			return;
 		}
+		m_capDestFormat.s_type(V4L2_BUF_TYPE_VIDEO_CAPTURE);
 		m_capDestFormat.s_pixelformat(V4L2_PIX_FMT_RGB24);
 		m_vbiTab->rawFormat(fmt.fmt.vbi);
 		m_vbiWidth = fmt.fmt.vbi.samples_per_line;
@@ -1430,6 +1449,7 @@ void ApplicationWindow::capStart(bool start)
 			return;
 		}
 		m_sdrSize = fmt.fmt.sdr.buffersize;
+		m_capDestFormat.s_type(V4L2_BUF_TYPE_VIDEO_CAPTURE);
 		m_capDestFormat.s_pixelformat(V4L2_PIX_FMT_RGB24);
 		m_frameData = new unsigned char[m_sdrSize];
 		m_capImage = new QImage(SDR_WIDTH, SDR_HEIGHT, dstFmt);

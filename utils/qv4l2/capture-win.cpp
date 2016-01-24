@@ -28,8 +28,8 @@
 
 #include <math.h>
 
-#define MIN_WIN_SIZE_WIDTH 160
-#define MIN_WIN_SIZE_HEIGHT 120
+#define MIN_WIN_SIZE_WIDTH 16
+#define MIN_WIN_SIZE_HEIGHT 12
 
 bool CaptureWin::m_enableScaling = true;
 double CaptureWin::m_pixelAspectRatio = 1.0;
@@ -162,10 +162,14 @@ QSize CaptureWin::cropSize(QSize size)
 			croppedSize.setWidth(realHeight * aspectRatio);
 	}
 
-	if (croppedSize.width() < MIN_WIN_SIZE_WIDTH || croppedSize.width() >= size.width())
+	if (croppedSize.width() >= size.width())
 		croppedSize.setWidth(size.width());
-	if (croppedSize.height() < MIN_WIN_SIZE_HEIGHT || croppedSize.height() >= size.height())
+	if (croppedSize.width() < MIN_WIN_SIZE_WIDTH)
+		croppedSize.setWidth(MIN_WIN_SIZE_WIDTH);
+	if (croppedSize.height() >= size.height())
 		croppedSize.setHeight(size.height());
+	if (croppedSize.height() < MIN_WIN_SIZE_HEIGHT)
+		croppedSize.setHeight(MIN_WIN_SIZE_HEIGHT);
 
 	return croppedSize;
 }

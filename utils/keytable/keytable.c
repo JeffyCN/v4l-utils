@@ -1277,7 +1277,7 @@ static void test_event(int fd)
 				printf(_(" key_%s: %s(0x%04x)\n"),
 					(ev[i].value == 0) ? _("up") : _("down"),
 					get_event_name(key_events, ev[i].code),
-					ev[i].type);
+					ev[i].code);
 				break;
 			case EV_REL:
 				printf(_(": %s (0x%04x) value=%d\n"),
@@ -1467,9 +1467,11 @@ int main(int argc, char *argv[])
 	static struct sysfs_names *names;
 	struct rc_device	  rc_dev;
 
+#ifdef ENABLE_NLS
 	setlocale (LC_ALL, "");
 	bindtextdomain (PACKAGE, LOCALEDIR);
 	textdomain (PACKAGE);
+#endif
 
 	argp_parse(&argp, argc, argv, ARGP_NO_HELP | ARGP_NO_EXIT, 0, 0);
 

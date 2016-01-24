@@ -36,10 +36,6 @@
 
 static struct cv4l_fmt cur_fmt;
 
-static const unsigned valid_output_flags =
-	V4L2_BUF_FLAG_TIMECODE | V4L2_BUF_FLAG_TSTAMP_SRC_MASK |
-	V4L2_BUF_FLAG_KEYFRAME | V4L2_BUF_FLAG_PFRAME | V4L2_BUF_FLAG_BFRAME;
-
 bool operator<(struct timeval const& n1, struct timeval const& n2)
 {
 	return n1.tv_sec < n2.tv_sec ||
@@ -294,7 +290,7 @@ int buffer::check(unsigned type, unsigned memory, unsigned index,
 			fail_on_test(g_bytesused(p) > g_length(p));
 		}
 		fail_on_test(!g_timestamp().tv_sec && !g_timestamp().tv_usec);
-		fail_on_test(!(g_flags() & (V4L2_BUF_FLAG_DONE | V4L2_BUF_FLAG_ERROR)));
+		fail_on_test(!(g_flags() & V4L2_BUF_FLAG_DONE));
 		fail_on_test((int)g_sequence() < seq.last_seq + 1);
 		if (v4l_type_is_video(g_type())) {
 			fail_on_test(g_field() == V4L2_FIELD_ALTERNATE);
@@ -430,7 +426,7 @@ int testReqBufs(struct node *node)
 	}
 	fail_on_test(ret != EINVAL);
 	fail_on_test(node->node2 == NULL);
-	for (i = 1; i <= V4L2_BUF_TYPE_SDR_CAPTURE; i++) {
+	for (i = 1; i <= V4L2_BUF_TYPE_LAST; i++) {
 		bool is_overlay = v4l_type_is_overlay(i);
 
 		if (!(node->valid_buftypes & (1 << i)))
@@ -576,7 +572,7 @@ int testExpBuf(struct node *node)
 		return ENOTTY;
 	}
 
-	for (type = 0; type <= V4L2_BUF_TYPE_SDR_CAPTURE; type++) {
+	for (type = 0; type <= V4L2_BUF_TYPE_LAST; type++) {
 		if (!(node->valid_buftypes & (1 << type)))
 			continue;
 		if (v4l_type_is_overlay(type))
@@ -643,7 +639,11 @@ int testReadWrite(struct node *node)
 static int captureBufs(struct node *node, const cv4l_queue &q,
 		const cv4l_queue &m2m_q, unsigned frame_count, bool use_poll)
 {
+	unsigned valid_output_flags =
+		V4L2_BUF_FLAG_TIMECODE | V4L2_BUF_FLAG_TSTAMP_SRC_MASK |
+		V4L2_BUF_FLAG_KEYFRAME | V4L2_BUF_FLAG_PFRAME | V4L2_BUF_FLAG_BFRAME;
 	int fd_flags = fcntl(node->g_fd(), F_GETFL);
+	cv4l_fmt fmt_q;
 	buffer buf(q);
 	unsigned count = frame_count;
 	int ret;
@@ -659,6 +659,17 @@ static int captureBufs(struct node *node, const cv4l_queue &q,
 	 * native size even while streaming.
 	 */
 	fail_on_test(testCanSetSameTimings(node));
+
+	node->g_fmt(fmt_q, q.g_type());
+	if (node->buftype_pixfmts[q.g_type()][fmt_q.g_pixelformat()] &
+		V4L2_FMT_FLAG_COMPRESSED)
+		valid_output_flags = V4L2_BUF_FLAG_TSTAMP_SRC_MASK;
+	if (node->is_m2m) {
+		node->g_fmt(fmt_q, m2m_q.g_type());
+		if (node->buftype_pixfmts[m2m_q.g_type()][fmt_q.g_pixelformat()] &
+			V4L2_FMT_FLAG_COMPRESSED)
+			valid_output_flags = V4L2_BUF_FLAG_TSTAMP_SRC_MASK;
+	}
 
 	if (use_poll)
 		fcntl(node->g_fd(), F_SETFL, fd_flags | O_NONBLOCK);
@@ -882,7 +893,7 @@ int testMmap(struct node *node, unsigned frame_count)
 		return ENOTTY;
 
 	buffer_info.clear();
-	for (type = 0; type <= V4L2_BUF_TYPE_SDR_CAPTURE; type++) {
+	for (type = 0; type <= V4L2_BUF_TYPE_LAST; type++) {
 		if (!(node->valid_buftypes & (1 << type)))
 			continue;
 		if (v4l_type_is_overlay(type))
@@ -1046,7 +1057,7 @@ int testUserPtr(struct node *node, unsigned frame_count)
 		return ENOTTY;
 
 	buffer_info.clear();
-	for (type = 0; type <= V4L2_BUF_TYPE_SDR_CAPTURE; type++) {
+	for (type = 0; type <= V4L2_BUF_TYPE_LAST; type++) {
 		if (!(node->valid_buftypes & (1 << type)))
 			continue;
 		if (v4l_type_is_overlay(type))
@@ -1148,7 +1159,7 @@ int testDmaBuf(struct node *expbuf_node, struct node *node, unsigned frame_count
 		return ENOTTY;
 
 	buffer_info.clear();
-	for (type = 0; type <= V4L2_BUF_TYPE_SDR_CAPTURE; type++) {
+	for (type = 0; type <= V4L2_BUF_TYPE_LAST; type++) {
 		if (!(node->valid_buftypes & (1 << type)))
 			continue;
 		if (v4l_type_is_sdr(type))

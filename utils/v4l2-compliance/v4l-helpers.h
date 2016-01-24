@@ -9,7 +9,7 @@
 #include <time.h>
 #include <unistd.h>
 #include <sys/ioctl.h>
-#include <sys/fcntl.h>
+#include <fcntl.h>
 #include <sys/mman.h>
 #include <errno.h>
 
@@ -346,6 +346,11 @@ static inline bool v4l_has_sdr_cap(const struct v4l_fd *f)
 	return v4l_g_caps(f) & V4L2_CAP_SDR_CAPTURE;
 }
 
+static inline bool v4l_has_sdr_out(const struct v4l_fd *f)
+{
+	return v4l_g_caps(f) & V4L2_CAP_SDR_OUTPUT;
+}
+
 static inline bool v4l_has_hwseek(const struct v4l_fd *f)
 {
 	return v4l_g_caps(f) & V4L2_CAP_HW_FREQ_SEEK;
@@ -385,15 +390,24 @@ static inline __u32 v4l_determine_type(const struct v4l_fd *f)
 		return V4L2_BUF_TYPE_SLICED_VBI_OUTPUT;
 	if (v4l_has_sdr_cap(f))
 		return V4L2_BUF_TYPE_SDR_CAPTURE;
+	if (v4l_has_sdr_out(f))
+		return V4L2_BUF_TYPE_SDR_OUTPUT;
 	return 0;
 }
 
 static inline int v4l_open(struct v4l_fd *f, const char *devname, bool non_blocking)
 {
-	struct v4l2_query_ext_ctrl qec = { V4L2_CTRL_FLAG_NEXT_CTRL | V4L2_CTRL_FLAG_NEXT_COMPOUND };
-	struct v4l2_ext_controls ec = { 0, 0 };
-	struct v4l2_queryctrl qc = { V4L2_CTRL_FLAG_NEXT_CTRL };
-	struct v4l2_selection sel = { 0 };
+	struct v4l2_query_ext_ctrl qec;
+	struct v4l2_ext_controls ec;
+	struct v4l2_queryctrl qc;
+	struct v4l2_selection sel;
+
+	memset(&qec, 0, sizeof(qec));
+	qec.id = V4L2_CTRL_FLAG_NEXT_CTRL | V4L2_CTRL_FLAG_NEXT_COMPOUND;
+	memset(&ec, 0, sizeof(ec));
+	memset(&qc, 0, sizeof(qc));
+	qc.id = V4L2_CTRL_FLAG_NEXT_CTRL;
+	memset(&sel, 0, sizeof(sel));
 
 	f->fd = f->open(f, devname, O_RDWR | (non_blocking ? O_NONBLOCK : 0));
 
@@ -518,6 +532,7 @@ static inline void v4l_format_s_pixelformat(struct v4l2_format *fmt, __u32 pixel
 		fmt->fmt.pix_mp.pixelformat = pixelformat;
 		break;
 	case V4L2_BUF_TYPE_SDR_CAPTURE:
+	case V4L2_BUF_TYPE_SDR_OUTPUT:
 		fmt->fmt.sdr.pixelformat = pixelformat;
 		break;
 	case V4L2_BUF_TYPE_VBI_CAPTURE:
@@ -537,6 +552,7 @@ static inline __u32 v4l_format_g_pixelformat(const struct v4l2_format *fmt)
 	case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
 		return fmt->fmt.pix_mp.pixelformat;
 	case V4L2_BUF_TYPE_SDR_CAPTURE:
+	case V4L2_BUF_TYPE_SDR_OUTPUT:
 		return fmt->fmt.sdr.pixelformat;
 	case V4L2_BUF_TYPE_VBI_CAPTURE:
 	case V4L2_BUF_TYPE_VBI_OUTPUT:
@@ -867,6 +883,7 @@ v4l_format_g_sizeimage(const struct v4l2_format *fmt, unsigned plane)
 	case V4L2_BUF_TYPE_SLICED_VBI_OUTPUT:
 		return plane ? 0 : fmt->fmt.sliced.io_size;
 	case V4L2_BUF_TYPE_SDR_CAPTURE:
+	case V4L2_BUF_TYPE_SDR_OUTPUT:
 		return plane ? 0 : fmt->fmt.sdr.buffersize;
 	default:
 		return 0;
@@ -982,7 +999,8 @@ static inline bool v4l_type_is_overlay(unsigned type)
 
 static inline bool v4l_type_is_sdr(unsigned type)
 {
-       return type == V4L2_BUF_TYPE_SDR_CAPTURE;
+       return type == V4L2_BUF_TYPE_SDR_CAPTURE ||
+	      type == V4L2_BUF_TYPE_SDR_OUTPUT;
 }
 
 static inline unsigned v4l_buffer_g_num_planes(const struct v4l_buffer *buf)
@@ -1624,7 +1642,7 @@ static inline int v4l_g_ext_ctrls(v4l_fd *f, struct v4l2_ext_controls *ec)
 	if (ec->count == 0)
 		return 0;
 	for (i = 0; i < ec->count; i++) {
-		struct v4l2_control c = { ec->controls[i].id };
+		struct v4l2_control c = { ec->controls[i].id, 0 };
 		int ret = v4l_ioctl(f, VIDIOC_G_CTRL, &c);
 
 		if (ret) {
@@ -1665,8 +1683,12 @@ static inline int v4l_try_ext_ctrls(v4l_fd *f, struct v4l2_ext_controls *ec)
 	if (ec->count == 0)
 		return 0;
 	for (i = 0; i < ec->count; i++) {
-		struct v4l2_queryctrl qc = { ec->controls[i].id };
-		int ret = v4l_ioctl(f, VIDIOC_QUERYCTRL, &qc);
+		struct v4l2_queryctrl qc;
+		int ret;
+
+		memset(&qc, 0, sizeof(qc));
+		qc.id = ec->controls[i].id;
+		ret = v4l_ioctl(f, VIDIOC_QUERYCTRL, &qc);
 
 		if (ret || qc.type == V4L2_CTRL_TYPE_STRING ||
 			   qc.type == V4L2_CTRL_TYPE_INTEGER64) {
