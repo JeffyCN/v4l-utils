@@ -473,6 +473,26 @@ static struct media_pad *v4l2_subdev_parse_pad_format(
 			continue;
 		}
 
+		if (strhazit("field:", &p)) {
+			enum v4l2_field field;
+
+			for (end = (char *)p; isalpha(*end) || *end == '-';
+			     ++end);
+
+			field = v4l2_subdev_string_to_field(p, end - p);
+			if (field == (enum v4l2_field)-1) {
+				media_dbg(media, "Invalid field value '%*s'\n",
+					  end - p, p);
+				*endp = (char *)p;
+				return NULL;
+			}
+
+			format->field = field;
+
+			p = end;
+			continue;
+		}
+
 		/*
 		 * Backward compatibility: crop rectangles can be specified
 		 * implicitly without the 'crop:' property name.
@@ -699,33 +719,36 @@ static struct {
 	const char *name;
 	enum v4l2_mbus_pixelcode code;
 } mbus_formats[] = {
-	{ "Y8", V4L2_MBUS_FMT_Y8_1X8},
-	{ "Y10", V4L2_MBUS_FMT_Y10_1X10 },
-	{ "Y12", V4L2_MBUS_FMT_Y12_1X12 },
-	{ "YUYV", V4L2_MBUS_FMT_YUYV8_1X16 },
-	{ "YUYV1_5X8", V4L2_MBUS_FMT_YUYV8_1_5X8 },
-	{ "YUYV2X8", V4L2_MBUS_FMT_YUYV8_2X8 },
-	{ "UYVY", V4L2_MBUS_FMT_UYVY8_1X16 },
-	{ "UYVY1_5X8", V4L2_MBUS_FMT_UYVY8_1_5X8 },
-	{ "UYVY2X8", V4L2_MBUS_FMT_UYVY8_2X8 },
-	{ "SBGGR8", V4L2_MBUS_FMT_SBGGR8_1X8 },
-	{ "SGBRG8", V4L2_MBUS_FMT_SGBRG8_1X8 },
-	{ "SGRBG8", V4L2_MBUS_FMT_SGRBG8_1X8 },
-	{ "SRGGB8", V4L2_MBUS_FMT_SRGGB8_1X8 },
-	{ "SBGGR10", V4L2_MBUS_FMT_SBGGR10_1X10 },
-	{ "SGBRG10", V4L2_MBUS_FMT_SGBRG10_1X10 },
-	{ "SGRBG10", V4L2_MBUS_FMT_SGRBG10_1X10 },
-	{ "SRGGB10", V4L2_MBUS_FMT_SRGGB10_1X10 },
-	{ "SBGGR10_DPCM8", V4L2_MBUS_FMT_SBGGR10_DPCM8_1X8 },
-	{ "SGBRG10_DPCM8", V4L2_MBUS_FMT_SGBRG10_DPCM8_1X8 },
-	{ "SGRBG10_DPCM8", V4L2_MBUS_FMT_SGRBG10_DPCM8_1X8 },
-	{ "SRGGB10_DPCM8", V4L2_MBUS_FMT_SRGGB10_DPCM8_1X8 },
-	{ "SBGGR12", V4L2_MBUS_FMT_SBGGR12_1X12 },
-	{ "SGBRG12", V4L2_MBUS_FMT_SGBRG12_1X12 },
-	{ "SGRBG12", V4L2_MBUS_FMT_SGRBG12_1X12 },
-	{ "SRGGB12", V4L2_MBUS_FMT_SRGGB12_1X12 },
-	{ "AYUV32", V4L2_MBUS_FMT_AYUV8_1X32 },
-	{ "ARGB32", V4L2_MBUS_FMT_ARGB8888_1X32 },
+	{ "Y8", MEDIA_BUS_FMT_Y8_1X8},
+	{ "Y10", MEDIA_BUS_FMT_Y10_1X10 },
+	{ "Y12", MEDIA_BUS_FMT_Y12_1X12 },
+	{ "YUYV", MEDIA_BUS_FMT_YUYV8_1X16 },
+	{ "YUYV1_5X8", MEDIA_BUS_FMT_YUYV8_1_5X8 },
+	{ "YUYV2X8", MEDIA_BUS_FMT_YUYV8_2X8 },
+	{ "UYVY", MEDIA_BUS_FMT_UYVY8_1X16 },
+	{ "UYVY1_5X8", MEDIA_BUS_FMT_UYVY8_1_5X8 },
+	{ "UYVY2X8", MEDIA_BUS_FMT_UYVY8_2X8 },
+	{ "VUY24", MEDIA_BUS_FMT_VUY8_1X24 },
+	{ "SBGGR8", MEDIA_BUS_FMT_SBGGR8_1X8 },
+	{ "SGBRG8", MEDIA_BUS_FMT_SGBRG8_1X8 },
+	{ "SGRBG8", MEDIA_BUS_FMT_SGRBG8_1X8 },
+	{ "SRGGB8", MEDIA_BUS_FMT_SRGGB8_1X8 },
+	{ "SBGGR10", MEDIA_BUS_FMT_SBGGR10_1X10 },
+	{ "SGBRG10", MEDIA_BUS_FMT_SGBRG10_1X10 },
+	{ "SGRBG10", MEDIA_BUS_FMT_SGRBG10_1X10 },
+	{ "SRGGB10", MEDIA_BUS_FMT_SRGGB10_1X10 },
+	{ "SBGGR10_DPCM8", MEDIA_BUS_FMT_SBGGR10_DPCM8_1X8 },
+	{ "SGBRG10_DPCM8", MEDIA_BUS_FMT_SGBRG10_DPCM8_1X8 },
+	{ "SGRBG10_DPCM8", MEDIA_BUS_FMT_SGRBG10_DPCM8_1X8 },
+	{ "SRGGB10_DPCM8", MEDIA_BUS_FMT_SRGGB10_DPCM8_1X8 },
+	{ "SBGGR12", MEDIA_BUS_FMT_SBGGR12_1X12 },
+	{ "SGBRG12", MEDIA_BUS_FMT_SGBRG12_1X12 },
+	{ "SGRBG12", MEDIA_BUS_FMT_SGRBG12_1X12 },
+	{ "SRGGB12", MEDIA_BUS_FMT_SRGGB12_1X12 },
+	{ "AYUV32", MEDIA_BUS_FMT_AYUV8_1X32 },
+	{ "RBG24", MEDIA_BUS_FMT_RBG888_1X24 },
+	{ "RGB32", MEDIA_BUS_FMT_RGB888_1X32_PADHI },
+	{ "ARGB32", MEDIA_BUS_FMT_ARGB8888_1X32 },
 };
 
 const char *v4l2_subdev_pixelcode_to_string(enum v4l2_mbus_pixelcode code)
@@ -754,4 +777,48 @@ enum v4l2_mbus_pixelcode v4l2_subdev_string_to_pixelcode(const char *string,
 		return (enum v4l2_mbus_pixelcode)-1;
 
 	return mbus_formats[i].code;
+}
+
+static struct {
+	const char *name;
+	enum v4l2_field field;
+} fields[] = {
+	{ "any", V4L2_FIELD_ANY },
+	{ "none", V4L2_FIELD_NONE },
+	{ "top", V4L2_FIELD_TOP },
+	{ "bottom", V4L2_FIELD_BOTTOM },
+	{ "interlaced", V4L2_FIELD_INTERLACED },
+	{ "seq-tb", V4L2_FIELD_SEQ_TB },
+	{ "seq-bt", V4L2_FIELD_SEQ_BT },
+	{ "alternate", V4L2_FIELD_ALTERNATE },
+	{ "interlaced-tb", V4L2_FIELD_INTERLACED_TB },
+	{ "interlaced-bt", V4L2_FIELD_INTERLACED_BT },
+};
+
+const char *v4l2_subdev_field_to_string(enum v4l2_field field)
+{
+	unsigned int i;
+
+	for (i = 0; i < ARRAY_SIZE(fields); ++i) {
+		if (fields[i].field == field)
+			return fields[i].name;
+	}
+
+	return "unknown";
+}
+
+enum v4l2_field v4l2_subdev_string_to_field(const char *string,
+					    unsigned int length)
+{
+	unsigned int i;
+
+	for (i = 0; i < ARRAY_SIZE(fields); ++i) {
+		if (strncasecmp(fields[i].name, string, length) == 0)
+			break;
+	}
+
+	if (i == ARRAY_SIZE(fields))
+		return (enum v4l2_field)-1;
+
+	return fields[i].field;
 }

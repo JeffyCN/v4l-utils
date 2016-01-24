@@ -36,9 +36,9 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <sys/mman.h>
-#include "../libv4lconvert/libv4lsyscall-priv.h"
 #include <linux/videodev2.h>
 #include <libv4l2.h>
+#include "../libv4lconvert/libv4lsyscall-priv.h"
 
 /* Check that open/read/mmap is not a define */
 #if defined open || defined read || defined mmap
@@ -148,14 +148,14 @@ LIBV4L_PUBLIC ssize_t read(int fd, void *buffer, size_t n)
 }
 
 LIBV4L_PUBLIC void *mmap(void *start, size_t length, int prot, int flags, int fd,
-		__off_t offset)
+		off_t offset)
 {
 	return v4l2_mmap(start, length, prot, flags, fd, offset);
 }
 
 #if defined(linux) && defined(__GLIBC__)
 LIBV4L_PUBLIC void *mmap64(void *start, size_t length, int prot, int flags, int fd,
-		__off64_t offset)
+		off64_t offset)
 {
 	return v4l2_mmap(start, length, prot, flags, fd, offset);
 }
