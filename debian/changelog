@@ -1,3 +1,9 @@
+v4l-utils (1.10.0-2) unstable; urgency=low
+
+  * Use v4l-utils boostrap script for autoreconf
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Sun, 20 Mar 2016 11:31:49 +0100
+
 v4l-utils (1.10.0-1) unstable; urgency=low
 
   * Imported Upstream version 1.10.0
