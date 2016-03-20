@@ -12,6 +12,9 @@ CONFIGURE_FLAGS += --enable-doxygen-man --disable-doxygen-ps --disable-doxygen-p
 %:
 	dh $@ --with autoreconf
 
+override_dh_autoreconf:
+	dh_autoreconf ./bootstrap.sh
+
 override_dh_auto_configure:
 	dh_auto_configure -- --disable-silent-rules --with-libv4lconvertsubdir=libv4lconvert0 $(CONFIGURE_FLAGS)
 
