@@ -1,3 +1,11 @@
+v4l-utils (1.10.1-1) unstable; urgency=medium
+
+  * Imported Upstream version 1.10.1 (Closes: #827302)
+  * Update watch file to version 4
+  * Bumped standards to version 3.9.8 (no changes needed)
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Wed, 15 Jun 2016 21:29:35 +0200
+
 v4l-utils (1.10.0-2) unstable; urgency=low
 
   * Use v4l-utils boostrap script for autoreconf
