@@ -20,8 +20,8 @@ Build-Depends: debhelper (>= 8.1.3),
                pkg-config,
                udev [linux-any]
 Standards-Version: 3.9.8
-Vcs-Browser: http://anonscm.debian.org/gitweb/?p=collab-maint/libv4l.git
-Vcs-Git: git://anonscm.debian.org/collab-maint/libv4l.git
+Vcs-Browser: https://anonscm.debian.org/cgit/collab-maint/libv4l.git
+Vcs-Git: https://anonscm.debian.org/git/collab-maint/libv4l.git
 Homepage: http://linuxtv.org/downloads/v4l-utils/
 
 Package: libv4l-0
