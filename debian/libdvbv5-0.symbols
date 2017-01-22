@@ -1,4 +1,9 @@
 libdvbv5.so.0 libdvbv5-0 #MINVER#
+ __dvb_fe_close@Base 1.12.1
+ __dvb_fe_get_parms@Base 1.12.1
+ __dvb_fe_get_stats@Base 1.12.1
+ __dvb_fe_set_parms@Base 1.12.1
+ __dvb_set_sys@Base 1.12.1
  atsc_desc_service_location_free@Base 1.4.0
  atsc_desc_service_location_init@Base 1.4.0
  atsc_desc_service_location_print@Base 1.4.0
@@ -14,7 +19,10 @@ libdvbv5.so.0 libdvbv5-0 #MINVER#
  atsc_time@Base 1.4.0
  channel_file_format@Base 1.4.0
  channel_file_zap_format@Base 1.4.0
+ daemon_version@Base 1.12.1
  delivery_system_name@Base 1.4.0
+ dev_type_names@Base 1.12.1
+ dev_type_names_size@Base 1.12.1
  dvb_add_parms_for_sys@Base 1.4.0
  dvb_add_scaned_transponders@Base 1.4.0
  dvb_attr_names@Base 1.4.0
@@ -76,6 +84,25 @@ libdvbv5.so.0 libdvbv5-0 #MINVER#
  dvb_desc_ts_info_init@Base 1.4.0
  dvb_desc_ts_info_print@Base 1.4.0
  dvb_descriptors@Base 1.4.0
+ dvb_dev_alloc@Base 1.12.1
+ dvb_dev_close@Base 1.12.1
+ dvb_dev_dmx_get_pmt_pid@Base 1.12.1
+ dvb_dev_dmx_set_pesfilter@Base 1.12.1
+ dvb_dev_dmx_set_section_filter@Base 1.12.1
+ dvb_dev_dmx_stop@Base 1.12.1
+ dvb_dev_dump_device@Base 1.12.1
+ dvb_dev_find@Base 1.12.1
+ dvb_dev_free@Base 1.12.1
+ dvb_dev_free_devices@Base 1.12.1
+ dvb_dev_local_init@Base 1.12.1
+ dvb_dev_open@Base 1.12.1
+ dvb_dev_read@Base 1.12.1
+ dvb_dev_remote_init@Base 1.12.1
+ dvb_dev_scan@Base 1.12.1
+ dvb_dev_seek_by_sysname@Base 1.12.1
+ dvb_dev_set_bufsize@Base 1.12.1
+ dvb_dev_set_log@Base 1.12.1
+ dvb_dev_stop_monitor@Base 1.12.1
  dvb_dmx_close@Base 1.4.0
  dvb_dmx_open@Base 1.4.0
  dvb_dmx_stop@Base 1.4.0
@@ -98,6 +125,7 @@ libdvbv5.so.0 libdvbv5-0 #MINVER#
  dvb_fe_open2@Base 1.4.0
  dvb_fe_open@Base 1.4.0
  dvb_fe_open_flags@Base 1.5.90
+ dvb_fe_open_fname@Base 1.12.1
  dvb_fe_prt_parms@Base 1.4.0
  dvb_fe_retrieve_ber@Base 1.4.0
  dvb_fe_retrieve_parm@Base 1.4.0
@@ -116,6 +144,11 @@ libdvbv5.so.0 libdvbv5-0 #MINVER#
  dvb_get_ts_tables@Base 1.4.0
  dvb_guess_user_country@Base 1.8.0
  dvb_hexdump@Base 1.4.0
+ dvb_local_fe_get_parms@Base 1.12.1
+ dvb_local_fe_get_stats@Base 1.12.1
+ dvb_local_fe_set_parms@Base 1.12.1
+ dvb_local_fe_set_sys@Base 1.12.1
+ dvb_local_seek_by_sysname@Base 1.12.1
  dvb_mpeg_es_frame_names@Base 1.4.0
  dvb_mpeg_es_pic_start_init@Base 1.4.0
  dvb_mpeg_es_pic_start_print@Base 1.4.0
@@ -139,11 +172,18 @@ libdvbv5.so.0 libdvbv5-0 #MINVER#
  dvb_read_section@Base 1.4.0
  dvb_read_section_with_id@Base 1.4.0
  dvb_read_sections@Base 1.4.0
+ dvb_remote_fe_get_parms@Base 1.12.1
+ dvb_remote_fe_get_stats@Base 1.12.1
+ dvb_remote_fe_set_parms@Base 1.12.1
+ dvb_remote_fe_set_sys@Base 1.12.1
+ dvb_remote_seek_by_sysname@Base 1.12.1 
  dvb_retrieve_entry_prop@Base 1.4.0
  dvb_s2_cnr_2_qual@Base 1.4.0
  dvb_s_cnr_2_qual@Base 1.4.0
  dvb_sat_get_lnb@Base 1.4.0
+ dvb_sat_get_lnb_name@Base 1.12.1
  dvb_sat_pol_name@Base 1.4.0
+ dvb_sat_real_freq@Base 1.12.1
  dvb_sat_search_lnb@Base 1.4.0
  dvb_sat_set_parms@Base 1.4.0
  dvb_scan_add_entry@Base 1.4.0
@@ -187,6 +227,7 @@ libdvbv5.so.0 libdvbv5-0 #MINVER#
  dvb_user_name@Base 1.4.0
  dvb_v5_attr_names@Base 1.4.0
  dvb_v5_delivery_system@Base 1.4.0
+ dvb_v5_free@Base 1.12.1
  dvb_v5_name@Base 1.4.0
  dvb_write_file@Base 1.4.0
  dvb_write_file_format@Base 1.4.0
@@ -220,6 +261,7 @@ libdvbv5.so.0 libdvbv5-0 #MINVER#
  fe_tone_name@Base 1.4.0
  fe_transmission_mode_name@Base 1.4.0
  fe_voltage_name@Base 1.4.0
+ free_dvb_dev@Base 1.12.1
  isdb_desc_partial_reception_free@Base 1.4.0
  isdb_desc_partial_reception_init@Base 1.4.0
  isdb_desc_partial_reception_print@Base 1.4.0
@@ -229,6 +271,7 @@ libdvbv5.so.0 libdvbv5-0 #MINVER#
  isdbt_interval@Base 1.4.0
  isdbt_mode@Base 1.4.0
  pmt_stream_name@Base 1.4.0
+ stack_dump@Base 1.12.1
  sys_atsc_props@Base 1.4.0
  sys_atscmh_props@Base 1.4.0
  sys_dtmb_props@Base 1.8.0
