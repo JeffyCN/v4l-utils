@@ -44,7 +44,7 @@ my $help = 0;
 my $pcap = 0;
 my $list_devices = 0;
 my $device;
-my $usbdev = -1;
+my @usbdev = ();
 my $frame_processor;
 
 GetOptions('debug=i' => \$debug,
@@ -52,12 +52,14 @@ GetOptions('debug=i' => \$debug,
 	   'pcap' => \$pcap,
 	   'device=s' => \$device,
 	    man => \$man,
-	   'usbdev=i' => \$usbdev,
+	   'usbdev=i' => \@usbdev,
 	   'list-devices' => \$list_devices,
 	   'frame_processor=s' => \$frame_processor,
 	  ) or pod2usage(2);
 pod2usage(1) if $help;
 pod2usage(-exitstatus => 0, -verbose => 2) if $man;
+
+my %devs = map { $_ => 1 } @usbdev;
 
 my $filename = shift;
 
@@ -343,7 +345,7 @@ sub print_frame($$)
 		($resp{"Time"} - $req{"Time"}) * 1000000 + 0.5;
 	$last_time = $req{"Time"};
 
-	printf " EP=%02x)", $resp{"Endpoint"};
+	printf " EP=%02x, Dev=%02x)", $resp{'Endpoint'}, $resp{'Device'};
 
 	my ($app_data, $type);
 
@@ -426,11 +428,11 @@ sub process_frame($) {
 		return;
 	}
 	for (my $i = 0; $i < scalar(@pending); $i++) {
-		if ($related eq $pending[$i]{"ID"}) {
+		if ($related eq $pending[$i]{"ID"} && $frame{'Device'} eq $pending[$i]{'Device'}) {
 			my %req = %{$pending[$i]};
 
 # skip unwanted URBs
-			if ($usbdev == -1 or $usbdev == $frame{'Device'}) {
+			if (scalar @usbdev == 0 or exists($devs{$frame{'Device'}})) {
 				if ($frame_processor) {
 					require $frame_processor;
 					frame_processor(\%req, \%frame);
@@ -551,28 +553,32 @@ sub sigint_handler {
 		exit(0);
 	}
 }
-
 #
-# Ancillary routines to list what's connected to each USB port
+# Ancillary routine to list what's connected to each USB port
 #
-sub parse_devices {
-	my $file = $File::Find::name;
-
-	return if (!($file =~ m/product/));
-	return if (!($file =~ m/[0-9]+\-[0-9]+/));
-	return if (($file =~ m/subsystem/));
-
-	my $name = qx(cat $file);
-	$name =~ s/\n//g;
-
-	my ($bus, $port);
-	($bus, $port) = ($1, $2) if ($file =~ m/([0-9]+)\-([0-9]+)/);
-
-	printf("usbmon%s ==> %s (level %s)\n",$bus, $name, $port);
-}
 
 if ($list_devices) {
-	find({follow => 1, follow_skip => 2, wanted => \&parse_devices, no_chdir => 1}, "/sys/bus/usb/devices/");
+	my ($bus, $dev, $name, $usb, $lastname);
+
+	open IN, "/sys/kernel/debug/usb/devices";
+	while (<IN>) {
+		if (m/T:\s+Bus=(\d+).*Dev\#\=\s*(\d+)/) {
+			$bus = $1 + 0;
+			$dev = $2 + 0;
+		}
+		if (m/S:\s+Product=(.*)/) {
+			$name = $1;
+		}
+		if (m/P:\s+Vendor=(\S+)\s+ProdID=(\S+)\s+Rev=(\S+)/) {
+			$usb = "($1:$2 rev $3)";
+		}
+		if ($name && m/^$/) {
+			printf("For %-36s%-22s ==> $0 --device usbmon%s --usbdev %s\n", $name, $usb, $bus, $dev);
+			$lastname = $name;
+		}
+	}
+	printf("For %-36s%-22s ==> $0 --device usbmon%s --usbdev %s\n", $name, $usb, $bus, $dev) if ($lastname ne $name);
+
 	exit;
 }
 

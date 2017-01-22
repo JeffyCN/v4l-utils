@@ -94,10 +94,10 @@ subdir = utils/v4l2-ctl
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/ac_define_dir.m4 \
 	$(top_srcdir)/m4/ax_prog_doxygen.m4 \
-	$(top_srcdir)/m4/libtool.m4 $(top_srcdir)/m4/ltoptions.m4 \
-	$(top_srcdir)/m4/ltsugar.m4 $(top_srcdir)/m4/ltversion.m4 \
-	$(top_srcdir)/m4/lt~obsolete.m4 $(top_srcdir)/m4/mode_t.m4 \
-	$(top_srcdir)/configure.ac
+	$(top_srcdir)/m4/ax_pthread.m4 $(top_srcdir)/m4/libtool.m4 \
+	$(top_srcdir)/m4/ltoptions.m4 $(top_srcdir)/m4/ltsugar.m4 \
+	$(top_srcdir)/m4/ltversion.m4 $(top_srcdir)/m4/lt~obsolete.m4 \
+	$(top_srcdir)/m4/mode_t.m4 $(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 DIST_COMMON = $(srcdir)/Makefile.am $(am__DIST_COMMON)
@@ -107,15 +107,23 @@ CONFIG_CLEAN_FILES = v4l2-ctl.1
 CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)" "$(DESTDIR)$(man1dir)"
 PROGRAMS = $(bin_PROGRAMS)
-am_v4l2_ctl_OBJECTS = v4l2-ctl.$(OBJEXT) v4l2-ctl-common.$(OBJEXT) \
-	v4l2-ctl-tuner.$(OBJEXT) v4l2-ctl-io.$(OBJEXT) \
-	v4l2-ctl-stds.$(OBJEXT) v4l2-ctl-vidcap.$(OBJEXT) \
-	v4l2-ctl-vidout.$(OBJEXT) v4l2-ctl-overlay.$(OBJEXT) \
-	v4l2-ctl-vbi.$(OBJEXT) v4l2-ctl-selection.$(OBJEXT) \
-	v4l2-ctl-misc.$(OBJEXT) v4l2-ctl-streaming.$(OBJEXT) \
-	v4l2-ctl-sdr.$(OBJEXT) v4l2-ctl-edid.$(OBJEXT) \
-	v4l2-ctl-modes.$(OBJEXT) vivid-tpg-colors.$(OBJEXT) \
-	vivid-tpg.$(OBJEXT)
+am_v4l2_ctl_OBJECTS = v4l2_ctl-v4l2-ctl.$(OBJEXT) \
+	v4l2_ctl-v4l2-ctl-common.$(OBJEXT) \
+	v4l2_ctl-v4l2-ctl-tuner.$(OBJEXT) \
+	v4l2_ctl-v4l2-ctl-io.$(OBJEXT) \
+	v4l2_ctl-v4l2-ctl-stds.$(OBJEXT) \
+	v4l2_ctl-v4l2-ctl-vidcap.$(OBJEXT) \
+	v4l2_ctl-v4l2-ctl-vidout.$(OBJEXT) \
+	v4l2_ctl-v4l2-ctl-overlay.$(OBJEXT) \
+	v4l2_ctl-v4l2-ctl-vbi.$(OBJEXT) \
+	v4l2_ctl-v4l2-ctl-selection.$(OBJEXT) \
+	v4l2_ctl-v4l2-ctl-misc.$(OBJEXT) \
+	v4l2_ctl-v4l2-ctl-streaming.$(OBJEXT) \
+	v4l2_ctl-v4l2-ctl-sdr.$(OBJEXT) \
+	v4l2_ctl-v4l2-ctl-edid.$(OBJEXT) \
+	v4l2_ctl-v4l2-ctl-modes.$(OBJEXT) \
+	v4l2_ctl-v4l2-tpg-colors.$(OBJEXT) \
+	v4l2_ctl-v4l2-tpg-core.$(OBJEXT) v4l2_ctl-v4l-stream.$(OBJEXT)
 v4l2_ctl_OBJECTS = $(am_v4l2_ctl_OBJECTS)
 @WITH_V4L2_CTL_LIBV4L_TRUE@v4l2_ctl_DEPENDENCIES =  \
 @WITH_V4L2_CTL_LIBV4L_TRUE@	../../lib/libv4l2/libv4l2.la \
@@ -124,9 +132,6 @@ AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
 am__v_lt_1 = 
-v4l2_ctl_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) \
-	$(LIBTOOLFLAGS) --mode=link $(CXXLD) $(AM_CXXFLAGS) \
-	$(CXXFLAGS) $(v4l2_ctl_LDFLAGS) $(LDFLAGS) -o $@
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -338,8 +343,10 @@ LTLIBINTL = @LTLIBINTL@
 LTLIBOBJS = @LTLIBOBJS@
 LT_SYS_LIBRARY_PATH = @LT_SYS_LIBRARY_PATH@
 MAINT = @MAINT@
+MAJOR = @MAJOR@
 MAKEINFO = @MAKEINFO@
 MANIFEST_TOOL = @MANIFEST_TOOL@
+MINOR = @MINOR@
 MKDIR_P = @MKDIR_P@
 MOC = @MOC@
 MSGFMT = @MSGFMT@
@@ -358,11 +365,15 @@ PACKAGE_STRING = @PACKAGE_STRING@
 PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
+PATCH = @PATCH@
 PATH_SEPARATOR = @PATH_SEPARATOR@
 PKG_CONFIG = @PKG_CONFIG@
 PKG_CONFIG_LIBDIR = @PKG_CONFIG_LIBDIR@
 PKG_CONFIG_PATH = @PKG_CONFIG_PATH@
 POSUB = @POSUB@
+PTHREAD_CC = @PTHREAD_CC@
+PTHREAD_CFLAGS = @PTHREAD_CFLAGS@
+PTHREAD_LIBS = @PTHREAD_LIBS@
 QT5GL_CFLAGS = @QT5GL_CFLAGS@
 QT5GL_LIBS = @QT5GL_LIBS@
 QT5_CFLAGS = @QT5_CFLAGS@
@@ -379,6 +390,7 @@ SHELL = @SHELL@
 STRIP = @STRIP@
 UIC = @UIC@
 USE_NLS = @USE_NLS@
+V4L_UTILS_VERSION = @V4L_UTILS_VERSION@
 VERSION = @VERSION@
 X11_CFLAGS = @X11_CFLAGS@
 X11_LIBS = @X11_LIBS@
@@ -398,6 +410,7 @@ am__leading_dot = @am__leading_dot@
 am__quote = @am__quote@
 am__tar = @am__tar@
 am__untar = @am__untar@
+ax_pthread_config = @ax_pthread_config@
 bindir = @bindir@
 build = @build@
 build_alias = @build_alias@
@@ -457,11 +470,11 @@ v4l2_ctl_SOURCES = v4l2-ctl.cpp v4l2-ctl.h v4l2-ctl-common.cpp v4l2-ctl-tuner.cp
 	v4l2-ctl-io.cpp v4l2-ctl-stds.cpp v4l2-ctl-vidcap.cpp v4l2-ctl-vidout.cpp \
 	v4l2-ctl-overlay.cpp v4l2-ctl-vbi.cpp v4l2-ctl-selection.cpp v4l2-ctl-misc.cpp \
 	v4l2-ctl-streaming.cpp v4l2-ctl-sdr.cpp v4l2-ctl-edid.cpp v4l2-ctl-modes.cpp \
-	vivid-tpg-colors.c vivid-tpg.c
+	v4l2-tpg-colors.c v4l2-tpg-core.c v4l-stream.c
 
-v4l2_ctl_LDFLAGS = -lrt
-@WITH_V4L2_CTL_LIBV4L_TRUE@v4l2_ctl_LDADD = ../../lib/libv4l2/libv4l2.la ../../lib/libv4lconvert/libv4lconvert.la
-EXTRA_DIST = Android.mk vivid-tpg.h.patch v4l2-ctl.1
+v4l2_ctl_CPPFLAGS = -I../common
+@WITH_V4L2_CTL_LIBV4L_TRUE@v4l2_ctl_LDADD = ../../lib/libv4l2/libv4l2.la ../../lib/libv4lconvert/libv4lconvert.la -lrt -lpthread
+EXTRA_DIST = Android.mk v4l2-ctl.1
 all: all-am
 
 .SUFFIXES:
@@ -549,7 +562,7 @@ clean-binPROGRAMS:
 
 v4l2-ctl$(EXEEXT): $(v4l2_ctl_OBJECTS) $(v4l2_ctl_DEPENDENCIES) $(EXTRA_v4l2_ctl_DEPENDENCIES) 
 	@rm -f v4l2-ctl$(EXEEXT)
-	$(AM_V_CXXLD)$(v4l2_ctl_LINK) $(v4l2_ctl_OBJECTS) $(v4l2_ctl_LDADD) $(LIBS)
+	$(AM_V_CXXLD)$(CXXLINK) $(v4l2_ctl_OBJECTS) $(v4l2_ctl_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -557,23 +570,24 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-ctl-common.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-ctl-edid.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-ctl-io.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-ctl-misc.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-ctl-modes.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-ctl-overlay.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-ctl-sdr.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-ctl-selection.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-ctl-stds.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-ctl-streaming.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-ctl-tuner.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-ctl-vbi.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-ctl-vidcap.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-ctl-vidout.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-ctl.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/vivid-tpg-colors.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/vivid-tpg.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_ctl-v4l-stream.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_ctl-v4l2-ctl-common.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_ctl-v4l2-ctl-edid.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_ctl-v4l2-ctl-io.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_ctl-v4l2-ctl-misc.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_ctl-v4l2-ctl-modes.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_ctl-v4l2-ctl-overlay.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_ctl-v4l2-ctl-sdr.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_ctl-v4l2-ctl-selection.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_ctl-v4l2-ctl-stds.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_ctl-v4l2-ctl-streaming.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_ctl-v4l2-ctl-tuner.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_ctl-v4l2-ctl-vbi.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_ctl-v4l2-ctl-vidcap.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_ctl-v4l2-ctl-vidout.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_ctl-v4l2-ctl.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_ctl-v4l2-tpg-colors.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_ctl-v4l2-tpg-core.Po@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.o$$||'`;\
@@ -599,6 +613,48 @@ distclean-compile:
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LTCOMPILE) -c -o $@ $<
 
+v4l2_ctl-v4l2-tpg-colors.o: v4l2-tpg-colors.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT v4l2_ctl-v4l2-tpg-colors.o -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-tpg-colors.Tpo -c -o v4l2_ctl-v4l2-tpg-colors.o `test -f 'v4l2-tpg-colors.c' || echo '$(srcdir)/'`v4l2-tpg-colors.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-tpg-colors.Tpo $(DEPDIR)/v4l2_ctl-v4l2-tpg-colors.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='v4l2-tpg-colors.c' object='v4l2_ctl-v4l2-tpg-colors.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o v4l2_ctl-v4l2-tpg-colors.o `test -f 'v4l2-tpg-colors.c' || echo '$(srcdir)/'`v4l2-tpg-colors.c
+
+v4l2_ctl-v4l2-tpg-colors.obj: v4l2-tpg-colors.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT v4l2_ctl-v4l2-tpg-colors.obj -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-tpg-colors.Tpo -c -o v4l2_ctl-v4l2-tpg-colors.obj `if test -f 'v4l2-tpg-colors.c'; then $(CYGPATH_W) 'v4l2-tpg-colors.c'; else $(CYGPATH_W) '$(srcdir)/v4l2-tpg-colors.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-tpg-colors.Tpo $(DEPDIR)/v4l2_ctl-v4l2-tpg-colors.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='v4l2-tpg-colors.c' object='v4l2_ctl-v4l2-tpg-colors.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o v4l2_ctl-v4l2-tpg-colors.obj `if test -f 'v4l2-tpg-colors.c'; then $(CYGPATH_W) 'v4l2-tpg-colors.c'; else $(CYGPATH_W) '$(srcdir)/v4l2-tpg-colors.c'; fi`
+
+v4l2_ctl-v4l2-tpg-core.o: v4l2-tpg-core.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT v4l2_ctl-v4l2-tpg-core.o -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-tpg-core.Tpo -c -o v4l2_ctl-v4l2-tpg-core.o `test -f 'v4l2-tpg-core.c' || echo '$(srcdir)/'`v4l2-tpg-core.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-tpg-core.Tpo $(DEPDIR)/v4l2_ctl-v4l2-tpg-core.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='v4l2-tpg-core.c' object='v4l2_ctl-v4l2-tpg-core.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o v4l2_ctl-v4l2-tpg-core.o `test -f 'v4l2-tpg-core.c' || echo '$(srcdir)/'`v4l2-tpg-core.c
+
+v4l2_ctl-v4l2-tpg-core.obj: v4l2-tpg-core.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT v4l2_ctl-v4l2-tpg-core.obj -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-tpg-core.Tpo -c -o v4l2_ctl-v4l2-tpg-core.obj `if test -f 'v4l2-tpg-core.c'; then $(CYGPATH_W) 'v4l2-tpg-core.c'; else $(CYGPATH_W) '$(srcdir)/v4l2-tpg-core.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-tpg-core.Tpo $(DEPDIR)/v4l2_ctl-v4l2-tpg-core.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='v4l2-tpg-core.c' object='v4l2_ctl-v4l2-tpg-core.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o v4l2_ctl-v4l2-tpg-core.obj `if test -f 'v4l2-tpg-core.c'; then $(CYGPATH_W) 'v4l2-tpg-core.c'; else $(CYGPATH_W) '$(srcdir)/v4l2-tpg-core.c'; fi`
+
+v4l2_ctl-v4l-stream.o: v4l-stream.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT v4l2_ctl-v4l-stream.o -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l-stream.Tpo -c -o v4l2_ctl-v4l-stream.o `test -f 'v4l-stream.c' || echo '$(srcdir)/'`v4l-stream.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l-stream.Tpo $(DEPDIR)/v4l2_ctl-v4l-stream.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='v4l-stream.c' object='v4l2_ctl-v4l-stream.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o v4l2_ctl-v4l-stream.o `test -f 'v4l-stream.c' || echo '$(srcdir)/'`v4l-stream.c
+
+v4l2_ctl-v4l-stream.obj: v4l-stream.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT v4l2_ctl-v4l-stream.obj -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l-stream.Tpo -c -o v4l2_ctl-v4l-stream.obj `if test -f 'v4l-stream.c'; then $(CYGPATH_W) 'v4l-stream.c'; else $(CYGPATH_W) '$(srcdir)/v4l-stream.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l-stream.Tpo $(DEPDIR)/v4l2_ctl-v4l-stream.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='v4l-stream.c' object='v4l2_ctl-v4l-stream.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o v4l2_ctl-v4l-stream.obj `if test -f 'v4l-stream.c'; then $(CYGPATH_W) 'v4l-stream.c'; else $(CYGPATH_W) '$(srcdir)/v4l-stream.c'; fi`
+
 .cpp.o:
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.o$$||'`;\
 @am__fastdepCXX_TRUE@	$(CXXCOMPILE) -MT $@ -MD -MP -MF $$depbase.Tpo -c -o $@ $< &&\
@@ -622,6 +678,216 @@ distclean-compile:
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='$<' object='$@' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LTCXXCOMPILE) -c -o $@ $<
+
+v4l2_ctl-v4l2-ctl.o: v4l2-ctl.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl.o -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl.Tpo -c -o v4l2_ctl-v4l2-ctl.o `test -f 'v4l2-ctl.cpp' || echo '$(srcdir)/'`v4l2-ctl.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl.cpp' object='v4l2_ctl-v4l2-ctl.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl.o `test -f 'v4l2-ctl.cpp' || echo '$(srcdir)/'`v4l2-ctl.cpp
+
+v4l2_ctl-v4l2-ctl.obj: v4l2-ctl.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl.obj -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl.Tpo -c -o v4l2_ctl-v4l2-ctl.obj `if test -f 'v4l2-ctl.cpp'; then $(CYGPATH_W) 'v4l2-ctl.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl.cpp' object='v4l2_ctl-v4l2-ctl.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl.obj `if test -f 'v4l2-ctl.cpp'; then $(CYGPATH_W) 'v4l2-ctl.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl.cpp'; fi`
+
+v4l2_ctl-v4l2-ctl-common.o: v4l2-ctl-common.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl-common.o -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl-common.Tpo -c -o v4l2_ctl-v4l2-ctl-common.o `test -f 'v4l2-ctl-common.cpp' || echo '$(srcdir)/'`v4l2-ctl-common.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl-common.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl-common.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl-common.cpp' object='v4l2_ctl-v4l2-ctl-common.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl-common.o `test -f 'v4l2-ctl-common.cpp' || echo '$(srcdir)/'`v4l2-ctl-common.cpp
+
+v4l2_ctl-v4l2-ctl-common.obj: v4l2-ctl-common.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl-common.obj -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl-common.Tpo -c -o v4l2_ctl-v4l2-ctl-common.obj `if test -f 'v4l2-ctl-common.cpp'; then $(CYGPATH_W) 'v4l2-ctl-common.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl-common.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl-common.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl-common.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl-common.cpp' object='v4l2_ctl-v4l2-ctl-common.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl-common.obj `if test -f 'v4l2-ctl-common.cpp'; then $(CYGPATH_W) 'v4l2-ctl-common.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl-common.cpp'; fi`
+
+v4l2_ctl-v4l2-ctl-tuner.o: v4l2-ctl-tuner.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl-tuner.o -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl-tuner.Tpo -c -o v4l2_ctl-v4l2-ctl-tuner.o `test -f 'v4l2-ctl-tuner.cpp' || echo '$(srcdir)/'`v4l2-ctl-tuner.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl-tuner.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl-tuner.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl-tuner.cpp' object='v4l2_ctl-v4l2-ctl-tuner.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl-tuner.o `test -f 'v4l2-ctl-tuner.cpp' || echo '$(srcdir)/'`v4l2-ctl-tuner.cpp
+
+v4l2_ctl-v4l2-ctl-tuner.obj: v4l2-ctl-tuner.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl-tuner.obj -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl-tuner.Tpo -c -o v4l2_ctl-v4l2-ctl-tuner.obj `if test -f 'v4l2-ctl-tuner.cpp'; then $(CYGPATH_W) 'v4l2-ctl-tuner.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl-tuner.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl-tuner.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl-tuner.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl-tuner.cpp' object='v4l2_ctl-v4l2-ctl-tuner.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl-tuner.obj `if test -f 'v4l2-ctl-tuner.cpp'; then $(CYGPATH_W) 'v4l2-ctl-tuner.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl-tuner.cpp'; fi`
+
+v4l2_ctl-v4l2-ctl-io.o: v4l2-ctl-io.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl-io.o -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl-io.Tpo -c -o v4l2_ctl-v4l2-ctl-io.o `test -f 'v4l2-ctl-io.cpp' || echo '$(srcdir)/'`v4l2-ctl-io.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl-io.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl-io.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl-io.cpp' object='v4l2_ctl-v4l2-ctl-io.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl-io.o `test -f 'v4l2-ctl-io.cpp' || echo '$(srcdir)/'`v4l2-ctl-io.cpp
+
+v4l2_ctl-v4l2-ctl-io.obj: v4l2-ctl-io.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl-io.obj -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl-io.Tpo -c -o v4l2_ctl-v4l2-ctl-io.obj `if test -f 'v4l2-ctl-io.cpp'; then $(CYGPATH_W) 'v4l2-ctl-io.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl-io.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl-io.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl-io.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl-io.cpp' object='v4l2_ctl-v4l2-ctl-io.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl-io.obj `if test -f 'v4l2-ctl-io.cpp'; then $(CYGPATH_W) 'v4l2-ctl-io.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl-io.cpp'; fi`
+
+v4l2_ctl-v4l2-ctl-stds.o: v4l2-ctl-stds.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl-stds.o -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl-stds.Tpo -c -o v4l2_ctl-v4l2-ctl-stds.o `test -f 'v4l2-ctl-stds.cpp' || echo '$(srcdir)/'`v4l2-ctl-stds.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl-stds.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl-stds.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl-stds.cpp' object='v4l2_ctl-v4l2-ctl-stds.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl-stds.o `test -f 'v4l2-ctl-stds.cpp' || echo '$(srcdir)/'`v4l2-ctl-stds.cpp
+
+v4l2_ctl-v4l2-ctl-stds.obj: v4l2-ctl-stds.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl-stds.obj -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl-stds.Tpo -c -o v4l2_ctl-v4l2-ctl-stds.obj `if test -f 'v4l2-ctl-stds.cpp'; then $(CYGPATH_W) 'v4l2-ctl-stds.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl-stds.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl-stds.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl-stds.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl-stds.cpp' object='v4l2_ctl-v4l2-ctl-stds.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl-stds.obj `if test -f 'v4l2-ctl-stds.cpp'; then $(CYGPATH_W) 'v4l2-ctl-stds.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl-stds.cpp'; fi`
+
+v4l2_ctl-v4l2-ctl-vidcap.o: v4l2-ctl-vidcap.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl-vidcap.o -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl-vidcap.Tpo -c -o v4l2_ctl-v4l2-ctl-vidcap.o `test -f 'v4l2-ctl-vidcap.cpp' || echo '$(srcdir)/'`v4l2-ctl-vidcap.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl-vidcap.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl-vidcap.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl-vidcap.cpp' object='v4l2_ctl-v4l2-ctl-vidcap.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl-vidcap.o `test -f 'v4l2-ctl-vidcap.cpp' || echo '$(srcdir)/'`v4l2-ctl-vidcap.cpp
+
+v4l2_ctl-v4l2-ctl-vidcap.obj: v4l2-ctl-vidcap.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl-vidcap.obj -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl-vidcap.Tpo -c -o v4l2_ctl-v4l2-ctl-vidcap.obj `if test -f 'v4l2-ctl-vidcap.cpp'; then $(CYGPATH_W) 'v4l2-ctl-vidcap.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl-vidcap.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl-vidcap.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl-vidcap.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl-vidcap.cpp' object='v4l2_ctl-v4l2-ctl-vidcap.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl-vidcap.obj `if test -f 'v4l2-ctl-vidcap.cpp'; then $(CYGPATH_W) 'v4l2-ctl-vidcap.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl-vidcap.cpp'; fi`
+
+v4l2_ctl-v4l2-ctl-vidout.o: v4l2-ctl-vidout.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl-vidout.o -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl-vidout.Tpo -c -o v4l2_ctl-v4l2-ctl-vidout.o `test -f 'v4l2-ctl-vidout.cpp' || echo '$(srcdir)/'`v4l2-ctl-vidout.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl-vidout.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl-vidout.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl-vidout.cpp' object='v4l2_ctl-v4l2-ctl-vidout.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl-vidout.o `test -f 'v4l2-ctl-vidout.cpp' || echo '$(srcdir)/'`v4l2-ctl-vidout.cpp
+
+v4l2_ctl-v4l2-ctl-vidout.obj: v4l2-ctl-vidout.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl-vidout.obj -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl-vidout.Tpo -c -o v4l2_ctl-v4l2-ctl-vidout.obj `if test -f 'v4l2-ctl-vidout.cpp'; then $(CYGPATH_W) 'v4l2-ctl-vidout.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl-vidout.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl-vidout.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl-vidout.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl-vidout.cpp' object='v4l2_ctl-v4l2-ctl-vidout.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl-vidout.obj `if test -f 'v4l2-ctl-vidout.cpp'; then $(CYGPATH_W) 'v4l2-ctl-vidout.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl-vidout.cpp'; fi`
+
+v4l2_ctl-v4l2-ctl-overlay.o: v4l2-ctl-overlay.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl-overlay.o -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl-overlay.Tpo -c -o v4l2_ctl-v4l2-ctl-overlay.o `test -f 'v4l2-ctl-overlay.cpp' || echo '$(srcdir)/'`v4l2-ctl-overlay.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl-overlay.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl-overlay.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl-overlay.cpp' object='v4l2_ctl-v4l2-ctl-overlay.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl-overlay.o `test -f 'v4l2-ctl-overlay.cpp' || echo '$(srcdir)/'`v4l2-ctl-overlay.cpp
+
+v4l2_ctl-v4l2-ctl-overlay.obj: v4l2-ctl-overlay.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl-overlay.obj -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl-overlay.Tpo -c -o v4l2_ctl-v4l2-ctl-overlay.obj `if test -f 'v4l2-ctl-overlay.cpp'; then $(CYGPATH_W) 'v4l2-ctl-overlay.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl-overlay.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl-overlay.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl-overlay.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl-overlay.cpp' object='v4l2_ctl-v4l2-ctl-overlay.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl-overlay.obj `if test -f 'v4l2-ctl-overlay.cpp'; then $(CYGPATH_W) 'v4l2-ctl-overlay.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl-overlay.cpp'; fi`
+
+v4l2_ctl-v4l2-ctl-vbi.o: v4l2-ctl-vbi.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl-vbi.o -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl-vbi.Tpo -c -o v4l2_ctl-v4l2-ctl-vbi.o `test -f 'v4l2-ctl-vbi.cpp' || echo '$(srcdir)/'`v4l2-ctl-vbi.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl-vbi.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl-vbi.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl-vbi.cpp' object='v4l2_ctl-v4l2-ctl-vbi.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl-vbi.o `test -f 'v4l2-ctl-vbi.cpp' || echo '$(srcdir)/'`v4l2-ctl-vbi.cpp
+
+v4l2_ctl-v4l2-ctl-vbi.obj: v4l2-ctl-vbi.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl-vbi.obj -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl-vbi.Tpo -c -o v4l2_ctl-v4l2-ctl-vbi.obj `if test -f 'v4l2-ctl-vbi.cpp'; then $(CYGPATH_W) 'v4l2-ctl-vbi.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl-vbi.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl-vbi.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl-vbi.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl-vbi.cpp' object='v4l2_ctl-v4l2-ctl-vbi.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl-vbi.obj `if test -f 'v4l2-ctl-vbi.cpp'; then $(CYGPATH_W) 'v4l2-ctl-vbi.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl-vbi.cpp'; fi`
+
+v4l2_ctl-v4l2-ctl-selection.o: v4l2-ctl-selection.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl-selection.o -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl-selection.Tpo -c -o v4l2_ctl-v4l2-ctl-selection.o `test -f 'v4l2-ctl-selection.cpp' || echo '$(srcdir)/'`v4l2-ctl-selection.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl-selection.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl-selection.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl-selection.cpp' object='v4l2_ctl-v4l2-ctl-selection.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl-selection.o `test -f 'v4l2-ctl-selection.cpp' || echo '$(srcdir)/'`v4l2-ctl-selection.cpp
+
+v4l2_ctl-v4l2-ctl-selection.obj: v4l2-ctl-selection.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl-selection.obj -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl-selection.Tpo -c -o v4l2_ctl-v4l2-ctl-selection.obj `if test -f 'v4l2-ctl-selection.cpp'; then $(CYGPATH_W) 'v4l2-ctl-selection.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl-selection.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl-selection.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl-selection.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl-selection.cpp' object='v4l2_ctl-v4l2-ctl-selection.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl-selection.obj `if test -f 'v4l2-ctl-selection.cpp'; then $(CYGPATH_W) 'v4l2-ctl-selection.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl-selection.cpp'; fi`
+
+v4l2_ctl-v4l2-ctl-misc.o: v4l2-ctl-misc.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl-misc.o -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl-misc.Tpo -c -o v4l2_ctl-v4l2-ctl-misc.o `test -f 'v4l2-ctl-misc.cpp' || echo '$(srcdir)/'`v4l2-ctl-misc.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl-misc.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl-misc.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl-misc.cpp' object='v4l2_ctl-v4l2-ctl-misc.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl-misc.o `test -f 'v4l2-ctl-misc.cpp' || echo '$(srcdir)/'`v4l2-ctl-misc.cpp
+
+v4l2_ctl-v4l2-ctl-misc.obj: v4l2-ctl-misc.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl-misc.obj -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl-misc.Tpo -c -o v4l2_ctl-v4l2-ctl-misc.obj `if test -f 'v4l2-ctl-misc.cpp'; then $(CYGPATH_W) 'v4l2-ctl-misc.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl-misc.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl-misc.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl-misc.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl-misc.cpp' object='v4l2_ctl-v4l2-ctl-misc.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl-misc.obj `if test -f 'v4l2-ctl-misc.cpp'; then $(CYGPATH_W) 'v4l2-ctl-misc.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl-misc.cpp'; fi`
+
+v4l2_ctl-v4l2-ctl-streaming.o: v4l2-ctl-streaming.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl-streaming.o -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl-streaming.Tpo -c -o v4l2_ctl-v4l2-ctl-streaming.o `test -f 'v4l2-ctl-streaming.cpp' || echo '$(srcdir)/'`v4l2-ctl-streaming.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl-streaming.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl-streaming.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl-streaming.cpp' object='v4l2_ctl-v4l2-ctl-streaming.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl-streaming.o `test -f 'v4l2-ctl-streaming.cpp' || echo '$(srcdir)/'`v4l2-ctl-streaming.cpp
+
+v4l2_ctl-v4l2-ctl-streaming.obj: v4l2-ctl-streaming.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl-streaming.obj -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl-streaming.Tpo -c -o v4l2_ctl-v4l2-ctl-streaming.obj `if test -f 'v4l2-ctl-streaming.cpp'; then $(CYGPATH_W) 'v4l2-ctl-streaming.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl-streaming.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl-streaming.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl-streaming.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl-streaming.cpp' object='v4l2_ctl-v4l2-ctl-streaming.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl-streaming.obj `if test -f 'v4l2-ctl-streaming.cpp'; then $(CYGPATH_W) 'v4l2-ctl-streaming.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl-streaming.cpp'; fi`
+
+v4l2_ctl-v4l2-ctl-sdr.o: v4l2-ctl-sdr.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl-sdr.o -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl-sdr.Tpo -c -o v4l2_ctl-v4l2-ctl-sdr.o `test -f 'v4l2-ctl-sdr.cpp' || echo '$(srcdir)/'`v4l2-ctl-sdr.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl-sdr.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl-sdr.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl-sdr.cpp' object='v4l2_ctl-v4l2-ctl-sdr.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl-sdr.o `test -f 'v4l2-ctl-sdr.cpp' || echo '$(srcdir)/'`v4l2-ctl-sdr.cpp
+
+v4l2_ctl-v4l2-ctl-sdr.obj: v4l2-ctl-sdr.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl-sdr.obj -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl-sdr.Tpo -c -o v4l2_ctl-v4l2-ctl-sdr.obj `if test -f 'v4l2-ctl-sdr.cpp'; then $(CYGPATH_W) 'v4l2-ctl-sdr.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl-sdr.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl-sdr.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl-sdr.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl-sdr.cpp' object='v4l2_ctl-v4l2-ctl-sdr.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl-sdr.obj `if test -f 'v4l2-ctl-sdr.cpp'; then $(CYGPATH_W) 'v4l2-ctl-sdr.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl-sdr.cpp'; fi`
+
+v4l2_ctl-v4l2-ctl-edid.o: v4l2-ctl-edid.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl-edid.o -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl-edid.Tpo -c -o v4l2_ctl-v4l2-ctl-edid.o `test -f 'v4l2-ctl-edid.cpp' || echo '$(srcdir)/'`v4l2-ctl-edid.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl-edid.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl-edid.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl-edid.cpp' object='v4l2_ctl-v4l2-ctl-edid.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl-edid.o `test -f 'v4l2-ctl-edid.cpp' || echo '$(srcdir)/'`v4l2-ctl-edid.cpp
+
+v4l2_ctl-v4l2-ctl-edid.obj: v4l2-ctl-edid.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl-edid.obj -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl-edid.Tpo -c -o v4l2_ctl-v4l2-ctl-edid.obj `if test -f 'v4l2-ctl-edid.cpp'; then $(CYGPATH_W) 'v4l2-ctl-edid.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl-edid.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl-edid.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl-edid.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl-edid.cpp' object='v4l2_ctl-v4l2-ctl-edid.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl-edid.obj `if test -f 'v4l2-ctl-edid.cpp'; then $(CYGPATH_W) 'v4l2-ctl-edid.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl-edid.cpp'; fi`
+
+v4l2_ctl-v4l2-ctl-modes.o: v4l2-ctl-modes.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl-modes.o -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl-modes.Tpo -c -o v4l2_ctl-v4l2-ctl-modes.o `test -f 'v4l2-ctl-modes.cpp' || echo '$(srcdir)/'`v4l2-ctl-modes.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl-modes.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl-modes.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl-modes.cpp' object='v4l2_ctl-v4l2-ctl-modes.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl-modes.o `test -f 'v4l2-ctl-modes.cpp' || echo '$(srcdir)/'`v4l2-ctl-modes.cpp
+
+v4l2_ctl-v4l2-ctl-modes.obj: v4l2-ctl-modes.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl-modes.obj -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl-modes.Tpo -c -o v4l2_ctl-v4l2-ctl-modes.obj `if test -f 'v4l2-ctl-modes.cpp'; then $(CYGPATH_W) 'v4l2-ctl-modes.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl-modes.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl-modes.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl-modes.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl-modes.cpp' object='v4l2_ctl-v4l2-ctl-modes.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl-modes.obj `if test -f 'v4l2-ctl-modes.cpp'; then $(CYGPATH_W) 'v4l2-ctl-modes.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl-modes.cpp'; fi`
 
 mostlyclean-libtool:
 	-rm -f *.lo

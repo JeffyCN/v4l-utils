@@ -202,6 +202,7 @@ static struct option long_options[] = {
 	{"set-edid", required_argument, 0, OptSetEdid},
 	{"clear-edid", optional_argument, 0, OptClearEdid},
 	{"get-edid", optional_argument, 0, OptGetEdid},
+	{"info-edid", optional_argument, 0, OptInfoEdid},
 	{"fix-edid-checksums", no_argument, 0, OptFixEdidChecksums},
 	{"tuner-index", required_argument, 0, OptTunerIndex},
 	{"list-buffers", no_argument, 0, OptListBuffers},
@@ -215,12 +216,15 @@ static struct option long_options[] = {
 	{"stream-count", required_argument, 0, OptStreamCount},
 	{"stream-skip", required_argument, 0, OptStreamSkip},
 	{"stream-loop", no_argument, 0, OptStreamLoop},
+	{"stream-sleep", required_argument, 0, OptStreamSleep},
 	{"stream-poll", no_argument, 0, OptStreamPoll},
 	{"stream-to", required_argument, 0, OptStreamTo},
+	{"stream-to-host", required_argument, 0, OptStreamToHost},
 	{"stream-mmap", optional_argument, 0, OptStreamMmap},
 	{"stream-user", optional_argument, 0, OptStreamUser},
 	{"stream-dmabuf", no_argument, 0, OptStreamDmaBuf},
 	{"stream-from", required_argument, 0, OptStreamFrom},
+	{"stream-from-host", required_argument, 0, OptStreamFromHost},
 	{"stream-out-pattern", required_argument, 0, OptStreamOutPattern},
 	{"stream-out-square", no_argument, 0, OptStreamOutSquare},
 	{"stream-out-border", no_argument, 0, OptStreamOutBorder},
@@ -442,14 +446,16 @@ static std::string ycbcr_enc2s(int val)
 		return "xvYCC 601";
 	case V4L2_YCBCR_ENC_XV709:
 		return "xvYCC 709";
-	case V4L2_YCBCR_ENC_SYCC:
-		return "sYCC";
 	case V4L2_YCBCR_ENC_BT2020:
 		return "BT.2020";
 	case V4L2_YCBCR_ENC_BT2020_CONST_LUM:
 		return "BT.2020 Constant Luminance";
 	case V4L2_YCBCR_ENC_SMPTE240M:
 		return "SMPTE 240M";
+	case V4L2_HSV_ENC_180:
+		return "HSV with Hue 0-179";
+	case V4L2_HSV_ENC_256:
+		return "HSV with Hue 0-255";
 	default:
 		return "Unknown (" + num2s(val) + ")";
 	}
@@ -531,7 +537,7 @@ void printfmt(const struct v4l2_format &vfmt)
 		printf("\tSize Image        : %u\n", vfmt.fmt.pix.sizeimage);
 		printf("\tColorspace        : %s\n", colorspace2s(vfmt.fmt.pix.colorspace).c_str());
 		printf("\tTransfer Function : %s\n", xfer_func2s(vfmt.fmt.pix.xfer_func).c_str());
-		printf("\tYCbCr Encoding    : %s\n", ycbcr_enc2s(vfmt.fmt.pix.ycbcr_enc).c_str());
+		printf("\tYCbCr/HSV Encoding: %s\n", ycbcr_enc2s(vfmt.fmt.pix.ycbcr_enc).c_str());
 		printf("\tQuantization      : %s\n", quantization2s(vfmt.fmt.pix.quantization).c_str());
 		if (vfmt.fmt.pix.priv == V4L2_PIX_FMT_PRIV_MAGIC)
 			printf("\tFlags             : %s\n", pixflags2s(vfmt.fmt.pix.flags).c_str());
@@ -686,6 +692,8 @@ static std::string cap2s(unsigned cap)
 		s += "\t\tSDR Output\n";
 	if (cap & V4L2_CAP_TUNER)
 		s += "\t\tTuner\n";
+	if (cap & V4L2_CAP_TOUCH)
+		s += "\t\tTouch Device\n";
 	if (cap & V4L2_CAP_HW_FREQ_SEEK)
 		s += "\t\tHW Frequency Seek\n";
 	if (cap & V4L2_CAP_MODULATOR)
@@ -847,7 +855,6 @@ static __u32 parse_ycbcr(const char *s)
 	if (!strcmp(s, "709")) return V4L2_YCBCR_ENC_709;
 	if (!strcmp(s, "xv601")) return V4L2_YCBCR_ENC_XV601;
 	if (!strcmp(s, "xv709")) return V4L2_YCBCR_ENC_XV709;
-	if (!strcmp(s, "sycc")) return V4L2_YCBCR_ENC_SYCC;
 	if (!strcmp(s, "bt2020")) return V4L2_YCBCR_ENC_BT2020;
 	if (!strcmp(s, "bt2020c")) return V4L2_YCBCR_ENC_BT2020_CONST_LUM;
 	if (!strcmp(s, "smpte240m")) return V4L2_YCBCR_ENC_SMPTE240M;

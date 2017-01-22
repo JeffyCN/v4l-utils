@@ -1,17 +1,16 @@
 /*
  * Copyright (c) 2011-2012 - Mauro Carvalho Chehab
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation version 2
- * of the License.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation version 2.1 of the License.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
+ * You should have received a copy of the GNU Lesser General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  * Or, point your browser to http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
@@ -89,13 +88,47 @@ const dvb_table_init_func dvb_table_initializers[256] = {
 	[DVB_TABLE_CAT]          = TABLE_INIT(dvb_table_cat),
 	[DVB_TABLE_PMT]          = TABLE_INIT(dvb_table_pmt),
 	[DVB_TABLE_NIT]          = TABLE_INIT(dvb_table_nit),
+	[DVB_TABLE_NIT2]         = TABLE_INIT(dvb_table_nit),
 	[DVB_TABLE_SDT]          = TABLE_INIT(dvb_table_sdt),
+	[DVB_TABLE_SDT2]         = TABLE_INIT(dvb_table_sdt),
 	[DVB_TABLE_EIT]          = TABLE_INIT(dvb_table_eit),
-	[DVB_TABLE_EIT_SCHEDULE] = TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_OTHER]	 = TABLE_INIT(dvb_table_eit),
 	[ATSC_TABLE_MGT]         = TABLE_INIT(atsc_table_mgt),
 	[ATSC_TABLE_EIT]         = TABLE_INIT(atsc_table_eit),
 	[ATSC_TABLE_TVCT]        = TABLE_INIT(atsc_table_vct),
 	[ATSC_TABLE_CVCT]        = TABLE_INIT(atsc_table_vct),
+	[DVB_TABLE_EIT_SCHEDULE]		= TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_SCHEDULE + 0x01]		= TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_SCHEDULE + 0x02]		= TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_SCHEDULE + 0x03]		= TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_SCHEDULE + 0x04]		= TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_SCHEDULE + 0x05]		= TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_SCHEDULE + 0x06]		= TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_SCHEDULE + 0x07]		= TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_SCHEDULE + 0x08]		= TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_SCHEDULE + 0x09]		= TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_SCHEDULE + 0x0a]		= TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_SCHEDULE + 0x0b]		= TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_SCHEDULE + 0x0c]		= TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_SCHEDULE + 0x0d]		= TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_SCHEDULE + 0x0e]		= TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_SCHEDULE + 0x0f]		= TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_SCHEDULE_OTHER]		= TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_SCHEDULE_OTHER + 0x01]	= TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_SCHEDULE_OTHER + 0x02]	= TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_SCHEDULE_OTHER + 0x03]	= TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_SCHEDULE_OTHER + 0x04]	= TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_SCHEDULE_OTHER + 0x05]	= TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_SCHEDULE_OTHER + 0x06]	= TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_SCHEDULE_OTHER + 0x07]	= TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_SCHEDULE_OTHER + 0x08]	= TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_SCHEDULE_OTHER + 0x09]	= TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_SCHEDULE_OTHER + 0x0a]	= TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_SCHEDULE_OTHER + 0x0b]	= TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_SCHEDULE_OTHER + 0x0c]	= TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_SCHEDULE_OTHER + 0x0d]	= TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_SCHEDULE_OTHER + 0x0e]	= TABLE_INIT(dvb_table_eit),
+	[DVB_TABLE_EIT_SCHEDULE_OTHER + 0x0f]	= TABLE_INIT(dvb_table_eit),
 };
 
 int dvb_desc_parse(struct dvb_v5_fe_parms *parms, const uint8_t *buf,

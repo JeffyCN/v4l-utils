@@ -3,11 +3,13 @@ lib_LTLIBRARIES = libdvbv5.la
 
 otherincludedir = $(includedir)/libdvbv5
 otherinclude_HEADERS = \
+	../include/libdvbv5/libdvb-version.h \
 	../include/libdvbv5/dvb-demux.h \
 	../include/libdvbv5/dvb-v5-std.h \
 	../include/libdvbv5/dvb-file.h \
 	../include/libdvbv5/countries.h \
 	../include/libdvbv5/crc32.h \
+	../include/libdvbv5/dvb-dev.h \
 	../include/libdvbv5/dvb-frontend.h \
 	../include/libdvbv5/dvb-fe.h \
 	../include/libdvbv5/dvb-sat.h \
@@ -66,6 +68,8 @@ libdvbv5_la_SOURCES = \
 	parse_string.c	 \
 	parse_string.h	 \
 	dvb-demux.c	 \
+	dvb-dev.c	 \
+	dvb-dev-local.c	 \
 	dvb-fe.c	 \
 	dvb-fe-priv.h    \
 	dvb-log.c	 \
@@ -106,6 +110,11 @@ libdvbv5_la_SOURCES = \
 	descriptors/desc_partial_reception.c	\
 	descriptors/desc_ca.c			\
 	descriptors/desc_ca_identifier.c
+
+if WITH_DVBV5_REMOTE
+libdvbv5_la_SOURCES += \
+	dvb-dev-remote.c
+endif
 
 libdvbv5_la_CPPFLAGS = -I../.. $(ENFORCE_LIBDVBV5_STATIC)
 libdvbv5_la_LDFLAGS = $(LIBDVBV5_VERSION) $(ENFORCE_LIBDVBV5_STATIC) -lm -lrt

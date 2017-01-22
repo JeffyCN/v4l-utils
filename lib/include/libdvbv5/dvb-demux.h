@@ -1,15 +1,14 @@
 /*
  * Copyright (c) 2011-2014 - Mauro Carvalho Chehab
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation version 2
- * of the License.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation version 2.1 of the License.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Lesser General Public License for more details.
  *
  * These routines were originally written as part of the dvb-apps, as:
  *	util functions for various ?zap implementations
@@ -24,7 +23,7 @@
  * @file dvb-demux.h
  * @ingroup demux
  * @brief Provides interfaces to deal with DVB demux.
- * @copyright GNU General Public License version 2 (GPLv2)
+ * @copyright GNU Lesser General Public License version 2.1 (LGPLv2.1)
  * @author Mauro Carvalho Chehab
  *
  * @par Bug Report
@@ -47,9 +46,12 @@ extern "C" {
  * @param adapter	DVB adapter number to open
  * @param demux		DVB demux number to open
  *
- * @details This is a wrapper function to open. File is always opened in blocking mode.
+ * @details This is a wrapper function to open(). File is always opened in
+ *	blocking mode.
  *
  * @return Returns a file descriptor on success, -1 otherwise.
+ *
+ * @warning Deprecated. Please use dvb_dev_open() instead.
  */
 int dvb_dmx_open(int adapter, int demux);
 
@@ -59,7 +61,9 @@ int dvb_dmx_open(int adapter, int demux);
  *
  * @param dmx_fd	File descriptor to close
  *
- * This is a wrapper function to open.
+ * This is a wrapper function to close().
+ *
+ * @warning Deprecated. Please use dvb_dev_close() instead.
  */
 void dvb_dmx_close(int dmx_fd);
 
@@ -69,7 +73,11 @@ void dvb_dmx_close(int dmx_fd);
  *
  * @param dmx_fd	File descriptor to close
  *
- * This is a wrapper function to open.
+ * This is a wrapper function to DMX_STOP ioctl.
+ * See http://linuxtv.org/downloads/v4l-dvb-apis/dvb_demux.html
+ * for more details.
+ *
+ * @warning Deprecated. Please use dvb_dev_dmx_stop() instead.
  */
 void dvb_dmx_stop(int dmx_fd);
 
@@ -91,6 +99,8 @@ void dvb_dmx_stop(int dmx_fd);
  * for more details.
  *
  * @return Retuns zero on success, -1 otherwise.
+ *
+ * @warning Deprecated. Please use dvb_dev_dmx_set_pesfilter() instead.
  */
 int dvb_set_pesfilter(int dmxfd, int pid, dmx_pes_type_t type,
 		      dmx_output_t output, int buffersize);
@@ -112,7 +122,10 @@ int dvb_set_pesfilter(int dmxfd, int pid, dmx_pes_type_t type,
  * See http://linuxtv.org/downloads/v4l-dvb-apis/dvb_demux.html
  * for more details.
  *
+ * @warning Deprecated. Please use dvb_dev_dmx_set_pesfilter() instead.
+ *
  * @return Retuns zero on success, -1 otherwise.
+ *
  */
 int dvb_set_section_filter(int dmxfd, int pid, unsigned filtsize,
 			   unsigned char *filter,
@@ -128,10 +141,12 @@ int dvb_set_section_filter(int dmxfd, int pid, unsigned filtsize,
  * @param dmxfd		File descriptor for the demux device
  * @param sid		Session ID to seeking
  *
- * @warning This function currently assumes that the PAT fits into one session.
+ * @warning Deprecated. Please use dvb_get_pmt_pid() instead.
  *
  * @return At return, it returns a negative value if error or the PID associated with
  * the desired Session ID.
+ *
+ * @warning This function currently assumes that the PAT fits into one session.
  */
 int dvb_get_pmt_pid(int dmxfd, int sid);
 

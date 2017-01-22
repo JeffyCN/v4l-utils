@@ -1,9 +1,9 @@
 SUBDIRS = \
-	dvb \
 	libv4l2util \
 	libmedia_dev \
 	decode_tm6000 \
 	ivtv-ctl \
+	ir-ctl \
 	cx18-ctl \
 	keytable \
 	media-ctl \
@@ -11,7 +11,15 @@ SUBDIRS = \
 	v4l2-ctl \
 	v4l2-dbg \
 	v4l2-sysfs-path \
+	cec-ctl \
+	cec-compliance \
+	cec-follower \
 	rds-ctl
+
+if WITH_LIBDVBV5
+SUBDIRS += \
+	dvb
+endif
 
 if LINUX_OS
 SUBDIRS += \

@@ -1,17 +1,16 @@
 /*
  * Copyright (c) 2011-2012 - Mauro Carvalho Chehab
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation version 2
- * of the License.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation version 2.1 of the License.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
+ * You should have received a copy of the GNU Lesser General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  * Or, point your browser to http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
@@ -648,8 +647,8 @@ static int fill_entry(struct dvb_entry *entry, char *key, char *value)
 	else if (!strcasecmp(key, "AUDIO_PID"))
 		is_audio = 1;
 	else if (!strcasecmp(key, "POLARIZATION")) {
-		for (j = 0; ARRAY_SIZE(dvb_sat_pol_name); j++)
-			if (!strcasecmp(value, dvb_sat_pol_name[j]))
+		for (j = 0; j < ARRAY_SIZE(dvb_sat_pol_name); j++)
+			if (dvb_sat_pol_name[j] && !strcasecmp(value, dvb_sat_pol_name[j]))
 				break;
 		if (j == ARRAY_SIZE(dvb_sat_pol_name))
 			return -2;
@@ -1232,6 +1231,7 @@ int dvb_store_channel(struct dvb_file **dvb_file,
 {
 	struct dvb_v5_fe_parms_priv *parms = (void *)__p;
 	int rc;
+	int num_services = 0;
 
 	if (!*dvb_file) {
 		*dvb_file = calloc(sizeof(**dvb_file), 1);
@@ -1274,32 +1274,6 @@ int dvb_store_channel(struct dvb_file **dvb_file,
 			return 0;
 	}
 
-
-	if (!dvb_scan_handler->sdt) {
-		int warned = 0;
-		int i;
-
-		for (i = 0; i < dvb_scan_handler->num_program; i++) {
-			unsigned service_id;
-
-			if (!dvb_scan_handler->program[i].pmt)
-				continue;
-
-			service_id = dvb_scan_handler->program[i].pat_pgm->service_id;
-			if (!warned) {
-				dvb_log(_("WARNING: no SDT table - storing channel(s) without their names"));
-				warned = 1;
-			}
-
-			rc = get_program_and_store(parms, *dvb_file, dvb_scan_handler,
-						   service_id, NULL, NULL,
-						   get_detected, get_nit);
-			if (rc < 0)
-				return rc;
-		}
-
-		return 0;
-	}
 	dvb_sdt_service_foreach(service, dvb_scan_handler->sdt) {
 		char *channel = NULL;
 		char *vchannel = NULL;
@@ -1336,6 +1310,47 @@ int dvb_store_channel(struct dvb_file **dvb_file,
 					   get_detected, get_nit);
 		if (rc < 0)
 			return rc;
+
+		num_services++;
+	}
+
+	if (!dvb_scan_handler->sdt || num_services < dvb_scan_handler->num_program) {
+		int warned = 0;
+		int i;
+
+		for (i = 0; i < dvb_scan_handler->num_program; i++) {
+			int found = 0;
+			unsigned service_id;
+
+			if (!dvb_scan_handler->program[i].pmt)
+				continue;
+
+			service_id = dvb_scan_handler->program[i].pat_pgm->service_id;
+			dvb_sdt_service_foreach(service, dvb_scan_handler->sdt) {
+				if (service->service_id == service_id) {
+					found = 1;
+					break;
+				}
+			}
+			if (found)
+				continue;
+
+			if (!warned) {
+				if (!dvb_scan_handler->sdt)
+					dvb_log(_("WARNING: no SDT table - storing channel(s) without their names"));
+				else
+					dvb_log(_("WARNING: Some Service IDs are not at the SDT table"));
+				warned = 1;
+			}
+
+			rc = get_program_and_store(parms, *dvb_file, dvb_scan_handler,
+						   service_id, NULL, NULL,
+						   get_detected, get_nit);
+			if (rc < 0)
+				return rc;
+		}
+
+		return 0;
 	}
 
 	return 0;

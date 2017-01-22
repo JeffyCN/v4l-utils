@@ -36,6 +36,9 @@
 #include <vector>
 
 #include "v4l2-compliance.h"
+#ifndef ANDROID
+#include "version.h"
+#endif
 
 /* Short option list
 
@@ -55,6 +58,7 @@ enum Option {
 	OptSetRadioDevice = 'r',
 	OptStreaming = 's',
 	OptSetSWRadioDevice = 'S',
+	OptSetTouchDevice = 't',
 	OptTrace = 'T',
 	OptVerbose = 'v',
 	OptSetVbiDevice = 'V',
@@ -105,6 +109,7 @@ static struct option long_options[] = {
 	{"vbi-device", required_argument, 0, OptSetVbiDevice},
 	{"sdr-device", required_argument, 0, OptSetSWRadioDevice},
 	{"expbuf-device", required_argument, 0, OptSetExpBufDevice},
+	{"touch-device", required_argument, 0, OptSetTouchDevice},
 	{"help", no_argument, 0, OptHelp},
 	{"verbose", no_argument, 0, OptVerbose},
 	{"no-warnings", no_argument, 0, OptNoWarnings},
@@ -134,6 +139,9 @@ static void usage(void)
 	printf("  -S, --sdr-device=<dev>\n");
 	printf("                     Use device <dev> as the SDR device.\n");
 	printf("                     If <dev> starts with a digit, then /dev/swradio<dev> is used.\n");
+	printf("  -t, --touch-device=<dev>\n");
+	printf("                     Use device <dev> as the touch device.\n");
+	printf("                     If <dev> starts with a digit, then /dev/v4l-touch<dev> is used.\n");
 	printf("  -e, --expbuf-device=<dev>\n");
 	printf("                     Use device <dev> to obtain DMABUF handles.\n");
 	printf("                     If <dev> starts with a digit, then /dev/video<dev> is used.\n");
@@ -206,6 +214,8 @@ std::string cap2s(unsigned cap)
 		s += "\t\tSDR Capture\n";
 	if (cap & V4L2_CAP_SDR_OUTPUT)
 		s += "\t\tSDR Output\n";
+	if (cap & V4L2_CAP_TOUCH)
+		s += "\t\tTouch Device\n";
 	if (cap & V4L2_CAP_TUNER)
 		s += "\t\tTuner\n";
 	if (cap & V4L2_CAP_HW_FREQ_SEEK)
@@ -226,6 +236,19 @@ std::string cap2s(unsigned cap)
 		s += "\t\tExtended Pix Format\n";
 	if (cap & V4L2_CAP_DEVICE_CAPS)
 		s += "\t\tDevice Capabilities\n";
+	return s;
+}
+
+std::string fcc2s(unsigned int val)
+{
+	std::string s;
+
+	s += val & 0x7f;
+	s += (val >> 8) & 0x7f;
+	s += (val >> 16) & 0x7f;
+	s += (val >> 24) & 0x7f;
+	if (val & (1 << 31))
+		s += "-BE";
 	return s;
 }
 
@@ -520,7 +543,8 @@ static int testCap(struct node *node)
 	    memcmp(vcap.bus_info, "ISA:", 4) &&
 	    memcmp(vcap.bus_info, "I2C:", 4) &&
 	    memcmp(vcap.bus_info, "parport", 7) &&
-	    memcmp(vcap.bus_info, "platform:", 9))
+	    memcmp(vcap.bus_info, "platform:", 9) &&
+	    memcmp(vcap.bus_info, "rmi4:", 5))
 		return fail("missing bus_info prefix ('%s')\n", vcap.bus_info);
 	fail_on_test((vcap.version >> 16) < 3);
 	fail_on_test(check_0(vcap.reserved, sizeof(vcap.reserved)));
@@ -572,6 +596,36 @@ static int testCap(struct node *node)
 	// having both mplane and splane caps is not allowed (at least for now)
 	fail_on_test((dcaps & mplane_caps) && (dcaps & splane_caps));
 
+	return 0;
+}
+
+#define NR_OPENS 100
+static int testUnlimitedOpens(struct node *node)
+{
+	int fds[NR_OPENS];
+	unsigned i;
+	bool ok;
+
+	/*
+	 * There should *not* be an artificial limit to the number
+	 * of open()s you can do on a V4L2 device node. So test whether
+	 * you can open a device node at least 100 times.
+	 *
+	 * And please don't start rejecting opens in your driver at 101!
+	 * There really shouldn't be a limit in the driver.
+	 *
+	 * If there are resource limits, then check against those limits
+	 * where they are actually needed.
+	 */
+	for (i = 0; i < NR_OPENS; i++) {
+		fds[i] = open(node->device, O_RDWR);
+		if (fds[i] < 0)
+			break;
+	}
+	ok = i == NR_OPENS;
+	while (i--)
+		close(fds[i]);
+	fail_on_test(!ok);
 	return 0;
 }
 
@@ -660,6 +714,8 @@ int main(int argc, char **argv)
 	struct node radio_node2;
 	struct node sdr_node;
 	struct node sdr_node2;
+	struct node touch_node;
+	struct node touch_node2;
 	struct node expbuf_node;
 
 	/* command args */
@@ -669,6 +725,7 @@ int main(int argc, char **argv)
 	const char *vbi_device = NULL;		/* -V device */
 	const char *radio_device = NULL;	/* -r device */
 	const char *sdr_device = NULL;		/* -S device */
+	const char *touch_device = NULL;	/* -t device */
 	const char *expbuf_device = NULL;	/* --expbuf-device device */
 	struct v4l2_capability vcap;		/* list_cap */
 	unsigned frame_count = 60;
@@ -735,6 +792,15 @@ int main(int argc, char **argv)
 
 				sprintf(newdev, "/dev/swradio%s", sdr_device);
 				sdr_device = newdev;
+			}
+			break;
+		case OptSetTouchDevice:
+			touch_device = optarg;
+			if (touch_device[0] >= '0' && touch_device[0] <= '9' && strlen(touch_device) <= 3) {
+				static char newdev[20];
+
+				sprintf(newdev, "/dev/v4l-touch%s", touch_device);
+				touch_device = newdev;
 			}
 			break;
 		case OptSetExpBufDevice:
@@ -826,7 +892,8 @@ int main(int argc, char **argv)
 	if (v1 == 2 && v2 == 6)
 		kernel_version = v3;
 
-	if (!video_device && !vbi_device && !radio_device && !sdr_device)
+	if (!video_device && !vbi_device && !radio_device &&
+	    !sdr_device && !touch_device)
 		video_device = "/dev/video0";
 
 	if (video_device) {
@@ -873,6 +940,17 @@ int main(int argc, char **argv)
 		}
 	}
 
+	if (touch_device) {
+		touch_node.s_trace(options[OptTrace]);
+		touch_node.s_direct(direct);
+		fd = touch_node.open(touch_device, false);
+		if (fd < 0) {
+			fprintf(stderr, "Failed to open %s: %s\n", touch_device,
+				strerror(errno));
+			exit(1);
+		}
+	}
+
 	if (expbuf_device) {
 		expbuf_node.s_trace(options[OptTrace]);
 		expbuf_node.s_direct(true);
@@ -900,6 +978,10 @@ int main(int argc, char **argv)
 		node = sdr_node;
 		device = sdr_device;
 		node.is_sdr = true;
+	} else if (touch_node.g_fd() >= 0) {
+		node = touch_node;
+		device = touch_device;
+		node.is_touch = true;
 	}
 	node.device = device;
 
@@ -926,10 +1008,17 @@ int main(int argc, char **argv)
 
 	/* Information Opts */
 
+#ifdef SHA
+#define STR(x) #x
+#define STRING(x) STR(x)
+	printf("v4l2-compliance SHA   : %s\n", STRING(SHA));
+#else
+	printf("v4l2-compliance SHA   : not available\n");
+#endif
 	if (kernel_version)
-		printf("Running on 2.6.%d\n\n", kernel_version);
+		printf("Running on 2.6.%d\n", kernel_version);
 
-	printf("Driver Info:\n");
+	printf("\nDriver Info:\n");
 	printf("\tDriver name   : %s\n", vcap.driver);
 	printf("\tCard type     : %s\n", vcap.card);
 	printf("\tBus info      : %s\n", vcap.bus_info);
@@ -1000,6 +1089,8 @@ int main(int argc, char **argv)
 			node.node2 = &sdr_node2;
 		}
 	}
+	printf("\ttest for unlimited opens: %s\n",
+		ok(testUnlimitedOpens(&node)));
 	printf("\n");
 
 	storeState(&node);
@@ -1055,6 +1146,7 @@ int main(int argc, char **argv)
 		node.controls.clear();
 		node.frmsizes.clear();
 		node.frmsizes_count.clear();
+		node.has_frmintervals = false;
 		for (unsigned idx = 0; idx < V4L2_BUF_TYPE_LAST + 1; idx++)
 			node.buftype_pixfmts[idx].clear();
 
@@ -1085,7 +1177,7 @@ int main(int argc, char **argv)
 		printf("\t\ttest VIDIOC_QUERYCTRL: %s\n", ok(testQueryControls(&node)));
 		printf("\t\ttest VIDIOC_G/S_CTRL: %s\n", ok(testSimpleControls(&node)));
 		printf("\t\ttest VIDIOC_G/S/TRY_EXT_CTRLS: %s\n", ok(testExtendedControls(&node)));
-		printf("\t\ttest VIDIOC_(UN)SUBSCRIBE_EVENT/DQEVENT: %s\n", ok(testControlEvents(&node)));
+		printf("\t\ttest VIDIOC_(UN)SUBSCRIBE_EVENT/DQEVENT: %s\n", ok(testEvents(&node)));
 		printf("\t\ttest VIDIOC_G/S_JPEGCOMP: %s\n", ok(testJpegComp(&node)));
 		printf("\t\tStandard Controls: %d Private Controls: %d\n",
 				node.std_controls, node.priv_controls);
@@ -1185,6 +1277,17 @@ int main(int argc, char **argv)
 			}
 		}
 	}
+	if (touch_device) {
+		touch_node2 = node;
+		printf("\ttest second touch open: %s\n",
+				ok(touch_node2.open(touch_device, false) >= 0 ? 0 : errno));
+		if (touch_node2.g_fd() >= 0) {
+			printf("\ttest VIDIOC_QUERYCAP: %s\n", ok(testCap(&touch_node2)));
+			printf("\ttest VIDIOC_G/S_PRIORITY: %s\n",
+					ok(testPrio(&node, &touch_node2)));
+			node.node2 = &touch_node2;
+		}
+	}
 	printf("\n");
 
 	/*
@@ -1203,5 +1306,11 @@ int main(int argc, char **argv)
 		expbuf_node.close();
 	printf("Total: %d, Succeeded: %d, Failed: %d, Warnings: %d\n",
 			tests_total, tests_ok, tests_total - tests_ok, warnings);
+	if (!strcmp((const char *)vcap.driver, "vivid") && tests_total - tests_ok > 19) {
+		printf("\nThis vivid driver has error injection controls that cause the compliance\n");
+	        printf("tests to fail unless you load the vivid module with the no_error_inj=1\n");
+		printf("module option to disable those error injection controls. It looks from\n");
+		printf("the number of failures that that wasn't done.\n");
+	}
 	exit(app_result);
 }

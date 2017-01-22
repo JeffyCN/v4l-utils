@@ -47,6 +47,7 @@
 #include <linux/dvb/dmx.h>
 #include "libdvbv5/dvb-file.h"
 #include "libdvbv5/dvb-demux.h"
+#include "libdvbv5/dvb-dev.h"
 #include "libdvbv5/dvb-v5-std.h"
 #include "libdvbv5/dvb-scan.h"
 #include "libdvbv5/countries.h"
@@ -60,7 +61,7 @@ const char *argp_program_bug_address = "Mauro Carvalho Chehab <m.chehab@samsung.
 struct arguments {
 	char *confname, *lnb_name, *output, *demux_dev;
 	unsigned adapter, n_adapter, adapter_fe, adapter_dmx, frontend, demux, get_detected, get_nit;
-	int force_dvbv3, lna, lnb, sat_number, freq_bpf;
+	int lna, lnb, sat_number, freq_bpf;
 	unsigned diseqc_wait, dont_add_new_freqs, timeout_multiply;
 	unsigned other_nit;
 	enum dvb_file_formats input_format, output_format;
@@ -88,7 +89,6 @@ static const struct argp_option options[] = {
 	{"parse-other-nit", 'p', NULL,			0, N_("Parse the other NIT/SDT tables"), 0},
 	{"input-format", 'I',	N_("format"),		0, N_("Input format: CHANNEL, DVBV5 (default: DVBV5)"), 0},
 	{"output-format", 'O',	N_("format"),		0, N_("Output format: VDR, CHANNEL, ZAP, DVBV5 (default: DVBV5)"), 0},
-	{"dvbv3",	'3',	0,			0, N_("Use DVBv3 only"), 0},
 	{"cc",		'C',	N_("country_code"),	0, N_("Set the default country to be used (in ISO 3166-1 two letter code)"), 0},
 	{"help",        '?',	0,		0,	N_("Give this help list"), -1},
 	{"usage",	-3,	0,		0,	N_("Give a short usage message")},
@@ -213,12 +213,13 @@ static int check_frontend(void *__args,
 	return (status & FE_HAS_LOCK) ? 0 : -1;
 }
 
-static int run_scan(struct arguments *args,
-		    struct dvb_v5_fe_parms *parms)
+static int run_scan(struct arguments *args, struct dvb_device *dvb)
 {
+	struct dvb_v5_fe_parms *parms = dvb->fe_parms;
 	struct dvb_file *dvb_file = NULL, *dvb_file_new = NULL;
 	struct dvb_entry *entry;
-	int count = 0, dmx_fd, shift;
+	struct dvb_open_descriptor *dmx_fd;
+	int count = 0, shift;
 	uint32_t freq, sys;
 	enum dvb_sat_polarization pol;
 
@@ -249,9 +250,10 @@ static int run_scan(struct arguments *args,
 	if (!dvb_file)
 		return -2;
 
-	dmx_fd = open(args->demux_dev, O_RDWR);
-	if (dmx_fd < 0) {
-		perror(_("openening pat demux failed"));
+	/* FIXME: should be replaced by dvb_dev_open() */
+	dmx_fd = dvb_dev_open(dvb, args->demux_dev, O_RDWR);
+	if (!dmx_fd) {
+		perror(_("opening demux failed"));
 		return -3;
 	}
 
@@ -293,10 +295,10 @@ static int run_scan(struct arguments *args,
 		 * Run the scanning logic
 		 */
 
-		dvb_scan_handler = dvb_scan_transponder(parms, entry, dmx_fd,
-							&check_frontend, args,
-							args->other_nit,
-							args->timeout_multiply);
+		dvb_scan_handler = dvb_dev_scan(dmx_fd, entry,
+						&check_frontend, args,
+						args->other_nit,
+						args->timeout_multiply);
 
 		if (parms->abort) {
 			dvb_scan_free_handler_table(dvb_scan_handler);
@@ -333,7 +335,7 @@ static int run_scan(struct arguments *args,
 	if (dvb_file_new)
 		dvb_file_free(dvb_file_new);
 
-	close(dmx_fd);
+	dvb_dev_close(dmx_fd);
 	return 0;
 }
 
@@ -409,9 +411,6 @@ static error_t parse_opt(int k, char *optarg, struct argp_state *state)
 	case 'o':
 		args->output = optarg;
 		break;
-	case '3':
-		args->force_dvbv3 = 1;
-		break;
 	case 'C':
 		args->cc = strndup(optarg, 2);
 		break;
@@ -453,7 +452,9 @@ int main(int argc, char **argv)
 {
 	struct arguments args;
 	int err, lnb = -1,idx = -1;
-	int r;
+	struct dvb_device *dvb;
+	struct dvb_dev_list *dvb_dev;
+	struct dvb_v5_fe_parms *parms;
 	const struct argp argp = {
 		.options = options,
 		.parser = parse_opt,
@@ -476,7 +477,11 @@ int main(int argc, char **argv)
 	args.adapter = (unsigned)-1;
 	args.lna = LNA_AUTO;
 
-	argp_parse(&argp, argc, argv, ARGP_NO_HELP | ARGP_NO_EXIT, &idx, &args);
+	if (argp_parse(&argp, argc, argv, ARGP_NO_HELP | ARGP_NO_EXIT, &idx, &args)) {
+		argp_help(&argp, stderr, ARGP_HELP_SHORT_USAGE, PROGRAM_NAME);
+		return -1;
+	}
+
 	if (args.timeout_multiply == 0)
 		args.timeout_multiply = 1;
 
@@ -512,42 +517,51 @@ int main(int argc, char **argv)
 		return -1;
 	}
 
-	r = asprintf(&args.demux_dev,
-		 "/dev/dvb/adapter%i/demux%i", args.adapter_dmx, args.demux);
-	if (r < 0) {
-		fprintf(stderr, _("asprintf error\n") );
+	dvb = dvb_dev_alloc();
+	if (!dvb)
+		return -1;
+	dvb_dev_set_log(dvb, verbose, NULL);
+	dvb_dev_find(dvb, NULL);
+	parms = dvb->fe_parms;
+
+	dvb_dev = dvb_dev_seek_by_sysname(dvb, args.adapter_dmx, args.demux, DVB_DEVICE_DEMUX);
+	if (!dvb_dev) {
+		fprintf(stderr, _("Couldn't find demux device node\n"));
+		dvb_dev_free(dvb);
 		return -1;
 	}
+	args.demux_dev = dvb_dev->sysname;
 
 	if (verbose)
 		fprintf(stderr, _("using demux '%s'\n"), args.demux_dev);
 
-	struct dvb_v5_fe_parms *parms = dvb_fe_open(args.adapter_fe,
-						    args.frontend,
-						    verbose, args.force_dvbv3);
-	if (!parms) {
+	dvb_dev = dvb_dev_seek_by_sysname(dvb, args.adapter_fe, args.frontend,
+					  DVB_DEVICE_FRONTEND);
+	if (!dvb_dev)
+		return -1;
+
+	if (!dvb_dev_open(dvb, dvb_dev->sysname, O_RDWR)) {
 		free(args.demux_dev);
 		return -1;
 	}
 	if (lnb >= 0)
 		parms->lnb = dvb_sat_get_lnb(lnb);
 	if (args.sat_number >= 0)
-		parms->sat_number = args.sat_number % 3;
+		parms->sat_number = args.sat_number;
 	parms->diseqc_wait = args.diseqc_wait;
 	parms->freq_bpf = args.freq_bpf;
 	parms->lna = args.lna;
-	r = dvb_fe_set_default_country(parms, args.cc);
-	if (r < 0)
+	err = dvb_fe_set_default_country(parms, args.cc);
+	if (err < 0)
 		fprintf(stderr, _("Failed to set the country code:%s\n"), args.cc);
 
 	timeout_flag = &parms->abort;
 	signal(SIGTERM, do_timeout);
 	signal(SIGINT, do_timeout);
 
-	err = run_scan(&args, parms);
+	err = run_scan(&args, dvb);
 
-	dvb_fe_close(parms);
-	free(args.demux_dev);
+	dvb_dev_free(dvb);
 
 	return err;
 }

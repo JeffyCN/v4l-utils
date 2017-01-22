@@ -362,6 +362,7 @@ static const flag_def dv_standards_def[] = {
 	{ V4L2_DV_BT_STD_DMT, "DMT" },
 	{ V4L2_DV_BT_STD_CVT, "CVT" },
 	{ V4L2_DV_BT_STD_GTF, "GTF" },
+	{ V4L2_DV_BT_STD_SDI, "SDI" },
 	{ 0, NULL }
 };
 
@@ -381,6 +382,8 @@ static std::string dvflags2s(unsigned vsync, int val)
 		s += "half-line, ";
 	if (val & V4L2_DV_FL_IS_CE_VIDEO)
 		s += "CE-video, ";
+	if (val & V4L2_DV_FL_FIRST_FIELD_EXTRA_LINE)
+		s += "first field has extra line, ";
 	if (s.length())
 		return s.erase(s.length() - 2, 2);
 	return s;
@@ -505,15 +508,17 @@ void stds_set(int fd)
 	}
 
 	if (options[OptSetDvBtTimings]) {
-		struct v4l2_enum_dv_timings et;
+		struct v4l2_enum_dv_timings et = {};
 		struct v4l2_dv_timings new_dv_timings = {};
 
 		if (query_and_set_dv_timings)
 			doioctl(fd, VIDIOC_QUERY_DV_TIMINGS, &new_dv_timings);
 		else if (enum_and_set_dv_timings >= 0) {
-			memset(&et, 0, sizeof(et));
+			__u32 reduced_fps = dv_timings.bt.flags & V4L2_DV_FL_REDUCED_FPS;
+
 			et.index = enum_and_set_dv_timings;
 			doioctl(fd, VIDIOC_ENUM_DV_TIMINGS, &et);
+			et.timings.bt.flags |= reduced_fps;
 			new_dv_timings = et.timings;
 		} else if (cleared_dv_timings) {
 			new_dv_timings = dv_timings;
@@ -600,7 +605,7 @@ void stds_get(int fd)
 	}
 
 	if (options[OptGetDvTimingsCap]) {
-		struct v4l2_dv_timings_cap dv_timings_cap;
+		struct v4l2_dv_timings_cap dv_timings_cap = {};
 
 		if (doioctl(fd, VIDIOC_DV_TIMINGS_CAP, &dv_timings_cap) >= 0) {
 			static const flag_def dv_caps_def[] = {
@@ -670,9 +675,8 @@ void stds_list(int fd)
 	}
 
 	if (options[OptListDvTimings]) {
-		struct v4l2_enum_dv_timings dv_enum_timings;
+		struct v4l2_enum_dv_timings dv_enum_timings = {};
 
-		dv_enum_timings.index = 0;
 		printf("ioctl: VIDIOC_ENUM_DV_TIMINGS\n");
 		while (test_ioctl(fd, VIDIOC_ENUM_DV_TIMINGS, &dv_enum_timings) >= 0) {
 			if (options[OptConcise]) {

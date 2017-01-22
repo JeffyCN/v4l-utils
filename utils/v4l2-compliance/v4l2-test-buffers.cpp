@@ -290,7 +290,7 @@ int buffer::check(unsigned type, unsigned memory, unsigned index,
 			fail_on_test(g_bytesused(p) > g_length(p));
 		}
 		fail_on_test(!g_timestamp().tv_sec && !g_timestamp().tv_usec);
-		fail_on_test(!(g_flags() & V4L2_BUF_FLAG_DONE));
+		fail_on_test(g_flags() & V4L2_BUF_FLAG_DONE);
 		fail_on_test((int)g_sequence() < seq.last_seq + 1);
 		if (v4l_type_is_video(g_type())) {
 			fail_on_test(g_field() == V4L2_FIELD_ALTERNATE);
@@ -719,7 +719,9 @@ static int captureBufs(struct node *node, const cv4l_queue &q,
 					fail_on_test(memcmp(&buf.g_timecode(), &orig_buf.timecode,
 								sizeof(orig_buf.timecode)));
 			}
+			fail_on_test(buf.g_flags() & V4L2_BUF_FLAG_DONE);
 			fail_on_test(buf.qbuf(node));
+			fail_on_test(buf.g_flags() & V4L2_BUF_FLAG_DONE);
 			if (--count == 0)
 				break;
 		}
@@ -746,7 +748,9 @@ static int captureBufs(struct node *node, const cv4l_queue &q,
 				fail_on_test(memcmp(&buf.g_timecode(), &orig_buf.timecode,
 							sizeof(orig_buf.timecode)));
 		}
+		fail_on_test(buf.g_flags() & V4L2_BUF_FLAG_DONE);
 		fail_on_test(buf.qbuf(node));
+		fail_on_test(buf.g_flags() & V4L2_BUF_FLAG_DONE);
 	}
 	if (use_poll)
 		fcntl(node->g_fd(), F_SETFL, fd_flags);
@@ -755,17 +759,6 @@ static int captureBufs(struct node *node, const cv4l_queue &q,
 		fflush(stdout);
 	}
 	return 0;
-}
-
-static unsigned invert_buf_type(unsigned type)
-{
-	if (v4l_type_is_planar(type))
-		return v4l_type_is_output(type) ?
-			V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE :
-			V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
-	return v4l_type_is_output(type) ?
-		V4L2_BUF_TYPE_VIDEO_CAPTURE :
-		V4L2_BUF_TYPE_VIDEO_OUTPUT;
 }
 
 static int setupM2M(struct node *node, cv4l_queue &q)
@@ -778,6 +771,7 @@ static int setupM2M(struct node *node, cv4l_queue &q)
 
 		fail_on_test(buf.querybuf(node, i));
 		fail_on_test(buf.qbuf(node));
+		fail_on_test(buf.g_flags() & V4L2_BUF_FLAG_DONE);
 	}
 	if (v4l_type_is_video(q.g_type())) {
 		cv4l_fmt fmt(q.g_type());
@@ -828,6 +822,7 @@ static int bufferOutputErrorTest(struct node *node, const buffer &orig_buf)
 		}
 	}
 	fail_on_test(buf.qbuf(node, false));
+	fail_on_test(buf.g_flags() & V4L2_BUF_FLAG_DONE);
 	for (unsigned p = 0; p < buf.g_num_planes(); p++) {
 		fail_on_test(buf.g_bytesused(p) != buf.g_length(p));
 		fail_on_test(buf.g_data_offset(p));
@@ -864,6 +859,7 @@ static int setupMmap(struct node *node, cv4l_queue &q)
 			}
 
 			fail_on_test(buf.qbuf(node));
+			fail_on_test(buf.g_flags() & V4L2_BUF_FLAG_DONE);
 			fail_on_test(!buf.qbuf(node));
 			fail_on_test(!buf.prepare_buf(node));
 			// Test with invalid buffer index
@@ -900,7 +896,7 @@ int testMmap(struct node *node, unsigned frame_count)
 			continue;
 
 		cv4l_queue q(type, V4L2_MEMORY_MMAP);
-		cv4l_queue m2m_q(invert_buf_type(type));
+		cv4l_queue m2m_q(v4l_type_invert(type));
 	
 		if (testSetupVbi(node, type))
 			continue;
@@ -926,6 +922,7 @@ int testMmap(struct node *node, unsigned frame_count)
 
 			fail_on_test(buf.querybuf(node, i));
 			fail_on_test(buf.qbuf(node));
+			fail_on_test(buf.g_flags() & V4L2_BUF_FLAG_DONE);
 		}
 		// calling STREAMOFF...
 		fail_on_test(node->streamoff(q.g_type()));
@@ -936,6 +933,7 @@ int testMmap(struct node *node, unsigned frame_count)
 
 			fail_on_test(buf.querybuf(node, i));
 			fail_on_test(buf.qbuf(node));
+			fail_on_test(buf.g_flags() & V4L2_BUF_FLAG_DONE);
 		}
 		// Now request buffers again, freeing the old buffers.
 		// Good check for whether all the internal vb2 calls are in
@@ -955,8 +953,7 @@ int testMmap(struct node *node, unsigned frame_count)
 				fmt.s_height(fmt.g_height() / 2);
 				for (unsigned p = 0; p < fmt.g_num_planes(); p++)
 					fmt.s_sizeimage(fmt.g_sizeimage(p) / 2, p);
-				ret = q.create_bufs(node, 1, &fmt);
-				fail_on_test(ret != EINVAL);
+				fail_on_test(q.create_bufs(node, 1, &fmt) != EINVAL);
 				fail_on_test(testQueryBuf(node, cur_fmt.type, q.g_buffers()));
 				fmt = cur_fmt;
 				for (unsigned p = 0; p < fmt.g_num_planes(); p++)
@@ -1041,6 +1038,7 @@ static int setupUserPtr(struct node *node, cv4l_queue &q)
 		}
 
 		fail_on_test(buf.qbuf(node));
+		fail_on_test(buf.g_flags() & V4L2_BUF_FLAG_DONE);
 		fail_on_test(buf.querybuf(node, i));
 		fail_on_test(buf.check(q, Queued, i));
 	}
@@ -1064,7 +1062,7 @@ int testUserPtr(struct node *node, unsigned frame_count)
 			continue;
 
 		cv4l_queue q(type, V4L2_MEMORY_USERPTR);
-		cv4l_queue m2m_q(invert_buf_type(type));
+		cv4l_queue m2m_q(v4l_type_invert(type));
 
 		if (testSetupVbi(node, type))
 			continue;
@@ -1142,6 +1140,7 @@ static int setupDmaBuf(struct node *expbuf_node, struct node *node,
 		}
 
 		fail_on_test(buf.qbuf(node));
+		fail_on_test(buf.g_flags() & V4L2_BUF_FLAG_DONE);
 		fail_on_test(buf.querybuf(node, i));
 		fail_on_test(buf.check(q, Queued, i));
 	}
@@ -1177,7 +1176,7 @@ int testDmaBuf(struct node *expbuf_node, struct node *node, unsigned frame_count
 			expbuf_type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
 
 		cv4l_queue q(type, V4L2_MEMORY_DMABUF);
-		cv4l_queue m2m_q(invert_buf_type(type));
+		cv4l_queue m2m_q(v4l_type_invert(type));
 		cv4l_queue exp_q(expbuf_type, V4L2_MEMORY_MMAP);
 
 		if (testSetupVbi(node, type))
@@ -1319,6 +1318,7 @@ static int testStreaming(struct node *node, unsigned frame_count)
 			if (alternate)
 				field ^= 1;
 			fail_on_test(node->qbuf(buf));
+			fail_on_test(buf.g_flags() & V4L2_BUF_FLAG_DONE);
 		}
 		fail_on_test(node->streamon());
 
@@ -1327,10 +1327,12 @@ static int testStreaming(struct node *node, unsigned frame_count)
 					buftype2s(q.g_type()).c_str(),
 					buf.g_sequence(), field2s(buf.g_field()).c_str());
 			fflush(stdout);
+			fail_on_test(buf.g_flags() & V4L2_BUF_FLAG_DONE);
 			buf.s_field(field);
 			if (alternate)
 				field ^= 1;
 			fail_on_test(node->qbuf(buf));
+			fail_on_test(buf.g_flags() & V4L2_BUF_FLAG_DONE);
 			if (frame_count-- == 0)
 				break;
 		}

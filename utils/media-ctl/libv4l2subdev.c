@@ -308,6 +308,7 @@ static int v4l2_subdev_parse_format(struct media_device *media,
 {
 	enum v4l2_mbus_pixelcode code;
 	unsigned int width, height;
+	char *fmt;
 	char *end;
 
 	/*
@@ -318,7 +319,12 @@ static int v4l2_subdev_parse_format(struct media_device *media,
 	for (end = (char *)p;
 	     *end != '/' && *end != ' ' && *end != '\0'; ++end);
 
-	code = v4l2_subdev_string_to_pixelcode(p, end - p);
+	fmt = strndup(p, end - p);
+	if (!fmt)
+		return -ENOMEM;
+
+	code = v4l2_subdev_string_to_pixelcode(fmt);
+	free(fmt);
 	if (code == (enum v4l2_mbus_pixelcode)-1) {
 		media_dbg(media, "Invalid pixel code '%.*s'\n", end - p, p);
 		return -EINVAL;
@@ -475,11 +481,19 @@ static struct media_pad *v4l2_subdev_parse_pad_format(
 
 		if (strhazit("field:", &p)) {
 			enum v4l2_field field;
+			char *strfield;
 
 			for (end = (char *)p; isalpha(*end) || *end == '-';
 			     ++end);
 
-			field = v4l2_subdev_string_to_field(p, end - p);
+			strfield = strndup(p, end - p);
+			if (!strfield) {
+				*endp = (char *)p;
+				return NULL;
+			}
+
+			field = v4l2_subdev_string_to_field(strfield);
+			free(strfield);
 			if (field == (enum v4l2_field)-1) {
 				media_dbg(media, "Invalid field value '%*s'\n",
 					  end - p, p);
@@ -709,16 +723,18 @@ int v4l2_subdev_parse_setup_formats(struct media_device *media, const char *p)
 		if (ret < 0)
 			return ret;
 
+		for (; isspace(*end); end++);
 		p = end + 1;
 	} while (*end == ',');
 
 	return *end ? -EINVAL : 0;
 }
 
-static struct {
+static const struct {
 	const char *name;
 	enum v4l2_mbus_pixelcode code;
 } mbus_formats[] = {
+#include "media-bus-format-names.h"
 	{ "Y8", MEDIA_BUS_FMT_Y8_1X8},
 	{ "Y10", MEDIA_BUS_FMT_Y10_1X10 },
 	{ "Y12", MEDIA_BUS_FMT_Y12_1X12 },
@@ -763,20 +779,16 @@ const char *v4l2_subdev_pixelcode_to_string(enum v4l2_mbus_pixelcode code)
 	return "unknown";
 }
 
-enum v4l2_mbus_pixelcode v4l2_subdev_string_to_pixelcode(const char *string,
-							 unsigned int length)
+enum v4l2_mbus_pixelcode v4l2_subdev_string_to_pixelcode(const char *string)
 {
 	unsigned int i;
 
 	for (i = 0; i < ARRAY_SIZE(mbus_formats); ++i) {
-		if (strncmp(mbus_formats[i].name, string, length) == 0)
-			break;
+		if (strcmp(mbus_formats[i].name, string) == 0)
+			return mbus_formats[i].code;
 	}
 
-	if (i == ARRAY_SIZE(mbus_formats))
-		return (enum v4l2_mbus_pixelcode)-1;
-
-	return mbus_formats[i].code;
+	return (enum v4l2_mbus_pixelcode)-1;
 }
 
 static struct {
@@ -807,18 +819,25 @@ const char *v4l2_subdev_field_to_string(enum v4l2_field field)
 	return "unknown";
 }
 
-enum v4l2_field v4l2_subdev_string_to_field(const char *string,
-					    unsigned int length)
+enum v4l2_field v4l2_subdev_string_to_field(const char *string)
 {
 	unsigned int i;
 
 	for (i = 0; i < ARRAY_SIZE(fields); ++i) {
-		if (strncasecmp(fields[i].name, string, length) == 0)
-			break;
+		if (strcasecmp(fields[i].name, string) == 0)
+			return fields[i].field;
 	}
 
-	if (i == ARRAY_SIZE(fields))
-		return (enum v4l2_field)-1;
+	return (enum v4l2_field)-1;
+}
 
-	return fields[i].field;
+static const enum v4l2_mbus_pixelcode mbus_codes[] = {
+#include "media-bus-format-codes.h"
+};
+
+const enum v4l2_mbus_pixelcode *v4l2_subdev_pixelcode_list(unsigned int *length)
+{
+	*length = ARRAY_SIZE(mbus_codes);
+
+	return mbus_codes;
 }

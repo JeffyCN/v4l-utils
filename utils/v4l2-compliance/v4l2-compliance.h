@@ -29,6 +29,12 @@
 #include <map>
 #include <linux/videodev2.h>
 
+#ifdef ANDROID
+#include <android-config.h>
+#else
+#include <config.h>
+#endif
+
 #ifndef NO_LIBV4L2
 #include <libv4l2.h>
 #endif
@@ -62,6 +68,7 @@ struct base_node {
 	bool is_radio;
 	bool is_vbi;
 	bool is_sdr;
+	bool is_touch;
 	bool is_m2m;
 	bool is_planar;
 	bool can_capture;
@@ -84,6 +91,7 @@ struct base_node {
 	pixfmt_map buftype_pixfmts[V4L2_BUF_TYPE_LAST + 1];
 	frmsizes_set frmsizes;
 	frmsizes_count_map frmsizes_count;
+	bool has_frmintervals;
 	__u32 valid_buftypes;
 	__u32 valid_buftype;
 	__u32 valid_memorytype;
@@ -150,6 +158,8 @@ static inline double fract2f(const struct v4l2_fract *f)
 
 std::string cap2s(unsigned cap);
 std::string buftype2s(int type);
+std::string fcc2s(unsigned int val);
+
 static inline std::string buftype2s(enum v4l2_buf_type type)
 {
        return buftype2s((int)type);
@@ -186,7 +196,7 @@ int testQueryExtControls(struct node *node);
 int testQueryControls(struct node *node);
 int testSimpleControls(struct node *node);
 int testExtendedControls(struct node *node);
-int testControlEvents(struct node *node);
+int testEvents(struct node *node);
 int testJpegComp(struct node *node);
 
 // I/O configuration ioctl tests

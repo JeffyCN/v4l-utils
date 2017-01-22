@@ -3,7 +3,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.59)
-AC_INIT([v4l-utils],[1.10.1])
+AC_INIT([v4l-utils],[1.12.0])
 
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIR([m4])
@@ -24,6 +24,7 @@ AC_CONFIG_FILES([Makefile
 	utils/decode_tm6000/Makefile
 	utils/dvb/Makefile
 	utils/keytable/Makefile
+	utils/ir-ctl/Makefile
 	utils/cx18-ctl/Makefile
 	utils/ivtv-ctl/Makefile
 	utils/media-ctl/Makefile
@@ -34,6 +35,12 @@ AC_CONFIG_FILES([Makefile
 	utils/v4l2-sysfs-path/Makefile
 	utils/xc3028-firmware/Makefile
 	utils/qv4l2/Makefile
+	utils/cec-ctl/Makefile
+	utils/cec-ctl/cec-ctl.1
+	utils/cec-compliance/Makefile
+	utils/cec-compliance/cec-compliance.1
+	utils/cec-follower/Makefile
+	utils/cec-follower/cec-follower.1
 	utils/rds-ctl/Makefile
 
 	contrib/Makefile
@@ -54,10 +61,13 @@ AC_CONFIG_FILES([Makefile
 	utils/media-ctl/libmediactl.pc
 	utils/media-ctl/libv4l2subdev.pc
 
+	lib/include/libdvbv5/libdvb-version.h
+
 	utils/qv4l2/qv4l2.1
 	utils/v4l2-compliance/v4l2-compliance.1
 	utils/v4l2-ctl/v4l2-ctl.1
 	utils/keytable/ir-keytable.1
+	utils/ir-ctl/ir-ctl.1
 	utils/dvb/dvb-fe-tool.1
 	utils/dvb/dvbv5-scan.1
 	utils/dvb/dvb-format-convert.1
@@ -142,6 +152,9 @@ case "$host_os" in
   linux*)
     linux_os="yes"
     ;;
+  freebsd*)
+    freebsd_os="yes"
+    ;;
 esac
 
 AM_CONDITIONAL([LINUX_OS], [test x$linux_os = xyes])
@@ -154,13 +167,13 @@ AC_SUBST([X11_LIBS])
 AM_CONDITIONAL([HAVE_X11], [test x$x11_pkgconfig = xyes])
 
 AS_IF([test "x$x11_pkgconfig" = xyes],
-      [PKG_CHECK_MODULES(GL, [gl], [gl_pkgconfig=yes], [gl_pkgconfig=no])])
+      [PKG_CHECK_MODULES(GL, [gl], [gl_pkgconfig=yes], [gl_pkgconfig=no])], [gl_pkgconfig=no])
 AC_SUBST([GL_CFLAGS])
 AC_SUBST([GL_LIBS])
 AM_CONDITIONAL([HAVE_GL], [test x$gl_pkgconfig = xyes])
 
 AS_IF([test "x$gl_pkgconfig" = xyes],
-      [PKG_CHECK_MODULES(GLU, [glu], [glu_pkgconfig=yes], [glu_pkgconfig=no])])
+      [PKG_CHECK_MODULES(GLU, [glu], [glu_pkgconfig=yes], [glu_pkgconfig=no])], [glu_pkgconfig=no])
 
 AC_SUBST([GLU_CFLAGS])
 AC_SUBST([GLU_LIBS])
@@ -175,13 +188,17 @@ AS_IF([test "x$with_jpeg" != xno],
       [AC_CHECK_HEADER([jpeglib.h],
                        [AC_CHECK_LIB([jpeg],
                                      [jpeg_read_header],
-                                     [have_jpeg=:
+                                     [have_jpeg=yes
                                       JPEG_LIBS="-ljpeg"
                                       AC_DEFINE([HAVE_JPEG],[1],[whether we use libjpeg])],
-                                     [AC_MSG_ERROR(cannot find libjpeg (v6 or later required))])],
-                       [AC_MSG_ERROR(cannot find jpeglib.h)])])
+                                     [have_jpeg=no
+                                      AC_MSG_WARN(cannot find libjpeg (v6 or later required))])],
+                       [have_jpeg=no
+                        AC_MSG_WARN(cannot find libjpeg)])])
 
-AM_CONDITIONAL([HAVE_JPEG], [$have_jpeg])
+AM_CONDITIONAL([HAVE_JPEG], [test x$have_jpeg = xyes])
+
+QT_VERSION="none"
 
 PKG_CHECK_MODULES(QT5, [Qt5Core >= 5.0 Qt5Gui >= 5.0 Qt5Widgets >= 5.0], [qt_pkgconfig=true], [qt_pkgconfig=false])
 if test "x$qt_pkgconfig" = "xtrue"; then
@@ -202,7 +219,9 @@ if test "x$qt_pkgconfig" = "xtrue"; then
       AC_SUBST(QT_CFLAGS)
       AC_SUBST(QT_LIBS)
       AC_DEFINE([HAVE_QTGL], [1], [qt has opengl support])
+      QT_VERSION="v5 with QtGL"
    else
+      QT_VERSION="v5"
       AC_MSG_WARN(Qt5 OpenGL is not available)
     fi
 else
@@ -220,7 +239,9 @@ else
       PKG_CHECK_MODULES(QTGL, [QtOpenGL >= 4.8 gl], [qt_pkgconfig_gl=true], [qt_pkgconfig_gl=false])
       if test "x$qt_pkgconfig_gl" = "xtrue"; then
          AC_DEFINE([HAVE_QTGL], [1], [qt has opengl support])
+         QT_VERSION="v4 with QtGL"
       else
+         QT_VERSION="v4"
          AC_MSG_WARN(Qt4 OpenGL is not available)
       fi
    else
@@ -236,28 +257,26 @@ else
    AC_MSG_WARN(ALSA library not available)
 fi
 
-AC_ARG_WITH([libudev],
-    AS_HELP_STRING([--with-libudev],
-	[Enable libudev to detect a device name]))
-
-AS_IF([test "x$with_libudev" = "xyes"],
-    [PKG_CHECK_MODULES(libudev, libudev, have_libudev=yes, have_libudev=no)],
-    [have_libudev=no])
-
-AS_IF([test "x$have_libudev" = "xyes"],
-    [
+PKG_CHECK_MODULES(libudev, libudev, have_libudev=yes, have_libudev=no)
+if test "x$have_libudev" = "xyes"; then
 	AC_DEFINE([HAVE_LIBUDEV], [], [Use libudev])
 	LIBUDEV_CFLAGS="$libudev_CFLAGS"
 	LIBUDEV_LIBS="$libudev_LIBS"
 	AC_SUBST(LIBUDEV_CFLAGS)
 	AC_SUBST(LIBUDEV_LIBS)
-    ],
-    [AS_IF([test "x$with_libudev" = "xyes"],
-	[AC_MSG_ERROR([libudev requested but not found])
-    ])
-])
+else
+   AC_MSG_WARN(udev library not available)
+fi
 
 AC_SUBST([JPEG_LIBS])
+
+# Check for pthread
+
+AS_IF([test x$enable_shared != xno],
+	[AX_PTHREAD([have_pthread=yes
+		    AC_DEFINE([HAVE_PTHREAD],[1],[Define if you have POSIX threads libraries and header files.])],
+		   [have_pthread=no])],
+	[have_pthread=no])
 
 # The dlopen() function is in the C library for *BSD and in
 # libdl on GLIBC-based systems
@@ -333,10 +352,19 @@ AC_DEFINE_DIR([LIBV4LCONVERT_PRIV_DIR], [libv4lconvertprivdir], [libv4lconvert p
 AC_DEFINE_DIR([IR_KEYTABLE_SYSTEM_DIR], [keytablesystemdir], [ir-keytable preinstalled tables directory])
 AC_DEFINE_DIR([IR_KEYTABLE_USER_DIR], [keytableuserdir], [ir-keytable user defined tables directory])
 
+MAJOR=`echo "$PACKAGE_VERSION" | perl -ne 'print $1 if (m/^(\d+)\.(\d+)\.(\d+)/)'`
+MINOR=`echo "$PACKAGE_VERSION" | perl -ne 'print $2 if (m/^(\d+)\.(\d+)\.(\d+)/)'`
+PATCH=`echo "$PACKAGE_VERSION" | perl -ne 'print $3 if (m/^(\d+)\.(\d+)\.(\d+)/)'`
+
+AC_SUBST(MAJOR)
+AC_SUBST(MINOR)
+AC_SUBST(PATCH)
+AC_SUBST(V4L_UTILS_VERSION)
+
 # options
 
 AC_ARG_ENABLE(libdvbv5,
-  AS_HELP_STRING([--disable-libdvbv5], [disable experimental dynamic libdvbv5 compilation]),
+  AS_HELP_STRING([--disable-libdvbv5], [disable libdvbv5 compilation]),
   [case "${enableval}" in
      yes | no ) ;;
      *) AC_MSG_ERROR(bad value ${enableval} for --disable-libdvbv5) ;;
@@ -391,13 +419,20 @@ AC_ARG_ENABLE(gconv,
    esac]
 )
 
-AM_CONDITIONAL([WITH_LIBDVBV5],     [test x$enable_libdvbv5  != xno])
+# Check if backtrace functions are defined
+AC_SEARCH_LIBS([backtrace], [execinfo], [
+  AC_DEFINE(HAVE_BACKTRACE, [1], [glibc has functions to provide stack backtrace])
+])
+
+AM_CONDITIONAL([WITH_LIBDVBV5],     [test x$enable_libdvbv5  != xno -a x$have_libudev = xyes])
+AM_CONDITIONAL([WITH_DVBV5_REMOTE], [test x$enable_libdvbv5  != xno -a x$have_libudev = xyes -a x$have_pthread = xyes])
+
 AM_CONDITIONAL([WITH_LIBV4L],       [test x$enable_libv4l    != xno])
 AM_CONDITIONAL([WITH_V4LUTILS],	    [test x$enable_v4l_utils != xno -a x$linux_os = xyes])
-AM_CONDITIONAL([WITH_QV4L2],	    [test ${qt_pkgconfig}  = true -a x$enable_qv4l2 != xno])
+AM_CONDITIONAL([WITH_QV4L2],	    [test x${qt_pkgconfig} = xtrue -a x$enable_qv4l2 != xno])
 AM_CONDITIONAL([WITH_V4L_PLUGINS],  [test x$enable_libv4l != xno -a x$enable_shared != xno])
 AM_CONDITIONAL([WITH_V4L_WRAPPERS], [test x$enable_libv4l != xno -a x$enable_shared != xno])
-AM_CONDITIONAL([WITH_QTGL],	    [test ${qt_pkgconfig_gl} = true])
+AM_CONDITIONAL([WITH_QTGL],	    [test x${qt_pkgconfig_gl} = xtrue])
 AM_CONDITIONAL([WITH_GCONV],        [test x${enable_gconv} = xyes])
 AM_CONDITIONAL([WITH_V4L2_CTL_LIBV4L], [test x${enable_v4l2_ctl_libv4l} != xno])
 AM_CONDITIONAL([WITH_V4L2_COMPLIANCE_LIBV4L], [test x${enable_v4l2_compliance_libv4l} != xno])
@@ -410,10 +445,58 @@ AS_IF([test x$enable_libv4l = xno],   [AC_SUBST([ENFORCE_LIBV4L_STATIC],   ["-st
 
 if test "x$linux_os" = "xyes"; then
   CPPFLAGS="-I\$(top_srcdir)/include $CPPFLAGS"
-else
+elif test "x$freebsd_os" = "xyes"; then
   CPPFLAGS="-I\$(top_srcdir)/contrib/freebsd/include $CPPFLAGS"
 fi
 
 CPPFLAGS="-I\$(top_srcdir)/lib/include -Wall -Wpointer-arith -D_GNU_SOURCE $CPPFLAGS"
 
+AM_COND_IF([WITH_LIBDVBV5], [USE_LIBDVBV5="yes"], [USE_LIBDVBV5="no"])
+AM_COND_IF([WITH_DVBV5_REMOTE], [USE_DVBV5_REMOTE="yes"
+				 AC_DEFINE([HAVE_DVBV5_REMOTE], [1], [Usage of DVBv5 remote enabled])],
+			        [USE_DVBV5_REMOTE="no"])
+AM_COND_IF([WITH_LIBV4L], [USE_LIBV4L="yes"], [USE_LIBV4L="no"])
+AM_COND_IF([WITH_V4LUTILS], [USE_V4LUTILS="yes"], [USE_V4LUTILS="no"])
+AM_COND_IF([WITH_QV4L2], [USE_QV4L2="yes"], [USE_QV4L2="no"])
+AM_COND_IF([WITH_V4L_PLUGINS], [USE_V4L_PLUGINS="yes"], [USE_V4L_PLUGINS="no"])
+AM_COND_IF([WITH_V4L_WRAPPERS], [USE_V4L_WRAPPERS="yes"], [USE_V4L_WRAPPERS="no"])
+AM_COND_IF([WITH_GCONV], [USE_GCONV="yes"], [USE_GCONV="no"])
+AM_COND_IF([WITH_V4L2_CTL_LIBV4L], [USE_V4L2_CTL="yes"], [USE_V4L2_CTL="no"])
+AM_COND_IF([WITH_V4L2_COMPLIANCE_LIBV4L], [USE_V4L2_COMPLIANCE="yes"], [USE_V4L2_COMPLIANCE="no"])
+AS_IF([test "x$alsa_pkgconfig" = "xtrue"], [USE_ALSA="yes"], [USE_ALSA="no"])
+
 AC_OUTPUT
+
+dnl ---------------------------------------------------------------------
+dnl compile time options summary
+
+cat <<EOF
+
+compile time options summary
+============================
+
+    Host OS             : $host_os
+    X11                 : $x11_pkgconfig
+    GL                  : $gl_pkgconfig
+    glu                 : $glu_pkgconfig
+    libjpeg             : $have_jpeg
+    libudev             : $have_libudev
+    pthread             : $have_pthread
+    QT version          : $QT_VERSION
+    ALSA support        : $USE_ALSA
+
+    build dynamic libs  : $enable_shared
+    build static libs   : $enable_static
+
+    gconv               : $USE_GCONV
+
+    libv4l              : $USE_LIBV4L
+    v4l_plugins         : $USE_V4L_PLUGINS
+    v4l_wrappers        : $USE_V4L_WRAPPERS
+    libdvbv5            : $USE_LIBDVBV5
+    dvbv5-daemon        : $USE_DVBV5_REMOTE
+    v4lutils            : $USE_V4LUTILS
+    qv4l2               : $USE_QV4L2
+    v4l2-ctrl           : $USE_V4L2_CTL
+    v4l2-compliance     : $USE_V4L2_COMPLIANCE
+EOF

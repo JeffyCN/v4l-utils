@@ -20,6 +20,7 @@
  */
 
 #include <sys/types.h>
+#include <sys/sysmacros.h>
 #include <sys/mman.h>
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -35,7 +36,11 @@
 #include "libv4lcontrol.h"
 #include "libv4lcontrol-priv.h"
 #include "../libv4lsyscall-priv.h"
+#if defined(__OpenBSD__)
+#include <sys/videoio.h>
+#else
 #include <linux/videodev2.h>
+#endif
 
 #define ARRAY_SIZE(x) ((int)sizeof(x) / (int)sizeof((x)[0]))
 

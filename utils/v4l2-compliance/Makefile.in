@@ -94,10 +94,10 @@ subdir = utils/v4l2-compliance
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/ac_define_dir.m4 \
 	$(top_srcdir)/m4/ax_prog_doxygen.m4 \
-	$(top_srcdir)/m4/libtool.m4 $(top_srcdir)/m4/ltoptions.m4 \
-	$(top_srcdir)/m4/ltsugar.m4 $(top_srcdir)/m4/ltversion.m4 \
-	$(top_srcdir)/m4/lt~obsolete.m4 $(top_srcdir)/m4/mode_t.m4 \
-	$(top_srcdir)/configure.ac
+	$(top_srcdir)/m4/ax_pthread.m4 $(top_srcdir)/m4/libtool.m4 \
+	$(top_srcdir)/m4/ltoptions.m4 $(top_srcdir)/m4/ltsugar.m4 \
+	$(top_srcdir)/m4/ltversion.m4 $(top_srcdir)/m4/lt~obsolete.m4 \
+	$(top_srcdir)/m4/mode_t.m4 $(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 DIST_COMMON = $(srcdir)/Makefile.am $(am__DIST_COMMON)
@@ -107,11 +107,16 @@ CONFIG_CLEAN_FILES = v4l2-compliance.1
 CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)" "$(DESTDIR)$(man1dir)"
 PROGRAMS = $(bin_PROGRAMS)
-am_v4l2_compliance_OBJECTS = v4l2-compliance.$(OBJEXT) \
-	v4l2-test-debug.$(OBJEXT) v4l2-test-input-output.$(OBJEXT) \
-	v4l2-test-controls.$(OBJEXT) v4l2-test-io-config.$(OBJEXT) \
-	v4l2-test-formats.$(OBJEXT) v4l2-test-buffers.$(OBJEXT) \
-	v4l2-test-codecs.$(OBJEXT) v4l2-test-colors.$(OBJEXT)
+am_v4l2_compliance_OBJECTS =  \
+	v4l2_compliance-v4l2-compliance.$(OBJEXT) \
+	v4l2_compliance-v4l2-test-debug.$(OBJEXT) \
+	v4l2_compliance-v4l2-test-input-output.$(OBJEXT) \
+	v4l2_compliance-v4l2-test-controls.$(OBJEXT) \
+	v4l2_compliance-v4l2-test-io-config.$(OBJEXT) \
+	v4l2_compliance-v4l2-test-formats.$(OBJEXT) \
+	v4l2_compliance-v4l2-test-buffers.$(OBJEXT) \
+	v4l2_compliance-v4l2-test-codecs.$(OBJEXT) \
+	v4l2_compliance-v4l2-test-colors.$(OBJEXT)
 v4l2_compliance_OBJECTS = $(am_v4l2_compliance_OBJECTS)
 @WITH_V4L2_COMPLIANCE_LIBV4L_TRUE@v4l2_compliance_DEPENDENCIES = ../../lib/libv4l2/libv4l2.la \
 @WITH_V4L2_COMPLIANCE_LIBV4L_TRUE@	../../lib/libv4lconvert/libv4lconvert.la
@@ -119,10 +124,6 @@ AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
 am__v_lt_1 = 
-v4l2_compliance_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
-	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CXXLD) \
-	$(AM_CXXFLAGS) $(CXXFLAGS) $(v4l2_compliance_LDFLAGS) \
-	$(LDFLAGS) -o $@
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -334,8 +335,10 @@ LTLIBINTL = @LTLIBINTL@
 LTLIBOBJS = @LTLIBOBJS@
 LT_SYS_LIBRARY_PATH = @LT_SYS_LIBRARY_PATH@
 MAINT = @MAINT@
+MAJOR = @MAJOR@
 MAKEINFO = @MAKEINFO@
 MANIFEST_TOOL = @MANIFEST_TOOL@
+MINOR = @MINOR@
 MKDIR_P = @MKDIR_P@
 MOC = @MOC@
 MSGFMT = @MSGFMT@
@@ -354,11 +357,15 @@ PACKAGE_STRING = @PACKAGE_STRING@
 PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
+PATCH = @PATCH@
 PATH_SEPARATOR = @PATH_SEPARATOR@
 PKG_CONFIG = @PKG_CONFIG@
 PKG_CONFIG_LIBDIR = @PKG_CONFIG_LIBDIR@
 PKG_CONFIG_PATH = @PKG_CONFIG_PATH@
 POSUB = @POSUB@
+PTHREAD_CC = @PTHREAD_CC@
+PTHREAD_CFLAGS = @PTHREAD_CFLAGS@
+PTHREAD_LIBS = @PTHREAD_LIBS@
 QT5GL_CFLAGS = @QT5GL_CFLAGS@
 QT5GL_LIBS = @QT5GL_LIBS@
 QT5_CFLAGS = @QT5_CFLAGS@
@@ -375,6 +382,7 @@ SHELL = @SHELL@
 STRIP = @STRIP@
 UIC = @UIC@
 USE_NLS = @USE_NLS@
+V4L_UTILS_VERSION = @V4L_UTILS_VERSION@
 VERSION = @VERSION@
 X11_CFLAGS = @X11_CFLAGS@
 X11_LIBS = @X11_LIBS@
@@ -394,6 +402,7 @@ am__leading_dot = @am__leading_dot@
 am__quote = @am__quote@
 am__tar = @am__tar@
 am__untar = @am__untar@
+ax_pthread_config = @ax_pthread_config@
 bindir = @bindir@
 build = @build@
 build_alias = @build_alias@
@@ -451,10 +460,11 @@ udevrulesdir = @udevrulesdir@
 man_MANS = v4l2-compliance.1
 v4l2_compliance_SOURCES = v4l2-compliance.cpp v4l2-test-debug.cpp v4l2-test-input-output.cpp \
 	v4l2-test-controls.cpp v4l2-test-io-config.cpp v4l2-test-formats.cpp v4l2-test-buffers.cpp \
-	v4l2-test-codecs.cpp v4l2-test-colors.cpp v4l2-compliance.h cv4l-helpers.h v4l-helpers.h
+	v4l2-test-codecs.cpp v4l2-test-colors.cpp v4l2-compliance.h
 
-v4l2_compliance_LDFLAGS = -lrt
-@WITH_V4L2_COMPLIANCE_LIBV4L_TRUE@v4l2_compliance_LDADD = ../../lib/libv4l2/libv4l2.la ../../lib/libv4lconvert/libv4lconvert.la
+v4l2_compliance_CPPFLAGS = -I../common
+@WITH_V4L2_COMPLIANCE_LIBV4L_FALSE@v4l2_compliance_LDADD = -lrt -lpthread
+@WITH_V4L2_COMPLIANCE_LIBV4L_TRUE@v4l2_compliance_LDADD = ../../lib/libv4l2/libv4l2.la ../../lib/libv4lconvert/libv4lconvert.la -lrt -lpthread
 EXTRA_DIST = Android.mk fixme.txt v4l2-compliance.1
 all: all-am
 
@@ -543,7 +553,7 @@ clean-binPROGRAMS:
 
 v4l2-compliance$(EXEEXT): $(v4l2_compliance_OBJECTS) $(v4l2_compliance_DEPENDENCIES) $(EXTRA_v4l2_compliance_DEPENDENCIES) 
 	@rm -f v4l2-compliance$(EXEEXT)
-	$(AM_V_CXXLD)$(v4l2_compliance_LINK) $(v4l2_compliance_OBJECTS) $(v4l2_compliance_LDADD) $(LIBS)
+	$(AM_V_CXXLD)$(CXXLINK) $(v4l2_compliance_OBJECTS) $(v4l2_compliance_LDADD) $(LIBS)
 
 mostlyclean-compile:
 	-rm -f *.$(OBJEXT)
@@ -551,15 +561,15 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-compliance.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-test-buffers.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-test-codecs.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-test-colors.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-test-controls.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-test-debug.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-test-formats.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-test-input-output.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2-test-io-config.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_compliance-v4l2-compliance.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_compliance-v4l2-test-buffers.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_compliance-v4l2-test-codecs.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_compliance-v4l2-test-colors.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_compliance-v4l2-test-controls.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_compliance-v4l2-test-debug.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_compliance-v4l2-test-formats.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_compliance-v4l2-test-input-output.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_compliance-v4l2-test-io-config.Po@am__quote@
 
 .cpp.o:
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.o$$||'`;\
@@ -584,6 +594,132 @@ distclean-compile:
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='$<' object='$@' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LTCXXCOMPILE) -c -o $@ $<
+
+v4l2_compliance-v4l2-compliance.o: v4l2-compliance.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_compliance-v4l2-compliance.o -MD -MP -MF $(DEPDIR)/v4l2_compliance-v4l2-compliance.Tpo -c -o v4l2_compliance-v4l2-compliance.o `test -f 'v4l2-compliance.cpp' || echo '$(srcdir)/'`v4l2-compliance.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_compliance-v4l2-compliance.Tpo $(DEPDIR)/v4l2_compliance-v4l2-compliance.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-compliance.cpp' object='v4l2_compliance-v4l2-compliance.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_compliance-v4l2-compliance.o `test -f 'v4l2-compliance.cpp' || echo '$(srcdir)/'`v4l2-compliance.cpp
+
+v4l2_compliance-v4l2-compliance.obj: v4l2-compliance.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_compliance-v4l2-compliance.obj -MD -MP -MF $(DEPDIR)/v4l2_compliance-v4l2-compliance.Tpo -c -o v4l2_compliance-v4l2-compliance.obj `if test -f 'v4l2-compliance.cpp'; then $(CYGPATH_W) 'v4l2-compliance.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-compliance.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_compliance-v4l2-compliance.Tpo $(DEPDIR)/v4l2_compliance-v4l2-compliance.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-compliance.cpp' object='v4l2_compliance-v4l2-compliance.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_compliance-v4l2-compliance.obj `if test -f 'v4l2-compliance.cpp'; then $(CYGPATH_W) 'v4l2-compliance.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-compliance.cpp'; fi`
+
+v4l2_compliance-v4l2-test-debug.o: v4l2-test-debug.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_compliance-v4l2-test-debug.o -MD -MP -MF $(DEPDIR)/v4l2_compliance-v4l2-test-debug.Tpo -c -o v4l2_compliance-v4l2-test-debug.o `test -f 'v4l2-test-debug.cpp' || echo '$(srcdir)/'`v4l2-test-debug.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_compliance-v4l2-test-debug.Tpo $(DEPDIR)/v4l2_compliance-v4l2-test-debug.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-test-debug.cpp' object='v4l2_compliance-v4l2-test-debug.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_compliance-v4l2-test-debug.o `test -f 'v4l2-test-debug.cpp' || echo '$(srcdir)/'`v4l2-test-debug.cpp
+
+v4l2_compliance-v4l2-test-debug.obj: v4l2-test-debug.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_compliance-v4l2-test-debug.obj -MD -MP -MF $(DEPDIR)/v4l2_compliance-v4l2-test-debug.Tpo -c -o v4l2_compliance-v4l2-test-debug.obj `if test -f 'v4l2-test-debug.cpp'; then $(CYGPATH_W) 'v4l2-test-debug.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-test-debug.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_compliance-v4l2-test-debug.Tpo $(DEPDIR)/v4l2_compliance-v4l2-test-debug.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-test-debug.cpp' object='v4l2_compliance-v4l2-test-debug.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_compliance-v4l2-test-debug.obj `if test -f 'v4l2-test-debug.cpp'; then $(CYGPATH_W) 'v4l2-test-debug.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-test-debug.cpp'; fi`
+
+v4l2_compliance-v4l2-test-input-output.o: v4l2-test-input-output.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_compliance-v4l2-test-input-output.o -MD -MP -MF $(DEPDIR)/v4l2_compliance-v4l2-test-input-output.Tpo -c -o v4l2_compliance-v4l2-test-input-output.o `test -f 'v4l2-test-input-output.cpp' || echo '$(srcdir)/'`v4l2-test-input-output.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_compliance-v4l2-test-input-output.Tpo $(DEPDIR)/v4l2_compliance-v4l2-test-input-output.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-test-input-output.cpp' object='v4l2_compliance-v4l2-test-input-output.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_compliance-v4l2-test-input-output.o `test -f 'v4l2-test-input-output.cpp' || echo '$(srcdir)/'`v4l2-test-input-output.cpp
+
+v4l2_compliance-v4l2-test-input-output.obj: v4l2-test-input-output.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_compliance-v4l2-test-input-output.obj -MD -MP -MF $(DEPDIR)/v4l2_compliance-v4l2-test-input-output.Tpo -c -o v4l2_compliance-v4l2-test-input-output.obj `if test -f 'v4l2-test-input-output.cpp'; then $(CYGPATH_W) 'v4l2-test-input-output.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-test-input-output.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_compliance-v4l2-test-input-output.Tpo $(DEPDIR)/v4l2_compliance-v4l2-test-input-output.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-test-input-output.cpp' object='v4l2_compliance-v4l2-test-input-output.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_compliance-v4l2-test-input-output.obj `if test -f 'v4l2-test-input-output.cpp'; then $(CYGPATH_W) 'v4l2-test-input-output.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-test-input-output.cpp'; fi`
+
+v4l2_compliance-v4l2-test-controls.o: v4l2-test-controls.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_compliance-v4l2-test-controls.o -MD -MP -MF $(DEPDIR)/v4l2_compliance-v4l2-test-controls.Tpo -c -o v4l2_compliance-v4l2-test-controls.o `test -f 'v4l2-test-controls.cpp' || echo '$(srcdir)/'`v4l2-test-controls.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_compliance-v4l2-test-controls.Tpo $(DEPDIR)/v4l2_compliance-v4l2-test-controls.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-test-controls.cpp' object='v4l2_compliance-v4l2-test-controls.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_compliance-v4l2-test-controls.o `test -f 'v4l2-test-controls.cpp' || echo '$(srcdir)/'`v4l2-test-controls.cpp
+
+v4l2_compliance-v4l2-test-controls.obj: v4l2-test-controls.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_compliance-v4l2-test-controls.obj -MD -MP -MF $(DEPDIR)/v4l2_compliance-v4l2-test-controls.Tpo -c -o v4l2_compliance-v4l2-test-controls.obj `if test -f 'v4l2-test-controls.cpp'; then $(CYGPATH_W) 'v4l2-test-controls.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-test-controls.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_compliance-v4l2-test-controls.Tpo $(DEPDIR)/v4l2_compliance-v4l2-test-controls.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-test-controls.cpp' object='v4l2_compliance-v4l2-test-controls.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_compliance-v4l2-test-controls.obj `if test -f 'v4l2-test-controls.cpp'; then $(CYGPATH_W) 'v4l2-test-controls.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-test-controls.cpp'; fi`
+
+v4l2_compliance-v4l2-test-io-config.o: v4l2-test-io-config.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_compliance-v4l2-test-io-config.o -MD -MP -MF $(DEPDIR)/v4l2_compliance-v4l2-test-io-config.Tpo -c -o v4l2_compliance-v4l2-test-io-config.o `test -f 'v4l2-test-io-config.cpp' || echo '$(srcdir)/'`v4l2-test-io-config.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_compliance-v4l2-test-io-config.Tpo $(DEPDIR)/v4l2_compliance-v4l2-test-io-config.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-test-io-config.cpp' object='v4l2_compliance-v4l2-test-io-config.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_compliance-v4l2-test-io-config.o `test -f 'v4l2-test-io-config.cpp' || echo '$(srcdir)/'`v4l2-test-io-config.cpp
+
+v4l2_compliance-v4l2-test-io-config.obj: v4l2-test-io-config.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_compliance-v4l2-test-io-config.obj -MD -MP -MF $(DEPDIR)/v4l2_compliance-v4l2-test-io-config.Tpo -c -o v4l2_compliance-v4l2-test-io-config.obj `if test -f 'v4l2-test-io-config.cpp'; then $(CYGPATH_W) 'v4l2-test-io-config.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-test-io-config.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_compliance-v4l2-test-io-config.Tpo $(DEPDIR)/v4l2_compliance-v4l2-test-io-config.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-test-io-config.cpp' object='v4l2_compliance-v4l2-test-io-config.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_compliance-v4l2-test-io-config.obj `if test -f 'v4l2-test-io-config.cpp'; then $(CYGPATH_W) 'v4l2-test-io-config.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-test-io-config.cpp'; fi`
+
+v4l2_compliance-v4l2-test-formats.o: v4l2-test-formats.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_compliance-v4l2-test-formats.o -MD -MP -MF $(DEPDIR)/v4l2_compliance-v4l2-test-formats.Tpo -c -o v4l2_compliance-v4l2-test-formats.o `test -f 'v4l2-test-formats.cpp' || echo '$(srcdir)/'`v4l2-test-formats.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_compliance-v4l2-test-formats.Tpo $(DEPDIR)/v4l2_compliance-v4l2-test-formats.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-test-formats.cpp' object='v4l2_compliance-v4l2-test-formats.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_compliance-v4l2-test-formats.o `test -f 'v4l2-test-formats.cpp' || echo '$(srcdir)/'`v4l2-test-formats.cpp
+
+v4l2_compliance-v4l2-test-formats.obj: v4l2-test-formats.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_compliance-v4l2-test-formats.obj -MD -MP -MF $(DEPDIR)/v4l2_compliance-v4l2-test-formats.Tpo -c -o v4l2_compliance-v4l2-test-formats.obj `if test -f 'v4l2-test-formats.cpp'; then $(CYGPATH_W) 'v4l2-test-formats.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-test-formats.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_compliance-v4l2-test-formats.Tpo $(DEPDIR)/v4l2_compliance-v4l2-test-formats.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-test-formats.cpp' object='v4l2_compliance-v4l2-test-formats.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_compliance-v4l2-test-formats.obj `if test -f 'v4l2-test-formats.cpp'; then $(CYGPATH_W) 'v4l2-test-formats.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-test-formats.cpp'; fi`
+
+v4l2_compliance-v4l2-test-buffers.o: v4l2-test-buffers.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_compliance-v4l2-test-buffers.o -MD -MP -MF $(DEPDIR)/v4l2_compliance-v4l2-test-buffers.Tpo -c -o v4l2_compliance-v4l2-test-buffers.o `test -f 'v4l2-test-buffers.cpp' || echo '$(srcdir)/'`v4l2-test-buffers.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_compliance-v4l2-test-buffers.Tpo $(DEPDIR)/v4l2_compliance-v4l2-test-buffers.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-test-buffers.cpp' object='v4l2_compliance-v4l2-test-buffers.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_compliance-v4l2-test-buffers.o `test -f 'v4l2-test-buffers.cpp' || echo '$(srcdir)/'`v4l2-test-buffers.cpp
+
+v4l2_compliance-v4l2-test-buffers.obj: v4l2-test-buffers.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_compliance-v4l2-test-buffers.obj -MD -MP -MF $(DEPDIR)/v4l2_compliance-v4l2-test-buffers.Tpo -c -o v4l2_compliance-v4l2-test-buffers.obj `if test -f 'v4l2-test-buffers.cpp'; then $(CYGPATH_W) 'v4l2-test-buffers.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-test-buffers.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_compliance-v4l2-test-buffers.Tpo $(DEPDIR)/v4l2_compliance-v4l2-test-buffers.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-test-buffers.cpp' object='v4l2_compliance-v4l2-test-buffers.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_compliance-v4l2-test-buffers.obj `if test -f 'v4l2-test-buffers.cpp'; then $(CYGPATH_W) 'v4l2-test-buffers.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-test-buffers.cpp'; fi`
+
+v4l2_compliance-v4l2-test-codecs.o: v4l2-test-codecs.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_compliance-v4l2-test-codecs.o -MD -MP -MF $(DEPDIR)/v4l2_compliance-v4l2-test-codecs.Tpo -c -o v4l2_compliance-v4l2-test-codecs.o `test -f 'v4l2-test-codecs.cpp' || echo '$(srcdir)/'`v4l2-test-codecs.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_compliance-v4l2-test-codecs.Tpo $(DEPDIR)/v4l2_compliance-v4l2-test-codecs.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-test-codecs.cpp' object='v4l2_compliance-v4l2-test-codecs.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_compliance-v4l2-test-codecs.o `test -f 'v4l2-test-codecs.cpp' || echo '$(srcdir)/'`v4l2-test-codecs.cpp
+
+v4l2_compliance-v4l2-test-codecs.obj: v4l2-test-codecs.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_compliance-v4l2-test-codecs.obj -MD -MP -MF $(DEPDIR)/v4l2_compliance-v4l2-test-codecs.Tpo -c -o v4l2_compliance-v4l2-test-codecs.obj `if test -f 'v4l2-test-codecs.cpp'; then $(CYGPATH_W) 'v4l2-test-codecs.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-test-codecs.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_compliance-v4l2-test-codecs.Tpo $(DEPDIR)/v4l2_compliance-v4l2-test-codecs.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-test-codecs.cpp' object='v4l2_compliance-v4l2-test-codecs.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_compliance-v4l2-test-codecs.obj `if test -f 'v4l2-test-codecs.cpp'; then $(CYGPATH_W) 'v4l2-test-codecs.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-test-codecs.cpp'; fi`
+
+v4l2_compliance-v4l2-test-colors.o: v4l2-test-colors.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_compliance-v4l2-test-colors.o -MD -MP -MF $(DEPDIR)/v4l2_compliance-v4l2-test-colors.Tpo -c -o v4l2_compliance-v4l2-test-colors.o `test -f 'v4l2-test-colors.cpp' || echo '$(srcdir)/'`v4l2-test-colors.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_compliance-v4l2-test-colors.Tpo $(DEPDIR)/v4l2_compliance-v4l2-test-colors.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-test-colors.cpp' object='v4l2_compliance-v4l2-test-colors.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_compliance-v4l2-test-colors.o `test -f 'v4l2-test-colors.cpp' || echo '$(srcdir)/'`v4l2-test-colors.cpp
+
+v4l2_compliance-v4l2-test-colors.obj: v4l2-test-colors.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_compliance-v4l2-test-colors.obj -MD -MP -MF $(DEPDIR)/v4l2_compliance-v4l2-test-colors.Tpo -c -o v4l2_compliance-v4l2-test-colors.obj `if test -f 'v4l2-test-colors.cpp'; then $(CYGPATH_W) 'v4l2-test-colors.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-test-colors.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_compliance-v4l2-test-colors.Tpo $(DEPDIR)/v4l2_compliance-v4l2-test-colors.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-test-colors.cpp' object='v4l2_compliance-v4l2-test-colors.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_compliance-v4l2-test-colors.obj `if test -f 'v4l2-test-colors.cpp'; then $(CYGPATH_W) 'v4l2-test-colors.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-test-colors.cpp'; fi`
 
 mostlyclean-libtool:
 	-rm -f *.lo
@@ -755,7 +891,8 @@ maintainer-clean-generic:
 	@echo "it deletes files that may require special tools to rebuild."
 clean: clean-am
 
-clean-am: clean-binPROGRAMS clean-generic clean-libtool mostlyclean-am
+clean-am: clean-binPROGRAMS clean-generic clean-libtool clean-local \
+	mostlyclean-am
 
 distclean: distclean-am
 	-rm -rf ./$(DEPDIR)
@@ -828,22 +965,36 @@ uninstall-man: uninstall-man1
 .MAKE: install-am install-strip
 
 .PHONY: CTAGS GTAGS TAGS all all-am check check-am clean \
-	clean-binPROGRAMS clean-generic clean-libtool cscopelist-am \
-	ctags ctags-am distclean distclean-compile distclean-generic \
-	distclean-libtool distclean-tags distdir dvi dvi-am html \
-	html-am info info-am install install-am install-binPROGRAMS \
-	install-data install-data-am install-dvi install-dvi-am \
-	install-exec install-exec-am install-html install-html-am \
-	install-info install-info-am install-man install-man1 \
-	install-pdf install-pdf-am install-ps install-ps-am \
-	install-strip installcheck installcheck-am installdirs \
-	maintainer-clean maintainer-clean-generic mostlyclean \
-	mostlyclean-compile mostlyclean-generic mostlyclean-libtool \
-	pdf pdf-am ps ps-am tags tags-am uninstall uninstall-am \
-	uninstall-binPROGRAMS uninstall-man uninstall-man1
+	clean-binPROGRAMS clean-generic clean-libtool clean-local \
+	cscopelist-am ctags ctags-am distclean distclean-compile \
+	distclean-generic distclean-libtool distclean-tags distdir dvi \
+	dvi-am html html-am info info-am install install-am \
+	install-binPROGRAMS install-data install-data-am install-dvi \
+	install-dvi-am install-exec install-exec-am install-html \
+	install-html-am install-info install-info-am install-man \
+	install-man1 install-pdf install-pdf-am install-ps \
+	install-ps-am install-strip installcheck installcheck-am \
+	installdirs maintainer-clean maintainer-clean-generic \
+	mostlyclean mostlyclean-compile mostlyclean-generic \
+	mostlyclean-libtool pdf pdf-am ps ps-am tags tags-am uninstall \
+	uninstall-am uninstall-binPROGRAMS uninstall-man \
+	uninstall-man1
 
 .PRECIOUS: Makefile
 
+
+v4l2-compliance.cpp: version.h
+
+version.h:
+	@if git show-ref -s HEAD >/dev/null 2>&1; then \
+		echo -n "#define SHA " >$@ ; \
+		git show-ref -s HEAD >>$@ ; \
+	else \
+		touch $@ ; \
+	fi
+
+clean-local:
+	-rm -vf version.h
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

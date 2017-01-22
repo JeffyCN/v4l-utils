@@ -1,17 +1,16 @@
 /*
  * Copyright (c) 2013 - Mauro Carvalho Chehab <m.chehab@samsung.com>
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation version 2
- * of the License.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation version 2.1 of the License.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
+ * You should have received a copy of the GNU Lesser General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  * Or, point your browser to http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
@@ -37,7 +36,12 @@ int isdbt_desc_delivery_init(struct dvb_v5_fe_parms *parms,
 
 	bswap16(d->bitfield);
 
-	d->num_freqs = (d->length - len)/ sizeof(uint16_t);
+	if (d->length < len) {
+		dvb_perror("Truncated isdbt_desc_terrestrial_delivery_system_descriptor");
+		d->num_freqs = 0;
+	} else {
+		d->num_freqs = (d->length - len)/ sizeof(uint16_t);
+	}
 	if (!d->num_freqs)
 		return 0;
 	d->frequency = malloc(d->num_freqs * sizeof(*d->frequency));

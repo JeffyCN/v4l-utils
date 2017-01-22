@@ -2,17 +2,16 @@
  * Copyright (c) 2011-2012 - Mauro Carvalho Chehab
  * Copyright (c) 2012-2014 - Andre Roth <neolynx@gmail.com>
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation version 2
- * of the License.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation version 2.1 of the License.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
+ * You should have received a copy of the GNU Lesser General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  * Or, point your browser to http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
@@ -38,9 +37,9 @@ ssize_t dvb_table_nit_init(struct dvb_v5_fe_parms *parms, const uint8_t *buf,
 		return -1;
 	}
 
-	if (buf[0] != DVB_TABLE_NIT) {
-		dvb_logerr("%s: invalid marker 0x%02x, sould be 0x%02x",
-				__func__, buf[0], DVB_TABLE_NIT);
+	if (buf[0] != DVB_TABLE_NIT && (buf[0] != DVB_TABLE_NIT2)) {
+		dvb_logerr("%s: invalid marker 0x%02x, should be 0x%02x or 0x%02x",
+				__func__, buf[0], DVB_TABLE_NIT, DVB_TABLE_NIT2);
 		return -2;
 	}
 
