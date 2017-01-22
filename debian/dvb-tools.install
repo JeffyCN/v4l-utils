@@ -3,3 +3,7 @@ usr/bin/dvb-format-convert
 usr/bin/dvbv5-daemon
 usr/bin/dvbv5-scan
 usr/bin/dvbv5-zap
+usr/share/man/man1/dvbv5-scan.1
+usr/share/man/man1/dvbv5-zap.1
+usr/share/man/man1/dvb-format-convert.1
+usr/share/man/man1/dvb-fe-tool.1

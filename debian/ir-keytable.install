@@ -1,4 +1,5 @@
 usr/bin/ir-keytable
+usr/share/man/man1/ir-keytable.1
 etc/rc_maps.cfg
 etc/rc_keymaps
 lib/udev/rc_keymaps

@@ -11,3 +11,9 @@ usr/bin/v4l2-compliance
 usr/bin/v4l2-ctl
 usr/bin/v4l2-sysfs-path
 usr/sbin/v4l2-dbg
+usr/share/man/man1/cec-compliance.1
+usr/share/man/man1/cec-ctl.1
+usr/share/man/man1/cec-follower.1
+usr/share/man/man1/ir-ctl.1
+usr/share/man/man1/v4l2-compliance.1
+usr/share/man/man1/v4l2-ctl.1
