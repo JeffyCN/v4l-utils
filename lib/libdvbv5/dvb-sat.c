@@ -1,17 +1,16 @@
 /*
- * Copyright (c) 2011-2012 - Mauro Carvalho Chehab
+ * Copyright (c) 2011-2016 - Mauro Carvalho Chehab
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation version 2
- * of the License.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation version 2.1 of the License.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
+ * You should have received a copy of the GNU Lesser General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  * Or, point your browser to http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
@@ -39,78 +38,240 @@
 
 # define N_(string) string
 
-static const struct dvb_sat_lnb lnb[] = {
+struct dvbsat_freqrange_priv {
+	unsigned low, high, int_freq, rangeswitch;
+	enum dvb_sat_polarization pol;
+};
+
+struct dvb_sat_lnb_priv {
+	struct dvb_sat_lnb desc;
+
+	/* Private members used internally */
+	struct dvbsat_freqrange_priv freqrange[4];
+};
+
+static const struct dvb_sat_lnb_priv lnb[] = {
 	{
-		.name = "Europe",
-		.alias = "UNIVERSAL",
-		.lowfreq = 9750,
-		.highfreq = 10600,
-		.rangeswitch = 11700,
+		.desc = {
+			.name = N_("Universal, Europe"),
+			.alias = "UNIVERSAL",
+			// Legacy fields - kept just to avoid API/ABI breakages
+			.lowfreq = 9750,
+			.highfreq = 10600,
+			.rangeswitch = 11700,
+			.freqrange = {
+				{ 10800, 11800 },
+				{ 11600, 12700 },
+			},
+		},
 		.freqrange = {
-			{ 10800, 11800 },
-			{ 11600, 12700 },
+			{ 10800, 11800, 9750, 11700 },
+			{ 11600, 12700, 10600, 0 },
 		}
 	}, {
-		.name = "Expressvu, North America",
-		.alias = "DBS",
-		.lowfreq = 11250,
+		.desc = {
+			.name = N_("Expressvu, North America"),
+			.alias = "DBS",
+			// Legacy fields - kept just to avoid API/ABI breakages
+			.lowfreq = 11250,
+			.freqrange = {
+				{ 12200, 12700 }
+			},
+		},
 		.freqrange = {
-			{ 12200, 12700 }
-		}
-    }, {
-        .name = "Astra 1E, European Universal Ku (extended)",
-        .alias = "EXTENDED",
-		.lowfreq = 9750,
-		.highfreq = 10600,
-		.rangeswitch = 11700,
-		.freqrange = {
-			{ 10700, 11700 },
-			{ 11700, 12750 },
+			{ 12200, 12700, 11250 }
 		}
 	}, {
-		.name = "Standard",
-		.alias = "STANDARD",
-		.lowfreq = 10000,
+		.desc = {
+			.name = N_("Astra 1E, European Universal Ku (extended)"),
+			.alias = "EXTENDED",
+			// Legacy fields - kept just to avoid API/ABI breakages
+			.lowfreq = 9750,
+			.highfreq = 10600,
+			.rangeswitch = 11700,
+			.freqrange = {
+				{ 10700, 11700 },
+				{ 11700, 12750 },
+			},
+		},
 		.freqrange = {
-			{ 10945, 11450 }
+			{ 10700, 11700, 9750, 11700},
+			{ 11700, 12750, 10600, 0 },
+		}
+	}, {
+		.desc = {
+			.name = N_("Standard"),
+			.alias = "STANDARD",
+			// Legacy fields - kept just to avoid API/ABI breakages
+			.lowfreq = 10000,
+			.freqrange = {
+				{ 10945, 11450 }
+			},
+		},
+		.freqrange = {
+			{ 10945, 11450, 10000, 0 }
 		},
 	}, {
-		.name = "Astra",
-		.alias = "ENHANCED",
-		.lowfreq = 9750,
+		.desc = {
+			.name = N_("L10700"),
+			.alias = "L10700",
+			// Legacy fields - kept just to avoid API/ABI breakages
+			.lowfreq = 10700,
+			.freqrange = {
+				{ 11750, 12750 }
+			},
+		},
 		.freqrange = {
-			{ 10700, 11700 }
+		       { 11750, 12750, 10700, 0 }
 		},
 	}, {
-		.name = "Big Dish - Monopoint LNBf",
-		.alias = "C-BAND",
-		.lowfreq = 5150,
+		.desc = {
+			.name = N_("L11300"),
+			.alias = "L11300",
+			// Legacy fields - kept just to avoid API/ABI breakages
+			.lowfreq = 11300,
+			.freqrange = {
+				{ 12250, 12750 }
+			},
+		},
 		.freqrange = {
-			{ 3700, 4200 }
+			{ 12250, 12750, 11300, 0 }
 		},
 	}, {
-		.name = "Big Dish - Multipoint LNBf",
-		.alias = "C-MULT",
-		.lowfreq = 5150,
-		.highfreq = 5750,
+		.desc = {
+			.name = N_("Astra"),
+			.alias = "ENHANCED",
+			// Legacy fields - kept just to avoid API/ABI breakages
+			.lowfreq = 9750,
+			.freqrange = {
+				{ 10700, 11700 }
+			},
+		},
 		.freqrange = {
-			{ 3700, 4200 }
+			{ 10700, 11700, 9750, 0 }
 		},
 	}, {
-		.name = "DishPro LNBf",
-		.alias = "DISHPRO",
-		.lowfreq = 11250,
-		.highfreq = 14350,
+		.desc = {
+			.name = N_("Big Dish - Monopoint LNBf"),
+			.alias = "C-BAND",
+			// Legacy fields - kept just to avoid API/ABI breakages
+			.lowfreq = 5150,
+			.freqrange = {
+				{ 3700, 4200 }
+			},
+		},
 		.freqrange = {
-			{ 12200, 12700 }
+			{ 3700, 4200, 5150, 0 }
+		},
+	}, {
+		.desc = {
+			.name = N_("Big Dish - Multipoint LNBf"),
+			.alias = "C-MULT",
+			// Legacy fields - kept just to avoid API/ABI breakages
+			.lowfreq = 5150,
+			.highfreq = 5750,
+			.freqrange = {
+				{ 3700, 4200 }
+			},
+		},
+		.freqrange = {
+			{ 3700, 4200, 5150, 0, POLARIZATION_R },
+			{ 3700, 4200, 5750, 0, POLARIZATION_L }
+		},
+	}, {
+		.desc = {
+			.name = N_("DishPro LNBf"),
+			.alias = "DISHPRO",
+			// Legacy fields - kept just to avoid API/ABI breakages
+			.lowfreq = 11250,
+			.highfreq = 14350,
+			.freqrange = {
+				{ 12200, 12700 }
+			},
+		},
+		.freqrange = {
+			{ 12200, 12700, 11250, 0, POLARIZATION_V },
+			{ 12200, 12700, 14350, 0, POLARIZATION_H }
 		}
 	}, {
-		.name = "Japan 110BS/CS LNBf",
-		.alias = "110BS",
-		.lowfreq = 10678,
+		.desc = {
+			.name = N_("Japan 110BS/CS LNBf"),
+			.alias = "110BS",
+			// Legacy fields - kept just to avoid API/ABI breakages
+			.lowfreq = 10678,
+			.freqrange = {
+				{ 11710, 12751 }
+			},
+		},
 		.freqrange = {
-			{ 11710, 12751 }
+			{ 11710, 12751, 10678, 0 }
 		}
+	}, {
+		.desc = {
+			.name = N_("BrasilSat Stacked"),
+			.alias = "STACKED-BRASILSAT",
+			// Legacy fields - kept just to avoid API/ABI breakages
+			.lowfreq = 9710,
+			.highfreq = 9750,
+			.freqrange = {
+				{ 10700, 11700 },
+			},
+		},
+		.freqrange = {
+			{ 10700, 11700, 9710, 0, POLARIZATION_H },
+			{ 10700, 11700, 9750, 0, POLARIZATION_H },
+		},
+	}, {
+		.desc = {
+			.name = N_("BrasilSat Oi"),
+			.alias = "OI-BRASILSAT",
+			// Legacy fields - kept just to avoid API/ABI breakages
+			.lowfreq = 10000,
+			.highfreq = 10445,
+			.rangeswitch = 11700,
+			.freqrange = {
+				{ 10950, 11200 },
+				{ 11800, 12200 },
+			},
+		},
+		.freqrange = {
+			{ 10950, 11200, 10000, 11700 },
+			{ 11800, 12200, 10445, 0 },
+		}
+	}, {
+		.desc = {
+			.name = N_("BrasilSat Amazonas 1/2 - 3 Oscilators"),
+			.alias = "AMAZONAS",
+			// No legacy fields - as old API doesn't allow 3 LO
+		},
+		.freqrange = {
+			{ 11037, 11450, 9670, 0, POLARIZATION_V },
+			{ 11770, 12070, 9922, 0, POLARIZATION_H },
+			{ 10950, 11280, 10000, 0, POLARIZATION_H },
+		},
+	}, {
+		.desc = {
+			.name = N_("BrasilSat Amazonas 1/2 - 2 Oscilators"),
+			.alias = "AMAZONAS",
+			// No legacy fields - as old API doesn't allow 3 ranges
+		},
+		.freqrange = {
+			{ 11037, 11360, 9670, 0, POLARIZATION_V },
+			{ 11780, 12150, 10000, 0, POLARIZATION_H },
+			{ 10950, 11280, 10000, 0, POLARIZATION_H },
+		},
+	}, {
+		.desc = {
+			.name = N_("BrasilSat custom GVT"),
+			.alias = "GVT-BRASILSAT",
+			// No legacy fields - as old API doesn't allow 4 LO
+		},
+		.freqrange = {
+			{ 11010.5, 11067.5, 12860, 0, POLARIZATION_V },
+			{ 11704.0, 11941.0, 13435, 0, POLARIZATION_V },
+			{ 10962.5, 11199.5, 13112, 0, POLARIZATION_H },
+			{ 11704.0, 12188.0, 13138, 0, POLARIZATION_H },
+		},
 	},
 };
 
@@ -119,35 +280,37 @@ int dvb_sat_search_lnb(const char *name)
 	int i = 0;
 
 	for (i = 0; i < ARRAY_SIZE(lnb); i++) {
-		if (!strcasecmp(name, lnb[i].alias))
+		if (!strcasecmp(name, lnb[i].desc.alias))
 			return i;
 	}
 	return -1;
 }
 
+static char *pol_name[] = {
+	[POLARIZATION_OFF] = "",
+	[POLARIZATION_H] = N_("Horizontal: "),
+	[POLARIZATION_V] = N_("Vertical  : "),
+	[POLARIZATION_L] = N_("Left      : "),
+	[POLARIZATION_R] = N_("Right     : "),
+};
+
 int dvb_print_lnb(int i)
 {
+	int j;
+
 	if (i < 0 || i >= ARRAY_SIZE(lnb))
 		return -1;
 
-	printf("%s\n\t%s\n", lnb[i].alias, lnb[i].name);
-	printf(_("\t%d to %d MHz"),
-	       lnb[i].freqrange[0].low, lnb[i].freqrange[0].high);
-	if (lnb[i].freqrange[1].low)
-		printf(_(" and %d to %d MHz"),
-		       lnb[i].freqrange[1].low, lnb[i].freqrange[1].high);
-	printf("\n\t%s LO, ", lnb[i].highfreq ? _("Dual") : _("Single"));
-	if (!lnb[i].highfreq) {
-		printf("IF = %d MHz\n", lnb[i].lowfreq);
-		return 0;
+	printf("%s\n\t%s%s\n", lnb[i].desc.alias, dvb_sat_get_lnb_name(i),
+	       lnb[i].freqrange[0].pol ? _(" (bandstacking)") : "");
+
+	for (j = 0; j < ARRAY_SIZE(lnb[i].freqrange) && lnb[i].freqrange[j].low; j++) {
+		printf(_("\t%s%d to %d MHz, LO: %d MHz\n"),
+			_(pol_name[lnb[i].freqrange[j].pol]),
+			lnb[i].freqrange[j].low,
+			lnb[i].freqrange[j].high,
+			lnb[i].freqrange[j].int_freq);
 	}
-	if (!lnb[i].rangeswitch) {
-		printf(_("Bandstacking, LO POL_R %d MHZ, LO POL_L %d MHz\n"),
-		       lnb[i].lowfreq, lnb[i].highfreq);
-		return 0;
-	}
-	printf(_("IF = lowband %d MHz, highband %d MHz\n"),
-	       lnb[i].lowfreq, lnb[i].highfreq);
 
 	return 0;
 }
@@ -167,8 +330,17 @@ const struct dvb_sat_lnb *dvb_sat_get_lnb(int i)
 	if (i < 0 || i >= ARRAY_SIZE(lnb))
 		return NULL;
 
-	return &lnb[i];
+	return (void *)&lnb[i];
 }
+
+const char *dvb_sat_get_lnb_name(int i)
+{
+	if (i < 0 || i >= ARRAY_SIZE(lnb))
+		return NULL;
+
+	return _(lnb[i].desc.name);
+}
+
 
 /*
  * DVB satellite Diseqc specifics
@@ -265,7 +437,7 @@ static int dvbsat_diseqc_write_to_port_group(struct dvb_v5_fe_parms_priv *parms,
 	cmd->data0 |= high_band;
 	cmd->data0 |= pol_v ? 0 : 2;
 	/* Instead of using position/option, use a number from 0 to 3 */
-	cmd->data0 |= (sat_number % 0x3) << 2;
+	cmd->data0 |= (sat_number & 0x3) << 2;
 
 	return dvb_fe_diseqc_cmd(&parms->p, cmd->len, cmd->msg);
 }
@@ -291,7 +463,7 @@ static int dvbsat_scr_odu_channel_change(struct dvb_v5_fe_parms_priv *parms,
 	cmd->data1 = t & 0xff;
 
 	/* Fill the satelite number - highest bit is for pos A/pos B */
-	cmd->data0 |= (sat_number % 0x7) << 5;
+	cmd->data0 |= (sat_number & 0x7) << 5;
 	pos_b =  (sat_number & 0x8) ? 1 : 0;
 
 	/* Fill the LNB number */
@@ -316,7 +488,11 @@ static int dvbsat_diseqc_set_input(struct dvb_v5_fe_parms_priv *parms,
 	int mini_b = 0;
 	struct diseqc_cmd cmd;
 
-	if (!lnb->rangeswitch) {
+	/* Negative numbers means to not use a DiSEqC switch */
+	if (parms->p.sat_number < 0)
+		return 0;
+
+	if (!lnb->freqrange[0].rangeswitch) {
 		/*
 		 * Bandstacking switches don't use 2 bands nor use
 		 * DISEqC for setting the polarization. It also doesn't
@@ -339,93 +515,147 @@ static int dvbsat_diseqc_set_input(struct dvb_v5_fe_parms_priv *parms,
 	if (rc)
 		return rc;
 
-	if (parms->p.sat_number > 0) {
-		rc = dvb_fe_sec_tone(&parms->p, SEC_TONE_OFF);
-		if (rc)
-			return rc;
+	rc = dvb_fe_sec_tone(&parms->p, SEC_TONE_OFF);
+	if (rc)
+		return rc;
 
-		usleep(15 * 1000);
+	usleep(15 * 1000);
 
-		if (!t)
-			rc = dvbsat_diseqc_write_to_port_group(parms, &cmd, high_band,
-							       pol_v, sat_number);
-		else
-			rc = dvbsat_scr_odu_channel_change(parms, &cmd, high_band,
-							   pol_v, sat_number, t);
+	if (!t)
+		rc = dvbsat_diseqc_write_to_port_group(parms, &cmd, high_band,
+							pol_v, sat_number);
+	else
+		rc = dvbsat_scr_odu_channel_change(parms, &cmd, high_band,
+							pol_v, sat_number, t);
 
-		if (rc) {
-			dvb_logerr(_("sending diseq failed"));
-			return rc;
-		}
-		usleep((15 + parms->p.diseqc_wait) * 1000);
-
-		rc = dvb_fe_diseqc_burst(&parms->p, mini_b);
-		if (rc)
-			return rc;
-		usleep(15 * 1000);
+	if (rc) {
+		dvb_logerr(_("sending diseq failed"));
+		return rc;
 	}
+	usleep((15 + parms->p.diseqc_wait) * 1000);
+
+	rc = dvb_fe_diseqc_burst(&parms->p, mini_b);
+	if (rc)
+		return rc;
+	usleep(15 * 1000);
 
 	rc = dvb_fe_sec_tone(&parms->p, tone_on ? SEC_TONE_ON : SEC_TONE_OFF);
 
 	return rc;
 }
 
+int dvb_sat_real_freq(struct dvb_v5_fe_parms *p, int freq)
+{
+	struct dvb_v5_fe_parms_priv *parms = (void *)p;
+	int new_freq, i;
+
+	if (!dvb_fe_is_satellite(p->current_sys))
+		return freq;
+
+	new_freq = freq + parms->freq_offset;
+	for (i = 0; i < ARRAY_SIZE(lnb->freqrange) && lnb->freqrange[i].low; i++) {
+		if (freq < lnb->freqrange[i].low * 1000 || freq > lnb->freqrange[i].high * 1000)
+			continue;
+
+		return new_freq;
+	}
+
+	return parms->freq_offset - freq;
+}
+
+
 /*
  * DVB satellite get/set params hooks
  */
 
 
+static int dvb_sat_get_freq(struct dvb_v5_fe_parms *p, uint16_t *t)
+{
+	struct dvb_v5_fe_parms_priv *parms = (void *)p;
+	const struct dvb_sat_lnb_priv *lnb = (void *)p->lnb;
+	enum dvb_sat_polarization pol;
+	uint32_t freq;
+	int j;
+
+	if (!lnb) {
+		dvb_logerr(_("Need a LNBf to work"));
+		return 0;
+	}
+
+	parms->high_band = 0;
+	parms->freq_offset = 0;
+
+	dvb_fe_retrieve_parm(&parms->p, DTV_FREQUENCY, &freq);
+
+	if (!lnb->freqrange[1].low) {
+		/* Trivial case: LNBf with a single local oscilator(LO) */
+		parms->freq_offset = lnb->freqrange[0].int_freq * 1000;
+		return freq;
+	}
+
+	if (lnb->freqrange[0].pol) {
+		/* polarization-controlled multi-LO multipoint LNBf (bandstacking) */
+		dvb_fe_retrieve_parm(&parms->p, DTV_POLARIZATION, &pol);
+
+		for (j = 0; j < ARRAY_SIZE(lnb->freqrange) && lnb->freqrange[j].low; j++) {
+			if (freq < lnb->freqrange[j].low * 1000 ||
+			    freq > lnb->freqrange[j].high * 1000 ||
+			    pol != lnb->freqrange[j].pol)
+				continue;
+
+			parms->freq_offset = lnb->freqrange[j].int_freq * 1000;
+			return freq;
+		}
+	} else {
+		/* Multi-LO (dual-band) LNBf using DiSEqC */
+		for (j = 0; j < ARRAY_SIZE(lnb->freqrange) && lnb->freqrange[j].low; j++) {
+			if (freq < lnb->freqrange[j].low * 1000 || freq > lnb->freqrange[j].high * 1000)
+				continue;
+			if (freq > lnb->freqrange[j].rangeswitch * 1000)
+				j++;
+
+			/* Sets DiSEqC to high_band if not low band */
+			if (j)
+				parms->high_band = 1;
+
+			if (parms->p.freq_bpf) {
+				/* For SCR/Unicable setups */
+				*t = (((freq / 1000) + parms->p.freq_bpf + 2) / 4) - 350;
+				parms->freq_offset += ((*t + 350) * 4) * 1000;
+				if (parms->p.verbose)
+					dvb_log("BPF: %d KHz", parms->p.freq_bpf);
+			} else {
+				parms->freq_offset = lnb->freqrange[j].int_freq * 1000;
+			}
+			return freq;
+		}
+	}
+	dvb_logerr("frequency: %.2f MHz is out of LNBf range\n",
+		   freq / 1000.);
+	return 0;
+}
+
 int dvb_sat_set_parms(struct dvb_v5_fe_parms *p)
 {
 	struct dvb_v5_fe_parms_priv *parms = (void *)p;
-	const struct dvb_sat_lnb *lnb = p->lnb;
-	enum dvb_sat_polarization pol;
-	dvb_fe_retrieve_parm(&parms->p, DTV_POLARIZATION, &pol);
 	uint32_t freq;
 	uint16_t t = 0;
 	int rc;
 
-	dvb_fe_retrieve_parm(&parms->p, DTV_FREQUENCY, &freq);
-
-	if (!lnb) {
-		dvb_logerr(_("Need a LNBf to work"));
+	freq = dvb_sat_get_freq(p, &t);
+	if (!freq)
 		return -EINVAL;
-	}
 
-	/* Simple case: LNBf with just Single LO */
-	if (!lnb->highfreq) {
-		parms->freq_offset = lnb->lowfreq * 1000;
-		goto ret;
-	}
+	if (parms->p.verbose)
+		dvb_log("frequency: %.2f MHz, high_band: %d", freq / 1000., parms->high_band);
 
-	/* polarization-controlled multi LNBf */
-	if (!lnb->rangeswitch) {
-		if ((pol == POLARIZATION_V) || (pol == POLARIZATION_R))
-			parms->freq_offset = lnb->lowfreq * 1000;
-		else
-			parms->freq_offset = lnb->highfreq * 1000;
-		goto ret;
-	}
-
-	/* Voltage-controlled multiband switch */
-	parms->high_band = (freq > lnb->rangeswitch * 1000) ? 1 : 0;
-
-	/* Adjust frequency */
-	if (parms->high_band)
-		parms->freq_offset = lnb->highfreq * 1000;
-	else
-		parms->freq_offset = lnb->lowfreq * 1000;
-
-	/* For SCR/Unicable setups */
-	if (parms->p.freq_bpf) {
-		t = (((freq / 1000) + parms->p.freq_bpf + 2) / 4) - 350;
-		parms->freq_offset += ((t + 350) * 4) * 1000;
-	}
-
-ret:
 	rc = dvbsat_diseqc_set_input(parms, t);
 
 	freq = abs(freq - parms->freq_offset);
+
+	if (parms->p.verbose)
+		dvb_log("L-Band frequency: %.2f MHz (offset = %.2f MHz)", freq / 1000., parms->freq_offset/1000.);
+
 	dvb_fe_store_parm(&parms->p, DTV_FREQUENCY, freq);
 
 	return rc;

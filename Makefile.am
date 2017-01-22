@@ -25,8 +25,7 @@ sync-with-kernel:
 	      ! -f $(KERNEL_DIR)/usr/include/linux/ivtv.h -o \
 	      ! -f $(KERNEL_DIR)/usr/include/linux/dvb/frontend.h -o \
 	      ! -f $(KERNEL_DIR)/usr/include/linux/dvb/dmx.h -o \
-	      ! -f $(KERNEL_DIR)/usr/include/linux/dvb/audio.h -o \
-	      ! -f $(KERNEL_DIR)/usr/include/linux/dvb/video.h ]; then \
+	      ! -f $(KERNEL_DIR)/usr/include/linux/lirc.h ]; then \
 	  echo "Error you must set KERNEL_DIR to point to an extracted kernel source dir"; \
 	  echo "and run 'make headers_install' in \$$KERNEL_DIR."; \
 	  exit 1; \
@@ -42,11 +41,13 @@ sync-with-kernel:
 	cp -a $(KERNEL_DIR)/usr/include/linux/ivtv.h $(top_srcdir)/include/linux
 	cp -a $(KERNEL_DIR)/usr/include/linux/dvb/frontend.h $(top_srcdir)/include/linux/dvb
 	cp -a $(KERNEL_DIR)/usr/include/linux/dvb/dmx.h $(top_srcdir)/include/linux/dvb
-	cp -a $(KERNEL_DIR)/usr/include/linux/dvb/audio.h $(top_srcdir)/include/linux/dvb
-	cp -a $(KERNEL_DIR)/usr/include/linux/dvb/video.h $(top_srcdir)/include/linux/dvb
-	cp -a $(KERNEL_DIR)/drivers/media/platform/vivid/vivid-tpg.[ch] $(top_srcdir)/utils/v4l2-ctl
-	cp -a $(KERNEL_DIR)/drivers/media/platform/vivid/vivid-tpg-colors.[ch] $(top_srcdir)/utils/v4l2-ctl
-	patch -p1 <$(top_srcdir)/utils/v4l2-ctl/vivid-tpg.h.patch
+	cp -a $(KERNEL_DIR)/usr/include/linux/lirc.h $(top_srcdir)/include/linux
+	cp -a $(KERNEL_DIR)/drivers/media/common/v4l2-tpg/v4l2-tpg-core.c $(top_srcdir)/utils/common
+	cp -a $(KERNEL_DIR)/drivers/media/common/v4l2-tpg/v4l2-tpg-colors.c $(top_srcdir)/utils/common
+	cp -a $(KERNEL_DIR)/include/media/v4l2-tpg* $(top_srcdir)/utils/common
+	patch -p0 <$(top_srcdir)/utils/common/v4l2-tpg.patch
+	cp -a $(KERNEL_DIR)/include/uapi/linux/cec.h $(top_srcdir)/include/linux
+	cp -a $(KERNEL_DIR)/include/uapi/linux/cec-funcs.h $(top_srcdir)/include/linux
 
 	$(MAKE) -C utils/keytable $@
 	$(MAKE) -C utils/xc3028-firmware $@

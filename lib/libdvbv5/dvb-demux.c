@@ -1,15 +1,14 @@
 /*
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation version 2
- * of the License.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation version 2.1 of the License.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
+ * You should have received a copy of the GNU Lesser General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  * Or, point your browser to http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
@@ -40,6 +39,7 @@
 #include <stdlib.h> /* free */
 
 #include <libdvbv5/dvb-demux.h>
+#include <libdvbv5/dvb-dev.h>
 
 #define MAX_TIME		10	/* 1.0 seconds */
 
@@ -66,22 +66,27 @@
 
 int dvb_dmx_open(int adapter, int demux)
 {
-	char* demux_name = NULL;
 	int fd_demux;
-	int r;
+	struct dvb_device *dvb;
+	struct dvb_dev_list *dvb_dev;
 
-	r = asprintf(&demux_name, "/dev/dvb/adapter%i/demux%i", adapter, demux );
-	if (r < 0)
+	dvb = dvb_dev_alloc();
+	dvb_dev_find(dvb, 0);
+	dvb_dev = dvb_dev_seek_by_sysname(dvb, adapter, demux, DVB_DEVICE_DEMUX);
+	if (!dvb_dev) {
+		dvb_dev_free(dvb);
 		return -1;
-	fd_demux = open( demux_name, O_RDWR | O_NONBLOCK );
-	free(demux_name);
+	}
+
+	fd_demux = open(dvb_dev->path, O_RDWR | O_NONBLOCK);
+	dvb_dev_free(dvb);
 	return fd_demux;
 }
 
 void dvb_dmx_close(int dmx_fd)
 {
 	(void)xioctl(dmx_fd, DMX_STOP);
-	close( dmx_fd);
+	close(dmx_fd);
 }
 
 void dvb_dmx_stop(int dmx_fd)

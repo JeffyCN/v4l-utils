@@ -213,7 +213,7 @@ ApplicationWindow::ApplicationWindow() :
 	connect(grp, SIGNAL(triggered(QAction *)), this, SLOT(overrideXferFuncChanged(QAction *)));
 
 	m_overrideYCbCrEnc = -1;
-	menu = new QMenu("Override Y'CbCr Encoding");
+	menu = new QMenu("Override Y'CbCr/HSV Encoding");
 	m_overrideYCbCrEncMenu = menu;
 	grp = new QActionGroup(menu);
 	addSubMenuItem(grp, menu, "No Override", -1)->setChecked(true);
@@ -221,10 +221,12 @@ ApplicationWindow::ApplicationWindow() :
 	addSubMenuItem(grp, menu, "Rec. 709", V4L2_YCBCR_ENC_709);
 	addSubMenuItem(grp, menu, "xvYCC 601", V4L2_YCBCR_ENC_XV601);
 	addSubMenuItem(grp, menu, "xvYCC 709", V4L2_YCBCR_ENC_XV709);
-	addSubMenuItem(grp, menu, "sYCC", V4L2_YCBCR_ENC_SYCC);
 	addSubMenuItem(grp, menu, "BT.2020", V4L2_YCBCR_ENC_BT2020);
 	addSubMenuItem(grp, menu, "BT.2020 Constant Luminance", V4L2_YCBCR_ENC_BT2020_CONST_LUM);
 	addSubMenuItem(grp, menu, "SMPTE 240M", V4L2_YCBCR_ENC_SMPTE240M);
+	addSubMenuItem(grp, menu, "HSV with Hue 0-179", V4L2_HSV_ENC_180);
+	addSubMenuItem(grp, menu, "HSV with Hue 0-255", V4L2_HSV_ENC_256);
+
 	connect(grp, SIGNAL(triggered(QAction *)), this, SLOT(overrideYCbCrEncChanged(QAction *)));
 
 	m_overrideQuantization = -1;

@@ -89,15 +89,19 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 bin_PROGRAMS = dvb-fe-tool$(EXEEXT) dvbv5-zap$(EXEEXT) \
-	dvbv5-scan$(EXEEXT) dvb-format-convert$(EXEEXT)
+	dvbv5-scan$(EXEEXT) dvb-format-convert$(EXEEXT) \
+	$(am__EXEEXT_1)
+@WITH_DVBV5_REMOTE_TRUE@am__append_1 = \
+@WITH_DVBV5_REMOTE_TRUE@	dvbv5-daemon
+
 subdir = utils/dvb
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/ac_define_dir.m4 \
 	$(top_srcdir)/m4/ax_prog_doxygen.m4 \
-	$(top_srcdir)/m4/libtool.m4 $(top_srcdir)/m4/ltoptions.m4 \
-	$(top_srcdir)/m4/ltsugar.m4 $(top_srcdir)/m4/ltversion.m4 \
-	$(top_srcdir)/m4/lt~obsolete.m4 $(top_srcdir)/m4/mode_t.m4 \
-	$(top_srcdir)/configure.ac
+	$(top_srcdir)/m4/ax_pthread.m4 $(top_srcdir)/m4/libtool.m4 \
+	$(top_srcdir)/m4/ltoptions.m4 $(top_srcdir)/m4/ltsugar.m4 \
+	$(top_srcdir)/m4/ltversion.m4 $(top_srcdir)/m4/lt~obsolete.m4 \
+	$(top_srcdir)/m4/mode_t.m4 $(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 DIST_COMMON = $(srcdir)/Makefile.am $(am__DIST_COMMON)
@@ -106,11 +110,14 @@ CONFIG_HEADER = $(top_builddir)/config.h
 CONFIG_CLEAN_FILES = dvb-fe-tool.1 dvbv5-scan.1 dvb-format-convert.1 \
 	dvbv5-zap.1
 CONFIG_CLEAN_VPATH_FILES =
+@WITH_DVBV5_REMOTE_TRUE@am__EXEEXT_1 = dvbv5-daemon$(EXEEXT)
 am__installdirs = "$(DESTDIR)$(bindir)" "$(DESTDIR)$(man1dir)"
 PROGRAMS = $(bin_PROGRAMS)
 am_dvb_fe_tool_OBJECTS = dvb-fe-tool.$(OBJEXT)
 dvb_fe_tool_OBJECTS = $(am_dvb_fe_tool_OBJECTS)
-dvb_fe_tool_DEPENDENCIES = ../../lib/libdvbv5/libdvbv5.la
+am__DEPENDENCIES_1 =
+dvb_fe_tool_DEPENDENCIES = ../../lib/libdvbv5/libdvbv5.la \
+	$(am__DEPENDENCIES_1)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
@@ -120,20 +127,30 @@ dvb_fe_tool_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
 	$(dvb_fe_tool_LDFLAGS) $(LDFLAGS) -o $@
 am_dvb_format_convert_OBJECTS = dvb-format-convert.$(OBJEXT)
 dvb_format_convert_OBJECTS = $(am_dvb_format_convert_OBJECTS)
-dvb_format_convert_DEPENDENCIES = ../../lib/libdvbv5/libdvbv5.la
+dvb_format_convert_DEPENDENCIES = ../../lib/libdvbv5/libdvbv5.la \
+	$(am__DEPENDENCIES_1)
 dvb_format_convert_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
 	$(AM_CFLAGS) $(CFLAGS) $(dvb_format_convert_LDFLAGS) \
 	$(LDFLAGS) -o $@
+am_dvbv5_daemon_OBJECTS = dvbv5_daemon-dvbv5-daemon.$(OBJEXT)
+dvbv5_daemon_OBJECTS = $(am_dvbv5_daemon_OBJECTS)
+dvbv5_daemon_DEPENDENCIES = ../../lib/libdvbv5/libdvbv5.la \
+	$(am__DEPENDENCIES_1)
+dvbv5_daemon_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(dvbv5_daemon_CFLAGS) \
+	$(CFLAGS) $(dvbv5_daemon_LDFLAGS) $(LDFLAGS) -o $@
 am_dvbv5_scan_OBJECTS = dvbv5-scan.$(OBJEXT)
 dvbv5_scan_OBJECTS = $(am_dvbv5_scan_OBJECTS)
-dvbv5_scan_DEPENDENCIES = ../../lib/libdvbv5/libdvbv5.la
+dvbv5_scan_DEPENDENCIES = ../../lib/libdvbv5/libdvbv5.la \
+	$(am__DEPENDENCIES_1)
 dvbv5_scan_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) \
 	$(dvbv5_scan_LDFLAGS) $(LDFLAGS) -o $@
 am_dvbv5_zap_OBJECTS = dvbv5-zap.$(OBJEXT)
 dvbv5_zap_OBJECTS = $(am_dvbv5_zap_OBJECTS)
-dvbv5_zap_DEPENDENCIES = ../../lib/libdvbv5/libdvbv5.la
+dvbv5_zap_DEPENDENCIES = ../../lib/libdvbv5/libdvbv5.la \
+	$(am__DEPENDENCIES_1)
 dvbv5_zap_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) \
 	$(dvbv5_zap_LDFLAGS) $(LDFLAGS) -o $@
@@ -172,9 +189,11 @@ am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
 SOURCES = $(dvb_fe_tool_SOURCES) $(dvb_format_convert_SOURCES) \
-	$(dvbv5_scan_SOURCES) $(dvbv5_zap_SOURCES)
+	$(dvbv5_daemon_SOURCES) $(dvbv5_scan_SOURCES) \
+	$(dvbv5_zap_SOURCES)
 DIST_SOURCES = $(dvb_fe_tool_SOURCES) $(dvb_format_convert_SOURCES) \
-	$(dvbv5_scan_SOURCES) $(dvbv5_zap_SOURCES)
+	$(dvbv5_daemon_SOURCES) $(dvbv5_scan_SOURCES) \
+	$(dvbv5_zap_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -334,8 +353,10 @@ LTLIBINTL = @LTLIBINTL@
 LTLIBOBJS = @LTLIBOBJS@
 LT_SYS_LIBRARY_PATH = @LT_SYS_LIBRARY_PATH@
 MAINT = @MAINT@
+MAJOR = @MAJOR@
 MAKEINFO = @MAKEINFO@
 MANIFEST_TOOL = @MANIFEST_TOOL@
+MINOR = @MINOR@
 MKDIR_P = @MKDIR_P@
 MOC = @MOC@
 MSGFMT = @MSGFMT@
@@ -354,11 +375,15 @@ PACKAGE_STRING = @PACKAGE_STRING@
 PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
+PATCH = @PATCH@
 PATH_SEPARATOR = @PATH_SEPARATOR@
 PKG_CONFIG = @PKG_CONFIG@
 PKG_CONFIG_LIBDIR = @PKG_CONFIG_LIBDIR@
 PKG_CONFIG_PATH = @PKG_CONFIG_PATH@
 POSUB = @POSUB@
+PTHREAD_CC = @PTHREAD_CC@
+PTHREAD_CFLAGS = @PTHREAD_CFLAGS@
+PTHREAD_LIBS = @PTHREAD_LIBS@
 QT5GL_CFLAGS = @QT5GL_CFLAGS@
 QT5GL_LIBS = @QT5GL_LIBS@
 QT5_CFLAGS = @QT5_CFLAGS@
@@ -375,6 +400,7 @@ SHELL = @SHELL@
 STRIP = @STRIP@
 UIC = @UIC@
 USE_NLS = @USE_NLS@
+V4L_UTILS_VERSION = @V4L_UTILS_VERSION@
 VERSION = @VERSION@
 X11_CFLAGS = @X11_CFLAGS@
 X11_LIBS = @X11_LIBS@
@@ -394,6 +420,7 @@ am__leading_dot = @am__leading_dot@
 am__quote = @am__quote@
 am__tar = @am__tar@
 am__untar = @am__untar@
+ax_pthread_config = @ax_pthread_config@
 bindir = @bindir@
 build = @build@
 build_alias = @build_alias@
@@ -450,17 +477,21 @@ top_srcdir = @top_srcdir@
 udevrulesdir = @udevrulesdir@
 man_MANS = dvb-fe-tool.1 dvbv5-zap.1 dvbv5-scan.1 dvb-format-convert.1
 dvb_fe_tool_SOURCES = dvb-fe-tool.c
-dvb_fe_tool_LDADD = ../../lib/libdvbv5/libdvbv5.la @LIBINTL@
-dvb_fe_tool_LDFLAGS = $(ARGP_LIBS) -lm
+dvb_fe_tool_LDADD = ../../lib/libdvbv5/libdvbv5.la @LIBINTL@ $(LIBUDEV_LIBS) $(XMLRPC_LDADD)
+dvb_fe_tool_LDFLAGS = $(ARGP_LIBS) -lm $(LIBUDEV_CFLAGS) $(XMLRPC_LDFLAGS)
 dvbv5_zap_SOURCES = dvbv5-zap.c
-dvbv5_zap_LDADD = ../../lib/libdvbv5/libdvbv5.la @LIBINTL@
-dvbv5_zap_LDFLAGS = $(ARGP_LIBS) -lm
+dvbv5_zap_LDADD = ../../lib/libdvbv5/libdvbv5.la @LIBINTL@ $(LIBUDEV_LIBS) $(XMLRPC_LDADD)
+dvbv5_zap_LDFLAGS = $(ARGP_LIBS) -lm $(LIBUDEV_CFLAGS) $(XMLRPC_LDFLAGS)
 dvbv5_scan_SOURCES = dvbv5-scan.c
-dvbv5_scan_LDADD = ../../lib/libdvbv5/libdvbv5.la @LIBINTL@
-dvbv5_scan_LDFLAGS = $(ARGP_LIBS) -lm
+dvbv5_scan_LDADD = ../../lib/libdvbv5/libdvbv5.la @LIBINTL@ $(LIBUDEV_LIBS) $(XMLRPC_LDADD)
+dvbv5_scan_LDFLAGS = $(ARGP_LIBS) -lm $(LIBUDEV_CFLAGS) $(XMLRPC_LDFLAGS)
 dvb_format_convert_SOURCES = dvb-format-convert.c
-dvb_format_convert_LDADD = ../../lib/libdvbv5/libdvbv5.la @LIBINTL@
-dvb_format_convert_LDFLAGS = $(ARGP_LIBS) -lm
+dvb_format_convert_LDADD = ../../lib/libdvbv5/libdvbv5.la @LIBINTL@ $(LIBUDEV_LIBS) $(XMLRPC_LDADD)
+dvb_format_convert_LDFLAGS = $(ARGP_LIBS) -lm $(LIBUDEV_CFLAGS) $(XMLRPC_LDFLAGS)
+dvbv5_daemon_SOURCES = dvbv5-daemon.c
+dvbv5_daemon_LDADD = ../../lib/libdvbv5/libdvbv5.la @LIBINTL@ $(LIBUDEV_LIBS) $(XMLRPC_LDADD) $(PTHREAD_LDADD)
+dvbv5_daemon_LDFLAGS = $(ARGP_LIBS) -lm $(XMLRPC_LDFLAGS) $(PTHREAD_LDFLAGS)
+dvbv5_daemon_CFLAGS = $(XMLRPC_CFLAGS) $(LIBUDEV_CFLAGS) $(PTHREAD_CFLAGS)
 EXTRA_DIST = README
 all: all-am
 
@@ -561,6 +592,10 @@ dvb-format-convert$(EXEEXT): $(dvb_format_convert_OBJECTS) $(dvb_format_convert_
 	@rm -f dvb-format-convert$(EXEEXT)
 	$(AM_V_CCLD)$(dvb_format_convert_LINK) $(dvb_format_convert_OBJECTS) $(dvb_format_convert_LDADD) $(LIBS)
 
+dvbv5-daemon$(EXEEXT): $(dvbv5_daemon_OBJECTS) $(dvbv5_daemon_DEPENDENCIES) $(EXTRA_dvbv5_daemon_DEPENDENCIES) 
+	@rm -f dvbv5-daemon$(EXEEXT)
+	$(AM_V_CCLD)$(dvbv5_daemon_LINK) $(dvbv5_daemon_OBJECTS) $(dvbv5_daemon_LDADD) $(LIBS)
+
 dvbv5-scan$(EXEEXT): $(dvbv5_scan_OBJECTS) $(dvbv5_scan_DEPENDENCIES) $(EXTRA_dvbv5_scan_DEPENDENCIES) 
 	@rm -f dvbv5-scan$(EXEEXT)
 	$(AM_V_CCLD)$(dvbv5_scan_LINK) $(dvbv5_scan_OBJECTS) $(dvbv5_scan_LDADD) $(LIBS)
@@ -579,6 +614,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dvb-format-convert.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dvbv5-scan.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dvbv5-zap.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dvbv5_daemon-dvbv5-daemon.Po@am__quote@
 
 .c.o:
 @am__fastdepCC_TRUE@	$(AM_V_CC)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.o$$||'`;\
@@ -603,6 +639,20 @@ distclean-compile:
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='$<' object='$@' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LTCOMPILE) -c -o $@ $<
+
+dvbv5_daemon-dvbv5-daemon.o: dvbv5-daemon.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(dvbv5_daemon_CFLAGS) $(CFLAGS) -MT dvbv5_daemon-dvbv5-daemon.o -MD -MP -MF $(DEPDIR)/dvbv5_daemon-dvbv5-daemon.Tpo -c -o dvbv5_daemon-dvbv5-daemon.o `test -f 'dvbv5-daemon.c' || echo '$(srcdir)/'`dvbv5-daemon.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dvbv5_daemon-dvbv5-daemon.Tpo $(DEPDIR)/dvbv5_daemon-dvbv5-daemon.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='dvbv5-daemon.c' object='dvbv5_daemon-dvbv5-daemon.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(dvbv5_daemon_CFLAGS) $(CFLAGS) -c -o dvbv5_daemon-dvbv5-daemon.o `test -f 'dvbv5-daemon.c' || echo '$(srcdir)/'`dvbv5-daemon.c
+
+dvbv5_daemon-dvbv5-daemon.obj: dvbv5-daemon.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(dvbv5_daemon_CFLAGS) $(CFLAGS) -MT dvbv5_daemon-dvbv5-daemon.obj -MD -MP -MF $(DEPDIR)/dvbv5_daemon-dvbv5-daemon.Tpo -c -o dvbv5_daemon-dvbv5-daemon.obj `if test -f 'dvbv5-daemon.c'; then $(CYGPATH_W) 'dvbv5-daemon.c'; else $(CYGPATH_W) '$(srcdir)/dvbv5-daemon.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dvbv5_daemon-dvbv5-daemon.Tpo $(DEPDIR)/dvbv5_daemon-dvbv5-daemon.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='dvbv5-daemon.c' object='dvbv5_daemon-dvbv5-daemon.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(dvbv5_daemon_CFLAGS) $(CFLAGS) -c -o dvbv5_daemon-dvbv5-daemon.obj `if test -f 'dvbv5-daemon.c'; then $(CYGPATH_W) 'dvbv5-daemon.c'; else $(CYGPATH_W) '$(srcdir)/dvbv5-daemon.c'; fi`
 
 mostlyclean-libtool:
 	-rm -f *.lo

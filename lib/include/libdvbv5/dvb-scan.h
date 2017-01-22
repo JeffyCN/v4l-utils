@@ -1,17 +1,16 @@
 /*
  * Copyright (c) 2011-2014 - Mauro Carvalho Chehab
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation version 2
- * of the License.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation version 2.1 of the License.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
+ * You should have received a copy of the GNU Lesser General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  * Or, point your browser to http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
@@ -28,7 +27,7 @@
  * @file dvb-scan.h
  * @ingroup frontend_scan
  * @brief Provides interfaces to scan programs inside MPEG-TS digital TV streams.
- * @copyright GNU General Public License version 2 (GPLv2)
+ * @copyright GNU Lesser General Public License version 2.1 (LGPLv2.1)
  * @author Mauro Carvalho Chehab
  *
  * @par Bug Report
@@ -63,17 +62,27 @@ struct dvb_v5_descriptors_program {
  * @brief Contains the descriptors needed to scan the Service ID and other relevant info at a MPEG-TS Digital TV stream
  * @ingroup frontend_scan
  *
- * @param delivery_system	Delivery system of the parsed MPEG-TS
+ * @param delivery_system Delivery system of the parsed MPEG-TS
  * @param entry		struct dvb_entry pointer (see dvb-file.h)
- * @param pat		PAT table descriptor pointer
- * @param vct		VCT table descriptor pointer
- * @param program		PAT/PMT array associated programs found at MPEG-TS
- * @param nit		NIT table descriptor pointer
- * @param sdt		SDT table descriptor pointer
- * @param num_program	Number of program entries at program array.
+ * @param pat		PAT table descriptor pointer (table ID 0x00).
+ * @param vct		VCT table descriptor pointer (either table ID 0xc8,
+ * 			for TVCT or table ID 0xc9, for CVCT)
+ * @param program	PAT/PMT array associated programs found at MPEG-TS
+ * @param num_program	Number of program entries at @ref program array.
+ * @param nit		NIT table descriptor pointer for table ID 0x40.
+ * @param sdt		SDT table descriptor pointer for table ID 0x42.
+ * @param other_nits	Contains an array of pointers to the other NIT
+ *			extension tables identified by table ID 0x41.
+ * @param num_other_nits Number of NIT tables at @ref other_nits array.
+ * @param other_sdts	Contains an array of pointers to the other NIT
+ *			extension tables identified by table ID 0x46.
+ * @param num_other_sdts Number of NIT tables at @ref other_sdts array.
  *
  * Those descriptors are filled by the scan routines when the tables are
  * found. Otherwise, they're NULL.
+ *
+ * @note: Never alloc this struct yourself. This is meant to always be
+ * allocated via dvb_scan_alloc_handler_table() or via dvb_get_ts_tables().
  */
 struct dvb_v5_descriptors {
 	uint32_t delivery_system;
@@ -88,6 +97,12 @@ struct dvb_v5_descriptors {
 	struct dvb_table_sdt *sdt;
 
 	unsigned num_program;
+
+	struct dvb_table_nit **other_nits;
+	unsigned num_other_nits;
+
+	struct dvb_table_sdt **other_sdts;
+	unsigned num_other_sdts;
 };
 
 /**

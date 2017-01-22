@@ -24,6 +24,7 @@
 #include <sys/ioctl.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/sysmacros.h>
 
 #include <ctype.h>
 #include <errno.h>
@@ -66,21 +67,14 @@ struct media_pad *media_entity_remote_source(struct media_pad *pad)
 }
 
 struct media_entity *media_get_entity_by_name(struct media_device *media,
-					      const char *name, size_t length)
+					      const char *name)
 {
 	unsigned int i;
-
-	/* A match is impossible if the entity name is longer than the maximum
-	 * size we can get from the kernel.
-	 */
-	if (length >= FIELD_SIZEOF(struct media_entity_desc, name))
-		return NULL;
 
 	for (i = 0; i < media->entities_count; ++i) {
 		struct media_entity *entity = &media->entities[i];
 
-		if (strncmp(entity->info.name, name, length) == 0 &&
-		    entity->info.name[length] == '\0')
+		if (strcmp(entity->info.name, name) == 0)
 			return entity;
 	}
 
@@ -218,8 +212,8 @@ int media_setup_link(struct media_device *media,
 		     struct media_pad *sink,
 		     __u32 flags)
 {
+	struct media_link_desc ulink = { { 0 } };
 	struct media_link *link;
-	struct media_link_desc ulink;
 	unsigned int i;
 	int ret;
 
@@ -330,7 +324,7 @@ static int media_enum_links(struct media_device *media)
 
 	for (id = 1; id <= media->entities_count; id++) {
 		struct media_entity *entity = &media->entities[id - 1];
-		struct media_links_enum links;
+		struct media_links_enum links = { 0 };
 		unsigned int i;
 
 		links.entity = entity->info.id;
@@ -569,8 +563,11 @@ static int media_enum_entities(struct media_device *media)
 
 		/* Find the corresponding device name. */
 		if (media_entity_type(entity) != MEDIA_ENT_T_DEVNODE &&
-		    media_entity_type(entity) != MEDIA_ENT_T_V4L2_SUBDEV &&
-		    entity->info.type == MEDIA_ENT_T_DEVNODE_ALSA)
+		    media_entity_type(entity) != MEDIA_ENT_T_V4L2_SUBDEV)
+			continue;
+
+		/* Don't try to parse empty major,minor */
+		if (!entity->info.dev.major && !entity->info.dev.minor)
 			continue;
 
 		/* Try to get the device name via udev */
@@ -595,6 +592,8 @@ int media_device_enumerate(struct media_device *media)
 	ret = media_device_open(media);
 	if (ret < 0)
 		return ret;
+
+	memset(&media->info, 0, sizeof(media->info));
 
 	ret = ioctl(media->fd, MEDIA_IOC_DEVICE_INFO, &media->info);
 	if (ret < 0) {
@@ -785,10 +784,10 @@ int media_device_add_entity(struct media_device *media,
 	return 0;
 }
 
-struct media_pad *media_parse_pad(struct media_device *media,
-				  const char *p, char **endp)
+struct media_entity *media_parse_entity(struct media_device *media,
+					const char *p, char **endp)
 {
-	unsigned int entity_id, pad;
+	unsigned int entity_id;
 	struct media_entity *entity;
 	char *end;
 
@@ -801,6 +800,8 @@ struct media_pad *media_parse_pad(struct media_device *media,
 	for (; isspace(*p); ++p);
 
 	if (*p == '"' || *p == '\'') {
+		char *name;
+
 		for (end = (char *)p + 1; *end && *end != '"' && *end != '\''; ++end);
 		if (*end != '"' && *end != '\'') {
 			media_dbg(media, "missing matching '\"'\n");
@@ -808,7 +809,11 @@ struct media_pad *media_parse_pad(struct media_device *media,
 			return NULL;
 		}
 
-		entity = media_get_entity_by_name(media, p + 1, end - p - 1);
+		name = strndup(p + 1, end - p - 1);
+		if (!name)
+			return NULL;
+		entity = media_get_entity_by_name(media, name);
+		free(name);
 		if (entity == NULL) {
 			media_dbg(media, "no such entity \"%.*s\"\n", end - p - 1, p + 1);
 			*endp = (char *)p + 1;
@@ -825,7 +830,28 @@ struct media_pad *media_parse_pad(struct media_device *media,
 			return NULL;
 		}
 	}
-	for (; isspace(*end); ++end);
+	for (p = end; isspace(*p); ++p);
+
+	*endp = (char *)p;
+
+	return entity;
+}
+
+struct media_pad *media_parse_pad(struct media_device *media,
+				  const char *p, char **endp)
+{
+	unsigned int pad;
+	struct media_entity *entity;
+	char *end;
+
+	if (endp == NULL)
+		endp = &end;
+
+	entity = media_parse_entity(media, p, &end);
+	if (!entity) {
+		*endp = end;
+		return NULL;
+	}
 
 	if (*end != ':') {
 		media_dbg(media, "Expected ':'\n", *end);

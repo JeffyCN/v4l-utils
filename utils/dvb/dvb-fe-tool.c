@@ -19,6 +19,7 @@
  */
 
 #include "libdvbv5/dvb-file.h"
+#include "libdvbv5/dvb-dev.h"
 #include <config.h>
 #include <argp.h>
 #include <signal.h>
@@ -47,7 +48,9 @@ static const char doc[] = N_(
 	"\nA DVB frontend tool using API version 5\n"
 	"\nOn the options below, the arguments are:\n"
 	"  ADAPTER      - the dvb adapter to control\n"
-	"  FRONTEND     - the dvb frontend to control");
+	"  FRONTEND     - the dvb frontend to control\n"
+	"  SERVER       - server address whith is running the dvb5-daemon\n"
+	"  PORT         - server port used by the dvb5-daemon\n");
 
 static const struct argp_option options[] = {
 	{"verbose",	'v',	0,		0,	N_("enables debug messages"), 0},
@@ -60,7 +63,10 @@ static const struct argp_option options[] = {
 	{"set",		's',	N_("PARAMS"),	0,	N_("set frontend"), 0},
 #endif
 	{"get",		'g',	0,		0,	N_("get frontend"), 0},
-	{"dvbv3",	'3',	0,		0,	N_("Use DVBv3 only"), 0},
+	{"server",	'H',	N_("SERVER"),	0, 	N_("dvbv5-daemon host IP address"), 0},
+	{"tcp-port",	'T',	N_("PORT"),	0, 	N_("dvbv5-daemon host tcp port"), 0},
+	{"device-mon",	'D',	0,		0,	N_("monitors device insert/removal"), 0},
+	{"count",	'c',	N_("COUNT"),	0,	N_("samples to take (default 0 = infinite)"), 0},
 	{"help",        '?',	0,		0,	N_("Give this help list"), -1},
 	{"usage",	-3,	0,		0,	N_("Give a short usage message")},
 	{"version",	'V',	0,		0,	N_("Print program version"), -1},
@@ -71,12 +77,15 @@ static int adapter = 0;
 static int frontend = 0;
 static unsigned get = 0;
 static char *set_params = NULL;
+static char *server = NULL;
+static unsigned port = 0;
 static int verbose = 0;
-static int dvbv3 = 0;
 static int delsys = 0;
 static int femon = 0;
 static int acoustical = 0;
 static int timeout_flag = 0;
+static int device_mon = 0;
+static int count = 0;
 
 static void do_timeout(int x)
 {
@@ -92,12 +101,13 @@ static void do_timeout(int x)
 	}
 }
 
-#define PERROR(x...)                                                    \
+#define ERROR(x...)                                                     \
 	do {                                                            \
-		fprintf(stderr, _("ERROR: "));                          \
+		fprintf(stderr, _("ERROR: "));                             \
 		fprintf(stderr, x);                                     \
-		fprintf(stderr, " (%s)\n", strerror(errno));		\
+		fprintf(stderr, "\n");                                 \
 	} while (0)
+
 
 static error_t parse_opt(int k, char *arg, struct argp_state *state)
 {
@@ -128,11 +138,20 @@ static error_t parse_opt(int k, char *arg, struct argp_state *state)
 	case 'g':
 		get++;
 		break;
-	case '3':
-		dvbv3++;
+	case 'D':
+		device_mon++;
+		break;
+	case 'H':
+		server = arg;
+		break;
+	case 'T':
+		port = atoi(arg);
 		break;
 	case 'v':
 		verbose	++;
+		break;
+	case 'c':
+		count = atoi(arg);
 		break;
 	case '?':
 		argp_state_help(state, state->out_stream,
@@ -166,7 +185,7 @@ static int print_frontend_stats(FILE *fd,
 
 	rc = dvb_fe_get_stats(parms);
 	if (rc) {
-		PERROR(_("dvb_fe_get_stats failed"));
+		ERROR(_("dvb_fe_get_stats failed"));
 		return -1;
 	}
 
@@ -266,15 +285,37 @@ static void get_show_stats(struct dvb_v5_fe_parms *parms)
 		rc = dvb_fe_get_stats(parms);
 		if (!rc)
 			print_frontend_stats(stderr, parms);
+		if (count > 0 && !--count)
+			break;
 		if (!timeout_flag)
 			usleep(1000000);
 	} while (!timeout_flag);
 }
 
+static const char const *event_type[] = {
+	[DVB_DEV_ADD] = "added",
+	[DVB_DEV_CHANGE] = "changed",
+	[DVB_DEV_REMOVE] = "removed",
+};
+
+static int dev_change_monitor(char *sysname,
+			       enum dvb_dev_change_type type)
+{
+	if (type > ARRAY_SIZE(event_type))
+		printf("unknown event on device %s\n", sysname);
+	else
+		printf("device %s was %s\n", sysname, event_type[type]);
+	free(sysname);
+
+	return 0;
+}
+
 int main(int argc, char *argv[])
 {
+	struct dvb_device *dvb;
+	struct dvb_dev_list *dvb_dev;
 	struct dvb_v5_fe_parms *parms;
-	int fe_flags = O_RDWR;
+	int ret, fe_flags = O_RDWR;
 
 #ifdef ENABLE_NLS
 	setlocale (LC_ALL, "");
@@ -282,7 +323,10 @@ int main(int argc, char *argv[])
 	textdomain (PACKAGE);
 #endif
 
-	argp_parse(&argp, argc, argv, ARGP_NO_HELP | ARGP_NO_EXIT, 0, 0);
+	if (argp_parse(&argp, argc, argv, ARGP_NO_HELP | ARGP_NO_EXIT, 0, 0)) {
+		argp_help(&argp, stderr, ARGP_HELP_SHORT_USAGE, PROGRAM_NAME);
+		return -1;
+	}
 
 	/*
 	 * If called without any option, be verbose, to print the
@@ -294,9 +338,33 @@ int main(int argc, char *argv[])
 	if (!delsys && !set_params)
 		fe_flags = O_RDONLY;
 
-	parms = dvb_fe_open_flags(adapter, frontend, verbose, dvbv3,
-				  NULL, fe_flags);
-	if (!parms)
+	dvb = dvb_dev_alloc();
+	if (!dvb)
+		return -1;
+
+	if (server && port) {
+		printf(_("Connecting to %s:%d\n"), server, port);
+		ret = dvb_dev_remote_init(dvb, server, port);
+		if (ret < 0)
+			return -1;
+	}
+
+	dvb_dev_set_log(dvb, verbose, NULL);
+	if (device_mon) {
+		dvb_dev_find(dvb, &dev_change_monitor);
+		while (1) {
+			usleep(1000000);
+		}
+	}
+	dvb_dev_find(dvb, NULL);
+	parms = dvb->fe_parms;
+
+	dvb_dev = dvb_dev_seek_by_sysname(dvb, adapter, frontend,
+					  DVB_DEVICE_FRONTEND);
+	if (!dvb_dev)
+		return -1;
+
+	if (!dvb_dev_open(dvb, dvb_dev->sysname, fe_flags))
 		return -1;
 
 	if (delsys) {
@@ -319,7 +387,7 @@ int main(int argc, char *argv[])
 		get_show_stats(parms);
 
 ret:
-	dvb_fe_close(parms);
+	dvb_dev_free(dvb);
 
 	return 0;
 }

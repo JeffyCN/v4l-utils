@@ -162,6 +162,8 @@ void CaptureWinGLEngine::setColorspace(unsigned colorspace, unsigned xfer_func,
 	case V4L2_PIX_FMT_YVYU:
 	case V4L2_PIX_FMT_UYVY:
 	case V4L2_PIX_FMT_VYUY:
+	case V4L2_PIX_FMT_YUV422M:
+	case V4L2_PIX_FMT_YVU422M:
 	case V4L2_PIX_FMT_YUV422P:
 	case V4L2_PIX_FMT_YVU420:
 	case V4L2_PIX_FMT_YUV420:
@@ -177,10 +179,14 @@ void CaptureWinGLEngine::setColorspace(unsigned colorspace, unsigned xfer_func,
 	case V4L2_PIX_FMT_NV61M:
 	case V4L2_PIX_FMT_NV24:
 	case V4L2_PIX_FMT_NV42:
+	case V4L2_PIX_FMT_YUV444M:
+	case V4L2_PIX_FMT_YVU444M:
 	case V4L2_PIX_FMT_YUV444:
 	case V4L2_PIX_FMT_YUV555:
 	case V4L2_PIX_FMT_YUV565:
 	case V4L2_PIX_FMT_YUV32:
+	case V4L2_PIX_FMT_HSV24:
+	case V4L2_PIX_FMT_HSV32:
 		is_rgb = false;
 		break;
 	}
@@ -366,6 +372,8 @@ bool CaptureWinGLEngine::hasNativeFormat(__u32 format)
 		V4L2_PIX_FMT_YVYU,
 		V4L2_PIX_FMT_UYVY,
 		V4L2_PIX_FMT_VYUY,
+		V4L2_PIX_FMT_YUV422M,
+		V4L2_PIX_FMT_YVU422M,
 		V4L2_PIX_FMT_YUV422P,
 		V4L2_PIX_FMT_YVU420,
 		V4L2_PIX_FMT_YUV420,
@@ -375,6 +383,8 @@ bool CaptureWinGLEngine::hasNativeFormat(__u32 format)
 		V4L2_PIX_FMT_NV61,
 		V4L2_PIX_FMT_NV24,
 		V4L2_PIX_FMT_NV42,
+		V4L2_PIX_FMT_YUV444M,
+		V4L2_PIX_FMT_YVU444M,
 		V4L2_PIX_FMT_NV16M,
 		V4L2_PIX_FMT_NV61M,
 		V4L2_PIX_FMT_YVU420M,
@@ -388,6 +398,8 @@ bool CaptureWinGLEngine::hasNativeFormat(__u32 format)
 		V4L2_PIX_FMT_GREY,
 		V4L2_PIX_FMT_Y16,
 		V4L2_PIX_FMT_Y16_BE,
+		V4L2_PIX_FMT_HSV24,
+		V4L2_PIX_FMT_HSV32,
 		0
 	};
 
@@ -451,6 +463,10 @@ void CaptureWinGLEngine::changeShader()
 	case V4L2_PIX_FMT_YVU420:
 	case V4L2_PIX_FMT_YUV420M:
 	case V4L2_PIX_FMT_YVU420M:
+	case V4L2_PIX_FMT_YUV422M:
+	case V4L2_PIX_FMT_YVU422M:
+	case V4L2_PIX_FMT_YUV444M:
+	case V4L2_PIX_FMT_YVU444M:
 		shader_YUV(m_frameFormat);
 		break;
 
@@ -493,6 +509,8 @@ void CaptureWinGLEngine::changeShader()
 	case V4L2_PIX_FMT_GREY:
 	case V4L2_PIX_FMT_Y16:
 	case V4L2_PIX_FMT_Y16_BE:
+	case V4L2_PIX_FMT_HSV24:
+	case V4L2_PIX_FMT_HSV32:
 	default:
 		shader_RGB(m_frameFormat);
 		break;
@@ -582,6 +600,10 @@ void CaptureWinGLEngine::paintGL()
 	case V4L2_PIX_FMT_YVU420:
 	case V4L2_PIX_FMT_YUV420M:
 	case V4L2_PIX_FMT_YVU420M:
+	case V4L2_PIX_FMT_YUV422M:
+	case V4L2_PIX_FMT_YVU422M:
+	case V4L2_PIX_FMT_YUV444M:
+	case V4L2_PIX_FMT_YVU444M:
 		render_YUV(m_frameFormat);
 		break;
 
@@ -631,6 +653,8 @@ void CaptureWinGLEngine::paintGL()
 	case V4L2_PIX_FMT_XBGR32:
 	case V4L2_PIX_FMT_ARGB32:
 	case V4L2_PIX_FMT_ABGR32:
+	case V4L2_PIX_FMT_HSV24:
+	case V4L2_PIX_FMT_HSV32:
 	default:
 		render_RGB(m_frameFormat);
 		break;
@@ -719,7 +743,6 @@ QString CaptureWinGLEngine::codeYUV2RGB()
 			       );
 	case V4L2_YCBCR_ENC_601:
 	case V4L2_YCBCR_ENC_XV601:
-	case V4L2_YCBCR_ENC_SYCC:
 		// These colorspaces all use the BT.601 luma coefficients
 		return QString("   float r = y + 1.403 * v;"
 		       "   float g = y - 0.344 * u - 0.714 * v;"
@@ -756,22 +779,22 @@ QString CaptureWinGLEngine::codeTransformToLinear()
 			       "        ((b <= 0.04045) ? b / 12.92 : pow((b + 0.055) / 1.055, 2.4));"
 			       );
 	case V4L2_XFER_FUNC_ADOBERGB:
-		return QString("   r = pow(r, 2.19921875);"
-			       "   g = pow(g, 2.19921875);"
-			       "   b = pow(b, 2.19921875);");
+		return QString("   r = pow(max(r, 0.0), 2.19921875);"
+			       "   g = pow(max(g, 0.0), 2.19921875);"
+			       "   b = pow(max(b, 0.0), 2.19921875);");
 	case V4L2_XFER_FUNC_DCI_P3:
-		return QString("   r = pow(r, 2.6);"
-			       "   g = pow(g, 2.6);"
-			       "   b = pow(b, 2.6);");
+		return QString("   r = pow(max(r, 0.0), 2.6);"
+			       "   g = pow(max(g, 0.0), 2.6);"
+			       "   b = pow(max(b, 0.0), 2.6);");
 	case V4L2_XFER_FUNC_SMPTE2084:
 		return QString("   float m1 = 1.0 / ((2610.0 / 4096.0) / 4.0);"
 			       "   float m2 = 1.0 / (128.0 * 2523.0 / 4096.0);"
 			       "   float c1 = 3424.0 / 4096.0;"
 			       "   float c2 = 32.0 * 2413.0 / 4096.0;"
 			       "   float c3 = 32.0 * 2392.0 / 4096.0;"
-			       "   r = pow(r, m2);"
-			       "   g = pow(g, m2);"
-			       "   b = pow(b, m2);"
+			       "   r = pow(max(r, 0.0), m2);"
+			       "   g = pow(max(g, 0.0), m2);"
+			       "   b = pow(max(b, 0.0), m2);"
 			       "   r = pow(max(r - c1, 0.0) / (c2 - c3 * r), m1);"
 			       "   g = pow(max(g - c1, 0.0) / (c2 - c3 * g), m1);"
 			       "   b = pow(max(b - c1, 0.0) / (c2 - c3 * b), m1);");
@@ -869,7 +892,19 @@ static const QString codeSuffixWithAlpha("   gl_FragColor = vec4(r, g, b, a);"
 
 void CaptureWinGLEngine::shader_YUV(__u32 format)
 {
-	unsigned vdiv = format == V4L2_PIX_FMT_YUV422P ? 1 : 2;
+	unsigned vdiv = 2, hdiv = 2;
+
+	switch (format) {
+	case V4L2_PIX_FMT_YUV422P:
+	case V4L2_PIX_FMT_YUV422M:
+	case V4L2_PIX_FMT_YVU422M:
+		vdiv = 1;
+		break;
+	case V4L2_PIX_FMT_YUV444M:
+	case V4L2_PIX_FMT_YVU444M:
+		vdiv = hdiv = 1;
+		break;
+	}
 
 	m_screenTextureCount = 3;
 	glGenTextures(m_screenTextureCount, m_screenTexture);
@@ -882,13 +917,13 @@ void CaptureWinGLEngine::shader_YUV(__u32 format)
 
 	glActiveTexture(GL_TEXTURE1);
 	configureTexture(1);
-	glTexImage2D(GL_TEXTURE_2D, 0, m_glRed, m_frameWidth / 2, m_frameHeight / vdiv, 0,
+	glTexImage2D(GL_TEXTURE_2D, 0, m_glRed, m_frameWidth / hdiv, m_frameHeight / vdiv, 0,
 		     m_glRed, GL_UNSIGNED_BYTE, NULL);
 	checkError("YUV shader texture 1");
 
 	glActiveTexture(GL_TEXTURE2);
 	configureTexture(2);
-	glTexImage2D(GL_TEXTURE_2D, 0, m_glRed, m_frameWidth / 2, m_frameHeight / vdiv, 0,
+	glTexImage2D(GL_TEXTURE_2D, 0, m_glRed, m_frameWidth / hdiv, m_frameHeight / vdiv, 0,
 		     m_glRed, GL_UNSIGNED_BYTE, NULL);
 	checkError("YUV shader texture 2");
 
@@ -928,20 +963,32 @@ void CaptureWinGLEngine::shader_YUV(__u32 format)
 
 void CaptureWinGLEngine::render_YUV(__u32 format)
 {
-	unsigned vdiv = 2;
+	unsigned vdiv = 2, hdiv = 2;
 	int idxU = 0;
 	int idxV = 0;
 
-	if (format == V4L2_PIX_FMT_YUV422P) {
+	switch (format) {
+	case V4L2_PIX_FMT_YUV444M:
+	case V4L2_PIX_FMT_YVU444M:
+		vdiv = hdiv = 1;
+		break;
+	case V4L2_PIX_FMT_YUV422P:
 		idxU = m_frameWidth * m_frameHeight;
 		idxV = idxU + (idxU / 2);
 		vdiv = 1;
-	} else if (format == V4L2_PIX_FMT_YUV420) {
+		break;
+	case V4L2_PIX_FMT_YUV422M:
+	case V4L2_PIX_FMT_YVU422M:
+		vdiv = 1;
+		break;
+	case V4L2_PIX_FMT_YUV420:
 		idxU = m_frameWidth * m_frameHeight;
 		idxV = idxU + (idxU / 4);
-	} else if (format == V4L2_PIX_FMT_YVU420) {
+		break;
+	case V4L2_PIX_FMT_YVU420:
 		idxV = m_frameWidth * m_frameHeight;
 		idxU = idxV + (idxV / 4);
+		break;
 	}
 
 	int idx = glGetUniformLocation(m_shaderProgram.programId(), "tex_h"); // Texture height
@@ -963,15 +1010,19 @@ void CaptureWinGLEngine::render_YUV(__u32 format)
 	case V4L2_PIX_FMT_YUV422P:
 	case V4L2_PIX_FMT_YUV420:
 	case V4L2_PIX_FMT_YVU420:
-		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth / 2, m_frameHeight / vdiv,
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth / hdiv, m_frameHeight / vdiv,
 			m_glRed, GL_UNSIGNED_BYTE, m_frameData == NULL ? NULL : &m_frameData[idxU]);
 		break;
 	case V4L2_PIX_FMT_YUV420M:
-		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth / 2, m_frameHeight / vdiv,
+	case V4L2_PIX_FMT_YUV422M:
+	case V4L2_PIX_FMT_YUV444M:
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth / hdiv, m_frameHeight / vdiv,
 			m_glRed, GL_UNSIGNED_BYTE, m_frameData2);
 		break;
 	case V4L2_PIX_FMT_YVU420M:
-		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth / 2, m_frameHeight / vdiv,
+	case V4L2_PIX_FMT_YVU422M:
+	case V4L2_PIX_FMT_YVU444M:
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth / hdiv, m_frameHeight / vdiv,
 			m_glRed, GL_UNSIGNED_BYTE, m_frameData3);
 		break;
 	}
@@ -985,15 +1036,19 @@ void CaptureWinGLEngine::render_YUV(__u32 format)
 	case V4L2_PIX_FMT_YUV422P:
 	case V4L2_PIX_FMT_YUV420:
 	case V4L2_PIX_FMT_YVU420:
-		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth / 2, m_frameHeight / vdiv,
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth / hdiv, m_frameHeight / vdiv,
 			m_glRed, GL_UNSIGNED_BYTE, m_frameData == NULL ? NULL : &m_frameData[idxV]);
 		break;
 	case V4L2_PIX_FMT_YUV420M:
-		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth / 2, m_frameHeight / vdiv,
+	case V4L2_PIX_FMT_YUV422M:
+	case V4L2_PIX_FMT_YUV444M:
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth / hdiv, m_frameHeight / vdiv,
 			m_glRed, GL_UNSIGNED_BYTE, m_frameData3);
 		break;
 	case V4L2_PIX_FMT_YVU420M:
-		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth / 2, m_frameHeight / vdiv,
+	case V4L2_PIX_FMT_YVU422M:
+	case V4L2_PIX_FMT_YVU444M:
+		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth / hdiv, m_frameHeight / vdiv,
 			m_glRed, GL_UNSIGNED_BYTE, m_frameData2);
 		break;
 	}
@@ -1490,7 +1545,9 @@ void CaptureWinGLEngine::shader_RGB(__u32 format)
 			  format == V4L2_PIX_FMT_BGR666 ||
 			  format == V4L2_PIX_FMT_GREY ||
 			  format == V4L2_PIX_FMT_Y16 ||
-			  format == V4L2_PIX_FMT_Y16_BE;
+			  format == V4L2_PIX_FMT_Y16_BE ||
+			  format == V4L2_PIX_FMT_HSV24 ||
+			  format == V4L2_PIX_FMT_HSV32;
 	GLint internalFmt = manualTransform ? GL_RGBA8 : GL_SRGB8_ALPHA8;
 
 	switch (format) {
@@ -1541,6 +1598,7 @@ void CaptureWinGLEngine::shader_RGB(__u32 format)
 		/* fall-through */
 	case V4L2_PIX_FMT_RGB32:
 	case V4L2_PIX_FMT_XRGB32:
+	case V4L2_PIX_FMT_HSV32:
 		glTexImage2D(GL_TEXTURE_2D, 0, internalFmt, m_frameWidth, m_frameHeight, 0,
 				GL_BGRA, GL_UNSIGNED_INT_8_8_8_8, NULL);
 		break;
@@ -1563,6 +1621,7 @@ void CaptureWinGLEngine::shader_RGB(__u32 format)
 		break;
 	case V4L2_PIX_FMT_RGB24:
 	case V4L2_PIX_FMT_BGR24:
+	case V4L2_PIX_FMT_HSV24:
 	default:
 		glTexImage2D(GL_TEXTURE_2D, 0, internalFmt, m_frameWidth, m_frameHeight, 0,
 				GL_RGB, GL_UNSIGNED_BYTE, NULL);
@@ -1609,6 +1668,22 @@ void CaptureWinGLEngine::shader_RGB(__u32 format)
 		codeHead += "   float r = color.r;"
 			    "   float g = r;"
 			    "   float b = r;";
+		break;
+	case V4L2_PIX_FMT_HSV24:
+	case V4L2_PIX_FMT_HSV32:
+		/* From http://lolengine.net/blog/2013/07/27/rgb-to-hsv-in-glsl */
+		if (m_ycbcr_enc == V4L2_HSV_ENC_256)
+			codeHead += "   float hue = color.r;";
+		else
+			codeHead += "   float hue = (color.r * 256.0) / 180.0;";
+
+		codeHead += "   vec3 c = vec3(hue, color.g, color.b);"
+			    "   vec4 K = vec4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);"
+			    "   vec3 p = abs(fract(c.xxx + K.xyz) * 6.0 - K.www);"
+			    "   vec3 ret = c.z * mix(K.xxx, clamp(p - K.xxx, 0.0, 1.0), c.y);"
+			    "   float r = ret.x;"
+			    "   float g = ret.y;"
+			    "   float b = ret.z;";
 		break;
 	default:
 		codeHead += "   float r = color.r;"
@@ -1712,6 +1787,7 @@ void CaptureWinGLEngine::render_RGB(__u32 format)
 	case V4L2_PIX_FMT_RGB32:
 	case V4L2_PIX_FMT_XRGB32:
 	case V4L2_PIX_FMT_ARGB32:
+	case V4L2_PIX_FMT_HSV32:
 		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth, m_frameHeight,
 				GL_BGRA, GL_UNSIGNED_INT_8_8_8_8, m_frameData);
 		break;
@@ -1724,6 +1800,7 @@ void CaptureWinGLEngine::render_RGB(__u32 format)
 		break;
 	case V4L2_PIX_FMT_RGB24:
 	case V4L2_PIX_FMT_BGR24:
+	case V4L2_PIX_FMT_HSV24:
 	default:
 		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth, m_frameHeight,
 				GL_RGB, GL_UNSIGNED_BYTE, m_frameData);

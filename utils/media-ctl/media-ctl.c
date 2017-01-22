@@ -150,6 +150,7 @@ static const struct flag_name bt_standards[] = {
 	{ V4L2_DV_BT_STD_DMT, "DMT" },
 	{ V4L2_DV_BT_STD_CVT, "CVT" },
 	{ V4L2_DV_BT_STD_GTF, "GTF" },
+	{ V4L2_DV_BT_STD_SDI, "SDI" },
 };
 
 static const struct flag_name bt_capabilities[] = {
@@ -165,6 +166,7 @@ static const struct flag_name bt_flags[] = {
 	{ V4L2_DV_FL_REDUCED_FPS, "reduced-fps" },
 	{ V4L2_DV_FL_HALF_LINE, "half-line" },
 	{ V4L2_DV_FL_IS_CE_VIDEO, "CE-video" },
+	{ V4L2_DV_FL_FIRST_FIELD_EXTRA_LINE, "first-field-extra-line" },
 };
 
 static void v4l2_subdev_print_dv_timings(const struct v4l2_dv_timings *timings,
@@ -351,6 +353,9 @@ static void media_print_topology_dot(struct media_device *media)
 		unsigned int num_links = media_entity_get_links_count(entity);
 		unsigned int npads;
 
+		if (!devname)
+			devname = "";
+
 		switch (media_entity_type(entity)) {
 		case MEDIA_ENT_T_DEVNODE:
 			printf("\tn%08x [label=\"%s\\n%s\", shape=box, style=filled, "
@@ -433,80 +438,78 @@ static void media_print_pad_text(struct media_entity *entity,
 		v4l2_subdev_print_subdev_dv(entity);
 }
 
-static void media_print_topology_text(struct media_device *media)
+static void media_print_topology_text_entity(struct media_device *media,
+					     struct media_entity *entity)
 {
 	static const struct flag_name link_flags[] = {
 		{ MEDIA_LNK_FL_ENABLED, "ENABLED" },
 		{ MEDIA_LNK_FL_IMMUTABLE, "IMMUTABLE" },
 		{ MEDIA_LNK_FL_DYNAMIC, "DYNAMIC" },
 	};
-
-	unsigned int nents = media_get_entities_count(media);
-	unsigned int i, j, k;
+	const struct media_entity_desc *info = media_entity_get_info(entity);
+	const char *devname = media_entity_get_devname(entity);
+	unsigned int num_links = media_entity_get_links_count(entity);
+	unsigned int j, k;
 	unsigned int padding;
+
+	padding = printf("- entity %u: ", info->id);
+	printf("%s (%u pad%s, %u link%s)\n", info->name,
+	       info->pads, info->pads > 1 ? "s" : "",
+	       num_links, num_links > 1 ? "s" : "");
+	printf("%*ctype %s subtype %s flags %x\n", padding, ' ',
+	       media_entity_type_to_string(info->type),
+	       media_entity_subtype_to_string(info->type),
+	       info->flags);
+	if (devname)
+		printf("%*cdevice node name %s\n", padding, ' ', devname);
+
+	for (j = 0; j < info->pads; j++) {
+		const struct media_pad *pad = media_entity_get_pad(entity, j);
+
+		printf("\tpad%u: %s\n", j, media_pad_type_to_string(pad->flags));
+
+		media_print_pad_text(entity, pad);
+
+		for (k = 0; k < num_links; k++) {
+			const struct media_link *link = media_entity_get_link(entity, k);
+			const struct media_pad *source = link->source;
+			const struct media_pad *sink = link->sink;
+
+			if (source->entity == entity && source->index == j)
+				printf("\t\t-> \"%s\":%u [",
+				       media_entity_get_info(sink->entity)->name,
+				       sink->index);
+			else if (sink->entity == entity && sink->index == j)
+				printf("\t\t<- \"%s\":%u [",
+				       media_entity_get_info(source->entity)->name,
+				       source->index);
+			else
+				continue;
+
+			print_flags(link_flags, ARRAY_SIZE(link_flags), link->flags);
+
+			printf("]\n");
+		}
+	}
+	printf("\n");
+}
+
+static void media_print_topology_text(struct media_device *media)
+{
+	unsigned int nents = media_get_entities_count(media);
+	unsigned int i;
 
 	printf("Device topology\n");
 
-	for (i = 0; i < nents; ++i) {
-		struct media_entity *entity = media_get_entity(media, i);
-		const struct media_entity_desc *info = media_entity_get_info(entity);
-		const char *devname = media_entity_get_devname(entity);
-		unsigned int num_links = media_entity_get_links_count(entity);
-
-		padding = printf("- entity %u: ", info->id);
-		printf("%s (%u pad%s, %u link%s)\n", info->name,
-			info->pads, info->pads > 1 ? "s" : "",
-			num_links, num_links > 1 ? "s" : "");
-		printf("%*ctype %s subtype %s flags %x\n", padding, ' ',
-			media_entity_type_to_string(info->type),
-			media_entity_subtype_to_string(info->type),
-			info->flags);
-		if (devname)
-			printf("%*cdevice node name %s\n", padding, ' ', devname);
-
-		for (j = 0; j < info->pads; j++) {
-			const struct media_pad *pad = media_entity_get_pad(entity, j);
-
-			printf("\tpad%u: %s\n", j, media_pad_type_to_string(pad->flags));
-
-			media_print_pad_text(entity, pad);
-
-			for (k = 0; k < num_links; k++) {
-				const struct media_link *link = media_entity_get_link(entity, k);
-				const struct media_pad *source = link->source;
-				const struct media_pad *sink = link->sink;
-
-				if (source->entity == entity && source->index == j)
-					printf("\t\t-> \"%s\":%u [",
-						media_entity_get_info(sink->entity)->name,
-						sink->index);
-				else if (sink->entity == entity && sink->index == j)
-					printf("\t\t<- \"%s\":%u [",
-						media_entity_get_info(source->entity)->name,
-						source->index);
-				else
-					continue;
-
-				print_flags(link_flags, ARRAY_SIZE(link_flags), link->flags);
-
-				printf("]\n");
-			}
-		}
-		printf("\n");
-	}
-}
-
-void media_print_topology(struct media_device *media, int dot)
-{
-	if (dot)
-		media_print_topology_dot(media);
-	else
-		media_print_topology_text(media);
+	for (i = 0; i < nents; ++i)
+		media_print_topology_text_entity(
+			media, media_get_entity(media, i));
 }
 
 int main(int argc, char **argv)
 {
 	struct media_device *media;
+	struct media_entity *entity = NULL;
 	int ret = -1;
 
 	if (parse_cmdline(argc, argv))
@@ -553,16 +556,11 @@ int main(int argc, char **argv)
 	}
 
 	if (media_opts.entity) {
-		struct media_entity *entity;
-
-		entity = media_get_entity_by_name(media, media_opts.entity,
-						  strlen(media_opts.entity));
+		entity = media_get_entity_by_name(media, media_opts.entity);
 		if (entity == NULL) {
 			printf("Entity '%s' not found\n", media_opts.entity);
 			goto out;
 		}
-
-		printf("%s\n", media_entity_get_devname(entity));
 	}
 
 	if (media_opts.fmt_pad) {
@@ -601,9 +599,19 @@ int main(int argc, char **argv)
 		}
 	}
 
-	if (media_opts.print || media_opts.print_dot) {
-		media_print_topology(media, media_opts.print_dot);
-		printf("\n");
+	if (media_opts.print_dot) {
+		media_print_topology_dot(media);
+	} else if (media_opts.print) {
+		if (entity)
+			media_print_topology_text_entity(media, entity);
+		else
+			media_print_topology_text(media);
+	} else if (entity) {
+		const char *devname;
+
+		devname = media_entity_get_devname(entity);
+		if (devname)
+			printf("%s\n", devname);
 	}
 
 	if (media_opts.reset) {

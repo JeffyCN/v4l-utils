@@ -1,17 +1,16 @@
 /*
  * Copyright (c) 2011-2014 - Mauro Carvalho Chehab
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation version 2
- * of the License.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation version 2.1 of the License.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
+ * You should have received a copy of the GNU Lesser General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  * Or, point your browser to http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
@@ -55,9 +54,13 @@ struct dvb_v5_stats {
 
 };
 
+struct dvb_device_priv;
+
 struct dvb_v5_fe_parms_priv {
 	/* dvbv_v4_fe_parms should be the first element on this struct */
 	struct dvb_v5_fe_parms		p;
+
+	struct dvb_device_priv		*dvb;
 
 	int				fd;
 	int				fe_flags;	/* open() flags */
@@ -73,5 +76,17 @@ struct dvb_v5_fe_parms_priv {
 	int				high_band;
 	unsigned			freq_offset;
 };
+
+/* Functions used internally by dvb-dev.c. Aren't part of the API */
+int dvb_fe_open_fname(struct dvb_v5_fe_parms_priv *parms, char *fname,
+		      int flags);
+void dvb_v5_free(struct dvb_v5_fe_parms_priv *parms);
+void __dvb_fe_close(struct dvb_v5_fe_parms_priv *parms);
+
+/* Functions that can be overriden to be executed remotely */
+int __dvb_set_sys(struct dvb_v5_fe_parms *p, fe_delivery_system_t sys);
+int __dvb_fe_get_parms(struct dvb_v5_fe_parms *p);
+int __dvb_fe_set_parms(struct dvb_v5_fe_parms *p);
+int __dvb_fe_get_stats(struct dvb_v5_fe_parms *p);
 
 #endif

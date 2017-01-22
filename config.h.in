@@ -7,6 +7,9 @@
 /* alsa library is present */
 #undef HAVE_ALSA
 
+/* glibc has functions to provide stack backtrace */
+#undef HAVE_BACKTRACE
+
 /* Define to 1 if you have the Mac OS X function CFLocaleCopyCurrent in the
    CoreFoundation framework. */
 #undef HAVE_CFLOCALECOPYCURRENT
@@ -21,6 +24,9 @@
 
 /* Define to 1 if you have the <dlfcn.h> header file. */
 #undef HAVE_DLFCN_H
+
+/* Usage of DVBv5 remote enabled */
+#undef HAVE_DVBV5_REMOTE
 
 /* Define if the GNU gettext() function is already present or preinstalled. */
 #undef HAVE_GETTEXT
@@ -45,6 +51,12 @@
 
 /* Have ioctl with POSIX signature */
 #undef HAVE_POSIX_IOCTL
+
+/* Define if you have POSIX threads libraries and header files. */
+#undef HAVE_PTHREAD
+
+/* Have PTHREAD_PRIO_INHERIT. */
+#undef HAVE_PTHREAD_PRIO_INHERIT
 
 /* qt has opengl support */
 #undef HAVE_QTGL
@@ -137,6 +149,10 @@
 /* Define to the type that is the result of default argument promotions of
    type mode_t. */
 #undef PROMOTED_MODE_T
+
+/* Define to necessary symbol if this constant uses a non-standard name on
+   your system. */
+#undef PTHREAD_CREATE_JOINABLE
 
 /* Define to 1 if you have the ANSI C header files. */
 #undef STDC_HEADERS

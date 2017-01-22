@@ -1,17 +1,16 @@
 /*
  * Copyright (c) 2011-2012 - Mauro Carvalho Chehab
  *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * as published by the Free Software Foundation version 2
- * of the License.
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU Lesser General Public License as published by
+ * the Free Software Foundation version 2.1 of the License.
  *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * GNU Lesser General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License
+ * You should have received a copy of the GNU Lesser General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  * Or, point your browser to http://www.gnu.org/licenses/old-licenses/gpl-2.0.html
@@ -199,26 +198,26 @@ static const struct dvb_parse_table sys_dvbs2_table[] = {
 };
 
 static const struct dvb_parse_table sys_dvbt_table[] = {
-	{ DTV_DELIVERY_SYSTEM, PTABLE(vdr_parse_delivery_system) },
 	{ DTV_BANDWIDTH_HZ, PTABLE(vdr_parse_bandwidth) },
 	{ DTV_CODE_RATE_HP, PTABLE(vdr_parse_code_rate_hp) },
 	{ DTV_CODE_RATE_LP, PTABLE(vdr_parse_code_rate_lp) },
+	{ DTV_GUARD_INTERVAL, PTABLE(vdr_parse_guard_interval) },
 	{ DTV_INVERSION, PTABLE(vdr_parse_inversion) },
 	{ DTV_MODULATION, PTABLE(vdr_parse_modulation) },
+	{ DTV_DELIVERY_SYSTEM, PTABLE(vdr_parse_delivery_system) },
 	{ DTV_TRANSMISSION_MODE, PTABLE(vdr_parse_trans_mode) },
-	{ DTV_GUARD_INTERVAL, PTABLE(vdr_parse_guard_interval) },
 	{ DTV_HIERARCHY, PTABLE(vdr_parse_hierarchy) },
 };
 
 static const struct dvb_parse_table sys_dvbt2_table[] = {
-	{ DTV_DELIVERY_SYSTEM, PTABLE(vdr_parse_delivery_system) },
 	{ DTV_BANDWIDTH_HZ, PTABLE(vdr_parse_bandwidth) },
 	{ DTV_CODE_RATE_HP, PTABLE(vdr_parse_code_rate_hp) },
 	{ DTV_CODE_RATE_LP, PTABLE(vdr_parse_code_rate_lp) },
+	{ DTV_GUARD_INTERVAL, PTABLE(vdr_parse_guard_interval) },
 	{ DTV_INVERSION, PTABLE(vdr_parse_inversion) },
 	{ DTV_MODULATION, PTABLE(vdr_parse_modulation) },
+	{ DTV_DELIVERY_SYSTEM, PTABLE(vdr_parse_delivery_system) },
 	{ DTV_TRANSMISSION_MODE, PTABLE(vdr_parse_trans_mode) },
-	{ DTV_GUARD_INTERVAL, PTABLE(vdr_parse_guard_interval) },
 	{ DTV_HIERARCHY, PTABLE(vdr_parse_hierarchy) },
 	/* DVB-T2 specifics */
 	{ DTV_STREAM_ID, NULL, },
@@ -310,13 +309,14 @@ int dvb_write_format_vdr(const char *fname,
 		fprintf(fp, "%s", entry->channel);
 		if (entry->vchannel)
 			fprintf(fp, ",%s", entry->vchannel);
+		fprintf(fp, ":");
 
 		/*
 		 * Output frequency:
 		 *	in kHz for terrestrial/cable
 		 *	in MHz for satellite
 		 */
-		fprintf(fp, ":%i:", freq / 1000);
+		fprintf(fp, "%i:", freq / 1000);
 
 		/* Output modulation parameters */
 		fmt = &formats[i];
@@ -350,24 +350,37 @@ int dvb_write_format_vdr(const char *fname,
 
 			fprintf(fp, "%s", table->table[data]);
 		}
-
-		/* Output format type */
-		fprintf(fp, ":%s:", id);
+		fprintf(fp, ":");
 
 		/*
-		 * Output satellite location
-		 * FIXME: probably require some adjustments to match the
-		 *	  format expected by VDR.
+		 * Output sources configuration for VDR
+		 *
+		 *   S (satellite) xy.z (orbital position in degrees) E or W (east or west)
+		 *
+		 *   FIXME: in case of ATSC we use "A", this is what w_scan does
 		 */
-		switch(delsys) {
-		case SYS_DVBS:
-		case SYS_DVBS2:
-			fprintf(fp, "%s:", entry->location);
+
+		if (entry->location) {
+			switch(delsys) {
+			case SYS_DVBS:
+			case SYS_DVBS2:
+				fprintf(fp, "%s", entry->location);
+				break;
+			default:
+				fprintf(fp, "%s", id);
+				break;
+			}
+		} else {
+			fprintf(fp, "%s", id);
 		}
+		fprintf(fp, ":");
 
 		/* Output symbol rate */
 		srate = 27500000;
 		switch(delsys) {
+		case SYS_DVBT:
+			srate = 0;
+			break;
 		case SYS_DVBS:
 		case SYS_DVBS2:
 		case SYS_DVBC_ANNEX_A:
@@ -408,10 +421,16 @@ int dvb_write_format_vdr(const char *fname,
 		/* Output Service ID */
 		fprintf(fp, "%d:", entry->service_id);
 
-		/* Output SID, NID, TID and RID */
-		fprintf(fp, "0:0:0:");
+		/* Output Network ID */
+		fprintf(fp, "0:");
 
-		fprintf(fp, "\n");
+		/* Output Transport Stream ID */
+		fprintf(fp, "0:");
+
+		/* Output Radio ID
+		 * this is the last entry, tagged bei a new line (not a colon!)
+		 */
+		fprintf(fp, "0\n");
 		line++;
 	};
 	fclose (fp);

@@ -245,14 +245,13 @@ static inline unsigned int media_entity_type(struct media_entity *entity)
  * @brief Find an entity by its name.
  * @param media - media device.
  * @param name - entity name.
- * @param length - size of @a name.
  *
  * Search for an entity with a name equal to @a name.
  *
  * @return A pointer to the entity if found, or NULL otherwise.
  */
 struct media_entity *media_get_entity_by_name(struct media_device *media,
-	const char *name, size_t length);
+	const char *name);
 
 /**
  * @brief Find an entity by its ID.
@@ -366,6 +365,20 @@ int media_setup_link(struct media_device *media,
  * @return 0 on success, or a negative error code on failure.
  */
 int media_reset_links(struct media_device *media);
+
+/**
+ * @brief Parse string to an entity on the media device.
+ * @param media - media device.
+ * @param p - input string
+ * @param endp - pointer to string where parsing ended
+ *
+ * Parse NULL terminated string describing an entity and return its
+ * struct media_entity instance.
+ *
+ * @return Pointer to struct media_entity on success, NULL on failure.
+ */
+struct media_entity *media_parse_entity(struct media_device *media,
+					const char *p, char **endp);
 
 /**
  * @brief Parse string to a pad on the media device.

@@ -90,14 +90,17 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
+@WITH_DVBV5_REMOTE_TRUE@am__append_1 = \
+@WITH_DVBV5_REMOTE_TRUE@	dvb-dev-remote.c
+
 subdir = lib/libdvbv5
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/ac_define_dir.m4 \
 	$(top_srcdir)/m4/ax_prog_doxygen.m4 \
-	$(top_srcdir)/m4/libtool.m4 $(top_srcdir)/m4/ltoptions.m4 \
-	$(top_srcdir)/m4/ltsugar.m4 $(top_srcdir)/m4/ltversion.m4 \
-	$(top_srcdir)/m4/lt~obsolete.m4 $(top_srcdir)/m4/mode_t.m4 \
-	$(top_srcdir)/configure.ac
+	$(top_srcdir)/m4/ax_pthread.m4 $(top_srcdir)/m4/libtool.m4 \
+	$(top_srcdir)/m4/ltoptions.m4 $(top_srcdir)/m4/ltsugar.m4 \
+	$(top_srcdir)/m4/ltversion.m4 $(top_srcdir)/m4/lt~obsolete.m4 \
+	$(top_srcdir)/m4/mode_t.m4 $(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 DIST_COMMON = $(srcdir)/Makefile.am $(am__otherinclude_HEADERS_DIST) \
@@ -138,13 +141,37 @@ am__installdirs = "$(DESTDIR)$(libdir)" "$(DESTDIR)$(pkgconfigdir)" \
 LTLIBRARIES = $(lib_LTLIBRARIES) $(noinst_LTLIBRARIES)
 am__DEPENDENCIES_1 =
 libdvbv5_la_DEPENDENCIES = $(am__DEPENDENCIES_1)
+am__libdvbv5_la_SOURCES_DIST = compat-soname.c crc32.c countries.c \
+	dvb-legacy-channel-format.c dvb-zap-format.c dvb-vdr-format.c \
+	dvb-v5.c dvb-v5.h parse_string.c parse_string.h dvb-demux.c \
+	dvb-dev.c dvb-dev-local.c dvb-fe.c dvb-fe-priv.h dvb-log.c \
+	dvb-file.c dvb-v5-std.c dvb-sat.c dvb-scan.c descriptors.c \
+	tables/header.c tables/pat.c tables/pmt.c tables/nit.c \
+	tables/sdt.c tables/vct.c tables/mgt.c tables/eit.c \
+	tables/cat.c tables/atsc_eit.c tables/mpeg_ts.c \
+	tables/mpeg_pes.c tables/mpeg_es.c descriptors/desc_language.c \
+	descriptors/desc_network_name.c \
+	descriptors/desc_cable_delivery.c descriptors/desc_sat.c \
+	descriptors/desc_terrestrial_delivery.c \
+	descriptors/desc_t2_delivery.c descriptors/desc_service.c \
+	descriptors/desc_frequency_list.c \
+	descriptors/desc_event_short.c \
+	descriptors/desc_event_extended.c \
+	descriptors/desc_atsc_service_location.c \
+	descriptors/desc_hierarchy.c descriptors/desc_extension.c \
+	descriptors/desc_isdbt_delivery.c \
+	descriptors/desc_logical_channel.c descriptors/desc_ts_info.c \
+	descriptors/desc_partial_reception.c descriptors/desc_ca.c \
+	descriptors/desc_ca_identifier.c dvb-dev-remote.c
 am__dirstamp = $(am__leading_dot)dirstamp
+@WITH_DVBV5_REMOTE_TRUE@am__objects_1 = libdvbv5_la-dvb-dev-remote.lo
 am_libdvbv5_la_OBJECTS = libdvbv5_la-compat-soname.lo \
 	libdvbv5_la-crc32.lo libdvbv5_la-countries.lo \
 	libdvbv5_la-dvb-legacy-channel-format.lo \
 	libdvbv5_la-dvb-zap-format.lo libdvbv5_la-dvb-vdr-format.lo \
 	libdvbv5_la-dvb-v5.lo libdvbv5_la-parse_string.lo \
-	libdvbv5_la-dvb-demux.lo libdvbv5_la-dvb-fe.lo \
+	libdvbv5_la-dvb-demux.lo libdvbv5_la-dvb-dev.lo \
+	libdvbv5_la-dvb-dev-local.lo libdvbv5_la-dvb-fe.lo \
 	libdvbv5_la-dvb-log.lo libdvbv5_la-dvb-file.lo \
 	libdvbv5_la-dvb-v5-std.lo libdvbv5_la-dvb-sat.lo \
 	libdvbv5_la-dvb-scan.lo libdvbv5_la-descriptors.lo \
@@ -173,7 +200,7 @@ am_libdvbv5_la_OBJECTS = libdvbv5_la-compat-soname.lo \
 	descriptors/libdvbv5_la-desc_ts_info.lo \
 	descriptors/libdvbv5_la-desc_partial_reception.lo \
 	descriptors/libdvbv5_la-desc_ca.lo \
-	descriptors/libdvbv5_la-desc_ca_identifier.lo
+	descriptors/libdvbv5_la-desc_ca_identifier.lo $(am__objects_1)
 libdvbv5_la_OBJECTS = $(am_libdvbv5_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
@@ -219,17 +246,19 @@ am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
 SOURCES = $(libdvbv5_la_SOURCES)
-DIST_SOURCES = $(libdvbv5_la_SOURCES)
+DIST_SOURCES = $(am__libdvbv5_la_SOURCES_DIST)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
     *) (install-info --version) >/dev/null 2>&1;; \
   esac
 DATA = $(pkgconfig_DATA)
-am__otherinclude_HEADERS_DIST = ../include/libdvbv5/dvb-demux.h \
+am__otherinclude_HEADERS_DIST = ../include/libdvbv5/libdvb-version.h \
+	../include/libdvbv5/dvb-demux.h \
 	../include/libdvbv5/dvb-v5-std.h \
 	../include/libdvbv5/dvb-file.h ../include/libdvbv5/countries.h \
-	../include/libdvbv5/crc32.h ../include/libdvbv5/dvb-frontend.h \
+	../include/libdvbv5/crc32.h ../include/libdvbv5/dvb-dev.h \
+	../include/libdvbv5/dvb-frontend.h \
 	../include/libdvbv5/dvb-fe.h ../include/libdvbv5/dvb-sat.h \
 	../include/libdvbv5/dvb-scan.h ../include/libdvbv5/dvb-log.h \
 	../include/libdvbv5/descriptors.h ../include/libdvbv5/header.h \
@@ -382,8 +411,10 @@ LTLIBINTL = @LTLIBINTL@
 LTLIBOBJS = @LTLIBOBJS@
 LT_SYS_LIBRARY_PATH = @LT_SYS_LIBRARY_PATH@
 MAINT = @MAINT@
+MAJOR = @MAJOR@
 MAKEINFO = @MAKEINFO@
 MANIFEST_TOOL = @MANIFEST_TOOL@
+MINOR = @MINOR@
 MKDIR_P = @MKDIR_P@
 MOC = @MOC@
 MSGFMT = @MSGFMT@
@@ -402,11 +433,15 @@ PACKAGE_STRING = @PACKAGE_STRING@
 PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
+PATCH = @PATCH@
 PATH_SEPARATOR = @PATH_SEPARATOR@
 PKG_CONFIG = @PKG_CONFIG@
 PKG_CONFIG_LIBDIR = @PKG_CONFIG_LIBDIR@
 PKG_CONFIG_PATH = @PKG_CONFIG_PATH@
 POSUB = @POSUB@
+PTHREAD_CC = @PTHREAD_CC@
+PTHREAD_CFLAGS = @PTHREAD_CFLAGS@
+PTHREAD_LIBS = @PTHREAD_LIBS@
 QT5GL_CFLAGS = @QT5GL_CFLAGS@
 QT5GL_LIBS = @QT5GL_LIBS@
 QT5_CFLAGS = @QT5_CFLAGS@
@@ -423,6 +458,7 @@ SHELL = @SHELL@
 STRIP = @STRIP@
 UIC = @UIC@
 USE_NLS = @USE_NLS@
+V4L_UTILS_VERSION = @V4L_UTILS_VERSION@
 VERSION = @VERSION@
 X11_CFLAGS = @X11_CFLAGS@
 X11_LIBS = @X11_LIBS@
@@ -442,6 +478,7 @@ am__leading_dot = @am__leading_dot@
 am__quote = @am__quote@
 am__tar = @am__tar@
 am__untar = @am__untar@
+ax_pthread_config = @ax_pthread_config@
 bindir = @bindir@
 build = @build@
 build_alias = @build_alias@
@@ -499,11 +536,13 @@ udevrulesdir = @udevrulesdir@
 @WITH_LIBDVBV5_TRUE@lib_LTLIBRARIES = libdvbv5.la
 @WITH_LIBDVBV5_TRUE@otherincludedir = $(includedir)/libdvbv5
 @WITH_LIBDVBV5_TRUE@otherinclude_HEADERS = \
+@WITH_LIBDVBV5_TRUE@	../include/libdvbv5/libdvb-version.h \
 @WITH_LIBDVBV5_TRUE@	../include/libdvbv5/dvb-demux.h \
 @WITH_LIBDVBV5_TRUE@	../include/libdvbv5/dvb-v5-std.h \
 @WITH_LIBDVBV5_TRUE@	../include/libdvbv5/dvb-file.h \
 @WITH_LIBDVBV5_TRUE@	../include/libdvbv5/countries.h \
 @WITH_LIBDVBV5_TRUE@	../include/libdvbv5/crc32.h \
+@WITH_LIBDVBV5_TRUE@	../include/libdvbv5/dvb-dev.h \
 @WITH_LIBDVBV5_TRUE@	../include/libdvbv5/dvb-frontend.h \
 @WITH_LIBDVBV5_TRUE@	../include/libdvbv5/dvb-fe.h \
 @WITH_LIBDVBV5_TRUE@	../include/libdvbv5/dvb-sat.h \
@@ -547,59 +586,28 @@ udevrulesdir = @udevrulesdir@
 @WITH_LIBDVBV5_TRUE@pkgconfig_DATA = libdvbv5.pc
 @WITH_LIBDVBV5_TRUE@LIBDVBV5_VERSION = -version-info 0
 @WITH_LIBDVBV5_FALSE@noinst_LTLIBRARIES = libdvbv5.la
-libdvbv5_la_SOURCES = \
-        compat-soname.c \
-	crc32.c \
-	countries.c \
-	dvb-legacy-channel-format.c \
-	dvb-zap-format.c \
-	dvb-vdr-format.c \
-	dvb-v5.c	 \
-	dvb-v5.h	 \
-	parse_string.c	 \
-	parse_string.h	 \
-	dvb-demux.c	 \
-	dvb-fe.c	 \
-	dvb-fe-priv.h    \
-	dvb-log.c	 \
-	dvb-file.c	 \
-	dvb-v5-std.c	 \
-	dvb-sat.c	 \
-	dvb-scan.c	 \
-	descriptors.c	 \
-	tables/header.c		\
-	tables/pat.c		\
-	tables/pmt.c		\
-	tables/nit.c		\
-	tables/sdt.c		\
-	tables/vct.c		\
-	tables/mgt.c		\
-	tables/eit.c		\
-	tables/cat.c		\
-	tables/atsc_eit.c	\
-	tables/mpeg_ts.c	\
-	tables/mpeg_pes.c	\
-	tables/mpeg_es.c	\
-	descriptors/desc_language.c		\
-	descriptors/desc_network_name.c		\
-	descriptors/desc_cable_delivery.c	\
-	descriptors/desc_sat.c			\
+libdvbv5_la_SOURCES = compat-soname.c crc32.c countries.c \
+	dvb-legacy-channel-format.c dvb-zap-format.c dvb-vdr-format.c \
+	dvb-v5.c dvb-v5.h parse_string.c parse_string.h dvb-demux.c \
+	dvb-dev.c dvb-dev-local.c dvb-fe.c dvb-fe-priv.h dvb-log.c \
+	dvb-file.c dvb-v5-std.c dvb-sat.c dvb-scan.c descriptors.c \
+	tables/header.c tables/pat.c tables/pmt.c tables/nit.c \
+	tables/sdt.c tables/vct.c tables/mgt.c tables/eit.c \
+	tables/cat.c tables/atsc_eit.c tables/mpeg_ts.c \
+	tables/mpeg_pes.c tables/mpeg_es.c descriptors/desc_language.c \
+	descriptors/desc_network_name.c \
+	descriptors/desc_cable_delivery.c descriptors/desc_sat.c \
 	descriptors/desc_terrestrial_delivery.c \
-	descriptors/desc_t2_delivery.c		\
-	descriptors/desc_service.c		\
-	descriptors/desc_frequency_list.c	\
-	descriptors/desc_event_short.c		\
-	descriptors/desc_event_extended.c	\
+	descriptors/desc_t2_delivery.c descriptors/desc_service.c \
+	descriptors/desc_frequency_list.c \
+	descriptors/desc_event_short.c \
+	descriptors/desc_event_extended.c \
 	descriptors/desc_atsc_service_location.c \
-	descriptors/desc_hierarchy.c		\
-	descriptors/desc_extension.c		\
-	descriptors/desc_isdbt_delivery.c	\
-	descriptors/desc_logical_channel.c	\
-	descriptors/desc_ts_info.c		\
-	descriptors/desc_partial_reception.c	\
-	descriptors/desc_ca.c			\
-	descriptors/desc_ca_identifier.c
-
+	descriptors/desc_hierarchy.c descriptors/desc_extension.c \
+	descriptors/desc_isdbt_delivery.c \
+	descriptors/desc_logical_channel.c descriptors/desc_ts_info.c \
+	descriptors/desc_partial_reception.c descriptors/desc_ca.c \
+	descriptors/desc_ca_identifier.c $(am__append_1)
 libdvbv5_la_CPPFLAGS = -I../.. $(ENFORCE_LIBDVBV5_STATIC)
 libdvbv5_la_LDFLAGS = $(LIBDVBV5_VERSION) $(ENFORCE_LIBDVBV5_STATIC) -lm -lrt
 libdvbv5_la_LIBADD = $(LTLIBICONV)
@@ -794,6 +802,9 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdvbv5_la-crc32.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdvbv5_la-descriptors.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdvbv5_la-dvb-demux.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdvbv5_la-dvb-dev-local.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdvbv5_la-dvb-dev-remote.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdvbv5_la-dvb-dev.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdvbv5_la-dvb-fe.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdvbv5_la-dvb-file.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdvbv5_la-dvb-legacy-channel-format.Plo@am__quote@
@@ -924,6 +935,20 @@ libdvbv5_la-dvb-demux.lo: dvb-demux.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='dvb-demux.c' object='libdvbv5_la-dvb-demux.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdvbv5_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o libdvbv5_la-dvb-demux.lo `test -f 'dvb-demux.c' || echo '$(srcdir)/'`dvb-demux.c
+
+libdvbv5_la-dvb-dev.lo: dvb-dev.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdvbv5_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT libdvbv5_la-dvb-dev.lo -MD -MP -MF $(DEPDIR)/libdvbv5_la-dvb-dev.Tpo -c -o libdvbv5_la-dvb-dev.lo `test -f 'dvb-dev.c' || echo '$(srcdir)/'`dvb-dev.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libdvbv5_la-dvb-dev.Tpo $(DEPDIR)/libdvbv5_la-dvb-dev.Plo
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='dvb-dev.c' object='libdvbv5_la-dvb-dev.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdvbv5_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o libdvbv5_la-dvb-dev.lo `test -f 'dvb-dev.c' || echo '$(srcdir)/'`dvb-dev.c
+
+libdvbv5_la-dvb-dev-local.lo: dvb-dev-local.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdvbv5_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT libdvbv5_la-dvb-dev-local.lo -MD -MP -MF $(DEPDIR)/libdvbv5_la-dvb-dev-local.Tpo -c -o libdvbv5_la-dvb-dev-local.lo `test -f 'dvb-dev-local.c' || echo '$(srcdir)/'`dvb-dev-local.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libdvbv5_la-dvb-dev-local.Tpo $(DEPDIR)/libdvbv5_la-dvb-dev-local.Plo
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='dvb-dev-local.c' object='libdvbv5_la-dvb-dev-local.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdvbv5_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o libdvbv5_la-dvb-dev-local.lo `test -f 'dvb-dev-local.c' || echo '$(srcdir)/'`dvb-dev-local.c
 
 libdvbv5_la-dvb-fe.lo: dvb-fe.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdvbv5_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT libdvbv5_la-dvb-fe.lo -MD -MP -MF $(DEPDIR)/libdvbv5_la-dvb-fe.Tpo -c -o libdvbv5_la-dvb-fe.lo `test -f 'dvb-fe.c' || echo '$(srcdir)/'`dvb-fe.c
@@ -1197,6 +1222,13 @@ descriptors/libdvbv5_la-desc_ca_identifier.lo: descriptors/desc_ca_identifier.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='descriptors/desc_ca_identifier.c' object='descriptors/libdvbv5_la-desc_ca_identifier.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdvbv5_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o descriptors/libdvbv5_la-desc_ca_identifier.lo `test -f 'descriptors/desc_ca_identifier.c' || echo '$(srcdir)/'`descriptors/desc_ca_identifier.c
+
+libdvbv5_la-dvb-dev-remote.lo: dvb-dev-remote.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdvbv5_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT libdvbv5_la-dvb-dev-remote.lo -MD -MP -MF $(DEPDIR)/libdvbv5_la-dvb-dev-remote.Tpo -c -o libdvbv5_la-dvb-dev-remote.lo `test -f 'dvb-dev-remote.c' || echo '$(srcdir)/'`dvb-dev-remote.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libdvbv5_la-dvb-dev-remote.Tpo $(DEPDIR)/libdvbv5_la-dvb-dev-remote.Plo
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='dvb-dev-remote.c' object='libdvbv5_la-dvb-dev-remote.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdvbv5_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o libdvbv5_la-dvb-dev-remote.lo `test -f 'dvb-dev-remote.c' || echo '$(srcdir)/'`dvb-dev-remote.c
 
 mostlyclean-libtool:
 	-rm -f *.lo
