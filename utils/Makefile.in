@@ -424,6 +424,7 @@ SUBDIRS = libv4l2util libmedia_dev decode_tm6000 ivtv-ctl ir-ctl \
 	v4l2-sysfs-path cec-ctl cec-compliance cec-follower rds-ctl \
 	$(am__append_1) $(am__append_2) $(am__append_3) \
 	$(am__append_4)
+EXTRA_DIST = common
 all: all-recursive
 
 .SUFFIXES:

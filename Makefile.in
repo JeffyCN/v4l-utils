@@ -476,7 +476,7 @@ AUTOMAKE_OPTIONS = foreign
 ACLOCAL_AMFLAGS = -I m4
 SUBDIRS = v4l-utils-po libdvbv5-po lib $(am__append_1)
 EXTRA_DIST = android-config.h bootstrap.sh doxygen_libdvbv5.cfg include COPYING.libv4l \
-        README.libv4l README.lib-multi-threading TODO.libdvbv5 \
+        COPYING.libdvbv5 README.libv4l README.lib-multi-threading TODO.libdvbv5 \
         doc/libdvbv5-index.doc
 
 @DX_COND_doc_TRUE@@DX_COND_html_TRUE@DX_CLEAN_HTML = @DX_DOCDIR@/html
