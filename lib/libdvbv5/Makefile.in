@@ -144,13 +144,13 @@ libdvbv5_la_DEPENDENCIES = $(am__DEPENDENCIES_1)
 am__libdvbv5_la_SOURCES_DIST = compat-soname.c crc32.c countries.c \
 	dvb-legacy-channel-format.c dvb-zap-format.c dvb-vdr-format.c \
 	dvb-v5.c dvb-v5.h parse_string.c parse_string.h dvb-demux.c \
-	dvb-dev.c dvb-dev-local.c dvb-fe.c dvb-fe-priv.h dvb-log.c \
-	dvb-file.c dvb-v5-std.c dvb-sat.c dvb-scan.c descriptors.c \
-	tables/header.c tables/pat.c tables/pmt.c tables/nit.c \
-	tables/sdt.c tables/vct.c tables/mgt.c tables/eit.c \
-	tables/cat.c tables/atsc_eit.c tables/mpeg_ts.c \
-	tables/mpeg_pes.c tables/mpeg_es.c descriptors/desc_language.c \
-	descriptors/desc_network_name.c \
+	dvb-dev.c dvb-dev-local.c dvb-dev-priv.h dvb-fe.c \
+	dvb-fe-priv.h dvb-log.c dvb-file.c dvb-v5-std.c dvb-sat.c \
+	dvb-scan.c descriptors.c tables/header.c tables/pat.c \
+	tables/pmt.c tables/nit.c tables/sdt.c tables/vct.c \
+	tables/mgt.c tables/eit.c tables/cat.c tables/atsc_eit.c \
+	tables/mpeg_ts.c tables/mpeg_pes.c tables/mpeg_es.c \
+	descriptors/desc_language.c descriptors/desc_network_name.c \
 	descriptors/desc_cable_delivery.c descriptors/desc_sat.c \
 	descriptors/desc_terrestrial_delivery.c \
 	descriptors/desc_t2_delivery.c descriptors/desc_service.c \
@@ -589,13 +589,13 @@ udevrulesdir = @udevrulesdir@
 libdvbv5_la_SOURCES = compat-soname.c crc32.c countries.c \
 	dvb-legacy-channel-format.c dvb-zap-format.c dvb-vdr-format.c \
 	dvb-v5.c dvb-v5.h parse_string.c parse_string.h dvb-demux.c \
-	dvb-dev.c dvb-dev-local.c dvb-fe.c dvb-fe-priv.h dvb-log.c \
-	dvb-file.c dvb-v5-std.c dvb-sat.c dvb-scan.c descriptors.c \
-	tables/header.c tables/pat.c tables/pmt.c tables/nit.c \
-	tables/sdt.c tables/vct.c tables/mgt.c tables/eit.c \
-	tables/cat.c tables/atsc_eit.c tables/mpeg_ts.c \
-	tables/mpeg_pes.c tables/mpeg_es.c descriptors/desc_language.c \
-	descriptors/desc_network_name.c \
+	dvb-dev.c dvb-dev-local.c dvb-dev-priv.h dvb-fe.c \
+	dvb-fe-priv.h dvb-log.c dvb-file.c dvb-v5-std.c dvb-sat.c \
+	dvb-scan.c descriptors.c tables/header.c tables/pat.c \
+	tables/pmt.c tables/nit.c tables/sdt.c tables/vct.c \
+	tables/mgt.c tables/eit.c tables/cat.c tables/atsc_eit.c \
+	tables/mpeg_ts.c tables/mpeg_pes.c tables/mpeg_es.c \
+	descriptors/desc_language.c descriptors/desc_network_name.c \
 	descriptors/desc_cable_delivery.c descriptors/desc_sat.c \
 	descriptors/desc_terrestrial_delivery.c \
 	descriptors/desc_t2_delivery.c descriptors/desc_service.c \
