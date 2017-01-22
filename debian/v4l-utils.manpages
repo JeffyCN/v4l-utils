@@ -1,2 +1,6 @@
+utils/cec-compliance/cec-compliance.1
+utils/cec-ctl/cec-ctl.1
+utils/cec-follower/cec-follower.1
+utils/ir-ctl/ir-ctl.1
 utils/v4l2-compliance/v4l2-compliance.1
 utils/v4l2-ctl/v4l2-ctl.1

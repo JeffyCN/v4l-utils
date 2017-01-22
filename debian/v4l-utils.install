@@ -1,5 +1,9 @@
+usr/bin/cec-ctl
+usr/bin/cec-compliance
+usr/bin/cec-follower
 usr/bin/cx18-ctl
 usr/bin/decode_tm6000
+usr/bin/ir-ctl
 usr/bin/ivtv-ctl
 usr/bin/media-ctl
 usr/bin/rds-ctl
