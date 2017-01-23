@@ -1,0 +1,11 @@
+lib/udev/rules.d/70-infrared.rules
+usr/lib/x86_64-linux-gnu/libdvbv5.la
+usr/lib/x86_64-linux-gnu/libv4l/v4l1compat.la
+usr/lib/x86_64-linux-gnu/libv4l/v4l2convert.la
+usr/lib/x86_64-linux-gnu/libv4l1.la
+usr/lib/x86_64-linux-gnu/libv4l2.la
+usr/lib/x86_64-linux-gnu/libv4l2rds.la
+usr/lib/x86_64-linux-gnu/libv4lconvert.la
+usr/lib/x86_64-linux-gnu/v4l1compat.so
+usr/lib/x86_64-linux-gnu/v4l2convert.so
+usr/lib/x86_64-linux-gnu/libv4l/plugins/libv4l-mplane.la
