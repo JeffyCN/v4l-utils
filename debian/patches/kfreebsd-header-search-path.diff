@@ -1,0 +1,15 @@
+Author: Gregor Jasny <gjasny@googlemail.com>
+Description: Apply FreeBSD header search paths also to kFreeBSD
+Applied-Upstream: https://git.linuxtv.org/v4l-utils.git/commit/?id=15479381d6924c02bb02755f0e05b84ddd1b4e1a
+
+--- a/configure.ac
++++ b/configure.ac
+@@ -152,7 +152,7 @@
+   linux*)
+     linux_os="yes"
+     ;;
+-  freebsd*)
++  *freebsd*)
+     freebsd_os="yes"
+     ;;
+ esac
