@@ -3,7 +3,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.59)
-AC_INIT([v4l-utils],[1.12.2])
+AC_INIT([v4l-utils],[1.12.3])
 
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIR([m4])
@@ -152,7 +152,7 @@ case "$host_os" in
   linux*)
     linux_os="yes"
     ;;
-  freebsd*)
+  *freebsd*)
     freebsd_os="yes"
     ;;
 esac

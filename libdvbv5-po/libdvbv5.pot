@@ -6,9 +6,9 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: v4l-utils 1.12.2\n"
+"Project-Id-Version: v4l-utils 1.12.3\n"
 "Report-Msgid-Bugs-To: linux-media@vger.Kernel.org\n"
-"POT-Creation-Date: 2017-01-22 22:00+0100\n"
+"POT-Creation-Date: 2017-02-17 20:09+0100\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -502,71 +502,79 @@ msgid "Astra"
 msgstr ""
 
 #: lib/libdvbv5/dvb-sat.c:155
+msgid "Invacom QPH-031"
+msgstr ""
+
+#: lib/libdvbv5/dvb-sat.c:178
 msgid "Big Dish - Monopoint LNBf"
 msgstr ""
 
-#: lib/libdvbv5/dvb-sat.c:168
+#: lib/libdvbv5/dvb-sat.c:191
 msgid "Big Dish - Multipoint LNBf"
 msgstr ""
 
-#: lib/libdvbv5/dvb-sat.c:183
+#: lib/libdvbv5/dvb-sat.c:206
 msgid "DishPro LNBf"
 msgstr ""
 
-#: lib/libdvbv5/dvb-sat.c:198
+#: lib/libdvbv5/dvb-sat.c:221
 msgid "Japan 110BS/CS LNBf"
 msgstr ""
 
-#: lib/libdvbv5/dvb-sat.c:211
+#: lib/libdvbv5/dvb-sat.c:234
 msgid "BrasilSat Stacked"
 msgstr ""
 
-#: lib/libdvbv5/dvb-sat.c:226
+#: lib/libdvbv5/dvb-sat.c:249
 msgid "BrasilSat Oi"
 msgstr ""
 
-#: lib/libdvbv5/dvb-sat.c:243
+#: lib/libdvbv5/dvb-sat.c:266
 msgid "BrasilSat Amazonas 1/2 - 3 Oscilators"
 msgstr ""
 
-#: lib/libdvbv5/dvb-sat.c:254
+#: lib/libdvbv5/dvb-sat.c:277
 msgid "BrasilSat Amazonas 1/2 - 2 Oscilators"
 msgstr ""
 
-#: lib/libdvbv5/dvb-sat.c:265
+#: lib/libdvbv5/dvb-sat.c:288
 msgid "BrasilSat custom GVT"
 msgstr ""
 
-#: lib/libdvbv5/dvb-sat.c:291
+#: lib/libdvbv5/dvb-sat.c:313
+msgid "Freqs     : "
+msgstr ""
+
+#: lib/libdvbv5/dvb-sat.c:314
 msgid "Horizontal: "
 msgstr ""
 
-#: lib/libdvbv5/dvb-sat.c:292
+#: lib/libdvbv5/dvb-sat.c:315
 msgid "Vertical  : "
 msgstr ""
 
-#: lib/libdvbv5/dvb-sat.c:293
+#: lib/libdvbv5/dvb-sat.c:316
 msgid "Left      : "
 msgstr ""
 
-#: lib/libdvbv5/dvb-sat.c:294
+#: lib/libdvbv5/dvb-sat.c:317
 msgid "Right     : "
 msgstr ""
 
-#: lib/libdvbv5/dvb-sat.c:305
+#: lib/libdvbv5/dvb-sat.c:328
 msgid " (bandstacking)"
 msgstr ""
 
-#: lib/libdvbv5/dvb-sat.c:308
+#: lib/libdvbv5/dvb-sat.c:331
 #, c-format
 msgid "\t%s%d to %d MHz, LO: %d MHz\n"
 msgstr ""
 
-#: lib/libdvbv5/dvb-sat.c:532
+#: lib/libdvbv5/dvb-sat.c:555
 msgid "sending diseq failed"
 msgstr ""
 
-#: lib/libdvbv5/dvb-sat.c:581
+#: lib/libdvbv5/dvb-sat.c:604
 msgid "Need a LNBf to work"
 msgstr ""
 
