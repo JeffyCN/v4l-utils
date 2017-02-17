@@ -152,6 +152,29 @@ static const struct dvb_sat_lnb_priv lnb[] = {
 		},
 	}, {
 		.desc = {
+			.name = N_("Invacom QPH-031"),
+			.alias = "QPH031",
+			// Legacy fields - kept just to avoid API/ABI breakages
+			.lowfreq = 10750,
+			.highfreq = 11250,
+			.rangeswitch = 12200,
+			.freqrange = {
+				{ 11700, 12200 },
+				{ 12200, 12700 },
+			},
+		},
+		// Note: This LNBf can accept both V/H and L/R polarization
+		// on ports 1 and 3, V is 12V and H is 19V
+		// on ports 2 and 4, R is 12V and L is 19V
+		// This is the same as what's done for Universal LNBf, so,
+		// we don't need any special logic here to handle this special
+		// case.
+		.freqrange = {
+			{ 11700, 12200, 10750, 12200  },
+			{ 12200, 12700, 11250, 0  },
+		},
+	}, {
+		.desc = {
 			.name = N_("Big Dish - Monopoint LNBf"),
 			.alias = "C-BAND",
 			// Legacy fields - kept just to avoid API/ABI breakages
@@ -287,11 +310,11 @@ int dvb_sat_search_lnb(const char *name)
 }
 
 static char *pol_name[] = {
-	[POLARIZATION_OFF] = "",
-	[POLARIZATION_H] = N_("Horizontal: "),
-	[POLARIZATION_V] = N_("Vertical  : "),
-	[POLARIZATION_L] = N_("Left      : "),
-	[POLARIZATION_R] = N_("Right     : "),
+	[POLARIZATION_OFF] = N_("Freqs     : "),
+	[POLARIZATION_H]   = N_("Horizontal: "),
+	[POLARIZATION_V]   = N_("Vertical  : "),
+	[POLARIZATION_L]   = N_("Left      : "),
+	[POLARIZATION_R]   = N_("Right     : "),
 };
 
 int dvb_print_lnb(int i)
@@ -588,12 +611,18 @@ static int dvb_sat_get_freq(struct dvb_v5_fe_parms *p, uint16_t *t)
 	dvb_fe_retrieve_parm(&parms->p, DTV_FREQUENCY, &freq);
 
 	if (!lnb->freqrange[1].low) {
+		if (parms->p.verbose)
+			dvb_log("LNBf with a single LO at %.2f MHz", parms->freq_offset/1000.);
+
 		/* Trivial case: LNBf with a single local oscilator(LO) */
 		parms->freq_offset = lnb->freqrange[0].int_freq * 1000;
 		return freq;
 	}
 
 	if (lnb->freqrange[0].pol) {
+		if (parms->p.verbose > 1)
+			dvb_log("LNBf polarity driven");
+
 		/* polarization-controlled multi-LO multipoint LNBf (bandstacking) */
 		dvb_fe_retrieve_parm(&parms->p, DTV_POLARIZATION, &pol);
 
@@ -607,12 +636,20 @@ static int dvb_sat_get_freq(struct dvb_v5_fe_parms *p, uint16_t *t)
 			return freq;
 		}
 	} else {
+		if (parms->p.verbose > 1)
+			dvb_log("Seeking for LO for %.2f MHz frequency", freq / 1000000.);
 		/* Multi-LO (dual-band) LNBf using DiSEqC */
 		for (j = 0; j < ARRAY_SIZE(lnb->freqrange) && lnb->freqrange[j].low; j++) {
+			if (parms->p.verbose > 1)
+				dvb_log("LO setting %i: %.2f MHz to %.2f MHz", j,
+					lnb->freqrange[j].low / 1000., lnb->freqrange[j].high / 1000.);
+
 			if (freq < lnb->freqrange[j].low * 1000 || freq > lnb->freqrange[j].high * 1000)
 				continue;
-			if (freq > lnb->freqrange[j].rangeswitch * 1000)
-				j++;
+			if (lnb->freqrange[j].rangeswitch && freq > lnb->freqrange[j].rangeswitch * 1000) {
+				if (j + 1 < ARRAY_SIZE(lnb->freqrange) && lnb->freqrange[j + 1].low)
+					j++;
+			}
 
 			/* Sets DiSEqC to high_band if not low band */
 			if (j)
@@ -626,6 +663,8 @@ static int dvb_sat_get_freq(struct dvb_v5_fe_parms *p, uint16_t *t)
 					dvb_log("BPF: %d KHz", parms->p.freq_bpf);
 			} else {
 				parms->freq_offset = lnb->freqrange[j].int_freq * 1000;
+				if (parms->p.verbose > 1)
+					dvb_log("Multi-LO LNBf. using LO setting %i at %.2f MHz", j, parms->freq_offset / 1000.);
 			}
 			return freq;
 		}
