@@ -1,3 +1,10 @@
+v4l-utils (1.12.4-1) unstable; urgency=medium
+
+  * Imported Upstream version 1.12.4 (Closes: #859008)
+  * Remove patches applied upstream
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Sat, 06 May 2017 19:29:03 +0200
+
 v4l-utils (1.12.3-2) unstable; urgency=medium
 
   * Fix DVB descriptor parsing (Closes: #859008)
