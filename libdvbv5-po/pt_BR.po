@@ -8,7 +8,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: libdvbv5 1.7.0\n"
 "Report-Msgid-Bugs-To: linux-media@vger.Kernel.org\n"
-"POT-Creation-Date: 2017-02-17 20:09+0100\n"
+"POT-Creation-Date: 2017-05-06 18:54+0200\n"
 "PO-Revision-Date: 2017-02-15 11:50-0200\n"
 "Last-Translator: Mauro Carvalho Chehab <mchehab@osg.samsung.com>\n"
 "Language-Team: Brazilian Portuguese\n"
@@ -252,7 +252,7 @@ msgid "Can't add property %s\n"
 msgstr "Não é possível adicionar propriedade %s\n"
 
 #: lib/libdvbv5/dvb-file.c:240 lib/libdvbv5/dvb-file.c:746
-#: lib/libdvbv5/dvb-file.c:1239
+#: lib/libdvbv5/dvb-file.c:1250
 msgid "Allocating memory for dvb_file"
 msgstr "Alocação de memória para dvb_file"
 
@@ -341,120 +341,120 @@ msgstr "falta valor"
 msgid "value %s is invalid for %s"
 msgstr "valor %s é inválido para %s"
 
-#: lib/libdvbv5/dvb-file.c:1120
+#: lib/libdvbv5/dvb-file.c:1131
 #, c-format
 msgid "Channel %s (service ID %d) not found on PMT. Skipping it."
 msgstr "Canal %s (serviço de ID %d) não foi encontrado na PMT. Ignorando."
 
-#: lib/libdvbv5/dvb-file.c:1138
+#: lib/libdvbv5/dvb-file.c:1149
 msgid "Not enough memory"
 msgstr "Memória insuficiente"
 
-#: lib/libdvbv5/dvb-file.c:1167
+#: lib/libdvbv5/dvb-file.c:1178
 msgid "Couldn't get frontend props"
 msgstr "Não foi possível obter propriedades do frontend"
 
-#: lib/libdvbv5/dvb-file.c:1196
+#: lib/libdvbv5/dvb-file.c:1207
 #, c-format
 msgid "Storing Service ID %d: '%s'"
 msgstr "Armazenando Serviço ID %d: '%s'"
 
-#: lib/libdvbv5/dvb-file.c:1211
+#: lib/libdvbv5/dvb-file.c:1222
 msgid "reserved"
 msgstr "reservado"
 
-#: lib/libdvbv5/dvb-file.c:1212
+#: lib/libdvbv5/dvb-file.c:1223
 msgid "digital television"
 msgstr "televisão digital"
 
-#: lib/libdvbv5/dvb-file.c:1213
+#: lib/libdvbv5/dvb-file.c:1224
 msgid "digital radio"
 msgstr "rádio digital"
 
-#: lib/libdvbv5/dvb-file.c:1214
+#: lib/libdvbv5/dvb-file.c:1225
 msgid "Teletext"
 msgstr "Teletexto"
 
-#: lib/libdvbv5/dvb-file.c:1215
+#: lib/libdvbv5/dvb-file.c:1226
 msgid "NVOD reference"
 msgstr "NVOD referência"
 
-#: lib/libdvbv5/dvb-file.c:1216
+#: lib/libdvbv5/dvb-file.c:1227
 msgid "NVOD time-shifted"
 msgstr "NVOD com time-shift"
 
-#: lib/libdvbv5/dvb-file.c:1217
+#: lib/libdvbv5/dvb-file.c:1228
 msgid "mosaic"
 msgstr "mosaico"
 
-#: lib/libdvbv5/dvb-file.c:1218
+#: lib/libdvbv5/dvb-file.c:1229
 msgid "PAL coded signal"
 msgstr "Sinal codificado PAL"
 
-#: lib/libdvbv5/dvb-file.c:1219
+#: lib/libdvbv5/dvb-file.c:1230
 msgid "SECAM coded signal"
 msgstr "Sinal codificado SECAM"
 
-#: lib/libdvbv5/dvb-file.c:1220
+#: lib/libdvbv5/dvb-file.c:1231
 msgid "D/D2-MAC"
 msgstr "D/D2-MAC"
 
-#: lib/libdvbv5/dvb-file.c:1221
+#: lib/libdvbv5/dvb-file.c:1232
 msgid "FM Radio"
 msgstr "Rádio FM"
 
-#: lib/libdvbv5/dvb-file.c:1222
+#: lib/libdvbv5/dvb-file.c:1233
 msgid "NTSC coded signal"
 msgstr "Sinal codificado NTSC"
 
-#: lib/libdvbv5/dvb-file.c:1223
+#: lib/libdvbv5/dvb-file.c:1234
 msgid "data broadcast"
 msgstr "transmissão de dados"
 
-#: lib/libdvbv5/dvb-file.c:1224
+#: lib/libdvbv5/dvb-file.c:1235
 msgid "user defined"
 msgstr "definido pelo usuário"
 
-#: lib/libdvbv5/dvb-file.c:1263
+#: lib/libdvbv5/dvb-file.c:1274
 #, c-format
 msgid "Virtual channel %s, name = %s"
 msgstr "Canal virtual %s, nome = %s"
 
-#: lib/libdvbv5/dvb-file.c:1291
+#: lib/libdvbv5/dvb-file.c:1302
 #, c-format
 msgid "Service %s, provider %s: %s"
 msgstr "Serviço %s, prestador %s: %s"
 
-#: lib/libdvbv5/dvb-file.c:1304
+#: lib/libdvbv5/dvb-file.c:1315
 #, c-format
 msgid "Storing as channel %s"
 msgstr "Armazenar como canal %s"
 
-#: lib/libdvbv5/dvb-file.c:1340
+#: lib/libdvbv5/dvb-file.c:1351
 msgid "WARNING: no SDT table - storing channel(s) without their names"
 msgstr "AVISO: nenhuma tabela SDT - armazenando canal(s), sem os seus nomes"
 
-#: lib/libdvbv5/dvb-file.c:1342
+#: lib/libdvbv5/dvb-file.c:1353
 msgid "WARNING: Some Service IDs are not at the SDT table"
 msgstr "AVISO: Alguns identificadores de serviço não estão na tabela SDT"
 
-#: lib/libdvbv5/dvb-file.c:1370
+#: lib/libdvbv5/dvb-file.c:1381
 #, c-format
 msgid "File format %s is unknown\n"
 msgstr "Formato de arquivo %s é desconhecido\n"
 
-#: lib/libdvbv5/dvb-file.c:1415
+#: lib/libdvbv5/dvb-file.c:1426
 #, c-format
 msgid "ERROR: Delivery system %s is not known. Valid values are:\n"
 msgstr ""
 "ERRO: sistema de TV digital %s não é conhecido. Os valores válidos são:\n"
 
-#: lib/libdvbv5/dvb-file.c:1459
+#: lib/libdvbv5/dvb-file.c:1470
 #, c-format
 msgid "Currently, VDR format is supported only for output\n"
 msgstr "Atualmente, o formato VDR é suportado apenas para a saída\n"
 
-#: lib/libdvbv5/dvb-file.c:1462
+#: lib/libdvbv5/dvb-file.c:1473
 #, c-format
 msgid "Format is not supported\n"
 msgstr "Formato não é suportado\n"
