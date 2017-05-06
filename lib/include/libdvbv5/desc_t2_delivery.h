@@ -45,10 +45,14 @@
  *
  * @param cell_id_extension	cell id extension
  * @param transposer_frequency	transposer frequency
+ *
+ * NOTE: This struct is deprecated and will never be filled. All
+ * subcell transposer frequencies will be added to
+ * dvb_desc_t2_delivery::centre_frequency array.
  */
 struct dvb_desc_t2_delivery_subcell {
 	uint8_t cell_id_extension;
-	uint16_t transposer_frequency;
+	uint16_t transposer_frequency;		// Should be 32 bits, instead
 } __attribute__((packed));
 
 /**
@@ -65,7 +69,8 @@ struct dvb_desc_t2_delivery_subcell {
  * @param other_frequency_flag	other frequency flag
  * @param tfs_flag		tfs flag
  *
- * @param centre_frequency	centre frequency vector
+ * @param centre_frequency	centre frequency vector, for all cell and
+ * 				subcel ID's
  * @param frequency_loop_length	size of the dvb_desc_t2_delivery::centre_frequency
  *				vector
  *
@@ -86,13 +91,15 @@ struct dvb_desc_t2_delivery {
 			uint16_t transmission_mode:3;
 			uint16_t guard_interval:3;
 			uint16_t reserved:2;
-			uint16_t bandwidth:3;
+			uint16_t bandwidth:4;
 			uint16_t SISO_MISO:2;
 		} __attribute__((packed));
 	} __attribute__((packed));
 
 	uint32_t *centre_frequency;
 	uint8_t frequency_loop_length;
+
+	/* Unused, as the definitions here are incomplete */
 	uint8_t subcel_info_loop_length;
 	struct dvb_desc_t2_delivery_subcell *subcell;
 } __attribute__((packed));
@@ -160,6 +167,12 @@ extern const uint32_t dvbt2_interval[];
  *	  enum fe_transmit_mode, as defined by DVBv5 API.
  */
 extern const unsigned dvbt2_transmission_mode[];
+
+/**
+ * @brief converts from internal representation to string the SISO_MISO
+ *	  field of dvb_desc_t2_delivery:SISO_MISO field.
+ */
+const char *siso_miso[4];
 
 #ifdef __cplusplus
 }
