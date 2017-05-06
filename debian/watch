@@ -1,3 +1,3 @@
 version=4
-opts=pgpsigurlmangle=s/$/.asc/ http://linuxtv.org/downloads/@PACKAGE@/ @PACKAGE@@ANY_VERSION@@ARCHIVE_EXT@ debian uupdate
+opts=pgpsigurlmangle=s/$/.asc/ https://linuxtv.org/downloads/@PACKAGE@/ @PACKAGE@@ANY_VERSION@@ARCHIVE_EXT@ debian uupdate
 
