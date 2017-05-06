@@ -271,6 +271,7 @@ libdvbv5.so.0 libdvbv5-0 #MINVER#
  isdbt_interval@Base 1.4.0
  isdbt_mode@Base 1.4.0
  pmt_stream_name@Base 1.4.0
+ siso_miso@Base 1.12.4
  stack_dump@Base 1.12.1
  sys_atsc_props@Base 1.4.0
  sys_atscmh_props@Base 1.4.0
