@@ -6,9 +6,9 @@
 #, fuzzy
 msgid ""
 msgstr ""
-"Project-Id-Version: v4l-utils 1.12.4\n"
+"Project-Id-Version: v4l-utils 1.12.5\n"
 "Report-Msgid-Bugs-To: linux-media@vger.Kernel.org\n"
-"POT-Creation-Date: 2017-05-06 18:54+0200\n"
+"POT-Creation-Date: 2017-05-10 20:26+0200\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
@@ -584,7 +584,7 @@ msgid "%s: table memory pointer not filled"
 msgstr ""
 
 #: lib/libdvbv5/dvb-scan.c:166 lib/libdvbv5/dvb-scan.c:214
-#: lib/libdvbv5/dvb-scan.c:238 lib/libdvbv5/dvb-scan.c:329
+#: lib/libdvbv5/dvb-scan.c:238 lib/libdvbv5/dvb-scan.c:323
 #, c-format
 msgid "%s: out of memory"
 msgstr ""
@@ -599,105 +599,105 @@ msgstr ""
 msgid "%s: couldn't match ID %d at the active section filters"
 msgstr ""
 
-#: lib/libdvbv5/dvb-scan.c:261
+#: lib/libdvbv5/dvb-scan.c:255
 #, c-format
 msgid "%s: section repeated on table 0x%02x, extension ID 0x%04x: done"
 msgstr ""
 
-#: lib/libdvbv5/dvb-scan.c:279
+#: lib/libdvbv5/dvb-scan.c:273
 #, c-format
 msgid "%s: no initializer for table %d"
 msgstr ""
 
-#: lib/libdvbv5/dvb-scan.c:285
+#: lib/libdvbv5/dvb-scan.c:279
 #, c-format
 msgid "%s: table 0x%02x, extension ID 0x%04x: done"
 msgstr ""
 
-#: lib/libdvbv5/dvb-scan.c:324
+#: lib/libdvbv5/dvb-scan.c:318
 #, c-format
 msgid "%s: waiting for table ID 0x%02x, program ID 0x%02x"
 msgstr ""
 
-#: lib/libdvbv5/dvb-scan.c:350
+#: lib/libdvbv5/dvb-scan.c:344
 #, c-format
 msgid "%s: no data read on section filter"
 msgstr ""
 
-#: lib/libdvbv5/dvb-scan.c:357
+#: lib/libdvbv5/dvb-scan.c:351
 #, c-format
 msgid "%s: buf returned an empty buffer"
 msgstr ""
 
-#: lib/libdvbv5/dvb-scan.c:362
+#: lib/libdvbv5/dvb-scan.c:356
 msgid "dvb_read_section: read error"
 msgstr ""
 
-#: lib/libdvbv5/dvb-scan.c:369
+#: lib/libdvbv5/dvb-scan.c:363
 #, c-format
 msgid "%s: crc error"
 msgstr ""
 
-#: lib/libdvbv5/dvb-scan.c:512
+#: lib/libdvbv5/dvb-scan.c:506
 msgid "error while waiting for PAT table"
 msgstr ""
 
-#: lib/libdvbv5/dvb-scan.c:528
+#: lib/libdvbv5/dvb-scan.c:522
 msgid "error while waiting for VCT table"
 msgstr ""
 
-#: lib/libdvbv5/dvb-scan.c:542
+#: lib/libdvbv5/dvb-scan.c:536
 #, c-format
 msgid "Program #%d is network PID: 0x%04x"
 msgstr ""
 
-#: lib/libdvbv5/dvb-scan.c:548
+#: lib/libdvbv5/dvb-scan.c:542
 #, c-format
 msgid "Program #%d ID 0x%04x, service ID 0x%04x"
 msgstr ""
 
-#: lib/libdvbv5/dvb-scan.c:559
+#: lib/libdvbv5/dvb-scan.c:553
 #, c-format
 msgid "error while reading the PMT table for service 0x%04x"
 msgstr ""
 
-#: lib/libdvbv5/dvb-scan.c:579 lib/libdvbv5/dvb-scan.c:608
+#: lib/libdvbv5/dvb-scan.c:573 lib/libdvbv5/dvb-scan.c:602
 msgid "error while reading the NIT table"
 msgstr ""
 
-#: lib/libdvbv5/dvb-scan.c:592 lib/libdvbv5/dvb-scan.c:619
+#: lib/libdvbv5/dvb-scan.c:586 lib/libdvbv5/dvb-scan.c:613
 msgid "error while reading the SDT table"
 msgstr ""
 
-#: lib/libdvbv5/dvb-scan.c:600
+#: lib/libdvbv5/dvb-scan.c:594
 msgid "Parsing other NIT/SDT"
 msgstr ""
 
-#: lib/libdvbv5/dvb-scan.c:665
+#: lib/libdvbv5/dvb-scan.c:659
 msgid "dvb_fe_set_parms failed"
 msgstr ""
 
-#: lib/libdvbv5/dvb-scan.c:760
+#: lib/libdvbv5/dvb-scan.c:754
 msgid ""
 "Cannot calc frequency shift. Either bandwidth/symbol-rate is unavailable "
 "(yet)."
 msgstr ""
 
-#: lib/libdvbv5/dvb-scan.c:842
+#: lib/libdvbv5/dvb-scan.c:836
 msgid "not enough memory for a new scanning frequency/TS"
 msgstr ""
 
-#: lib/libdvbv5/dvb-scan.c:871
+#: lib/libdvbv5/dvb-scan.c:865
 #, c-format
 msgid "New transponder/channel found: #%d: %d"
 msgstr ""
 
-#: lib/libdvbv5/dvb-scan.c:880
+#: lib/libdvbv5/dvb-scan.c:874
 #, c-format
 msgid "BUG: Couldn't add %d to the scan frequency list."
 msgstr ""
 
-#: lib/libdvbv5/dvb-scan.c:1222
+#: lib/libdvbv5/dvb-scan.c:1216
 msgid "Transponders detection not implemented for this standard yet."
 msgstr ""
 
