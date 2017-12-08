@@ -1,3 +1,9 @@
+v4l-utils (1.12.6-1) unstable; urgency=medium
+
+  * Imported Upstream version 1.12.6 (LP: #1737063)
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Fri, 08 Dec 2017 18:51:14 +0100
+
 v4l-utils (1.12.5-1) unstable; urgency=medium
 
   * Imported Upstream version 1.12.5 (Closes: #859008)
