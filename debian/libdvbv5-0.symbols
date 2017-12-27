@@ -94,14 +94,17 @@ libdvbv5.so.0 libdvbv5-0 #MINVER#
  dvb_dev_find@Base 1.12.1
  dvb_dev_free@Base 1.12.1
  dvb_dev_free_devices@Base 1.12.1
+ dvb_dev_get_fd@Base 1.14.0
  dvb_dev_local_init@Base 1.12.1
  dvb_dev_open@Base 1.12.1
  dvb_dev_read@Base 1.12.1
  dvb_dev_remote_init@Base 1.12.1
  dvb_dev_scan@Base 1.12.1
+ dvb_dev_seek_by_adapter@Base 1.14.0
  dvb_dev_seek_by_sysname@Base 1.12.1
  dvb_dev_set_bufsize@Base 1.12.1
  dvb_dev_set_log@Base 1.12.1
+ dvb_dev_set_logpriv@Base 1.14.0
  dvb_dev_stop_monitor@Base 1.12.1
  dvb_dmx_close@Base 1.4.0
  dvb_dmx_open@Base 1.4.0
@@ -140,6 +143,8 @@ libdvbv5.so.0 libdvbv5-0 #MINVER#
  dvb_fe_snprintf_eng@Base 1.4.0
  dvb_fe_snprintf_stat@Base 1.4.0
  dvb_fe_store_parm@Base 1.4.0
+ dvb_get_dev_info@Base 1.14.0
+ dvb_get_log_priv@Base 1.14.0
  dvb_get_pmt_pid@Base 1.4.0
  dvb_get_ts_tables@Base 1.4.0
  dvb_guess_user_country@Base 1.8.0
@@ -148,6 +153,8 @@ libdvbv5.so.0 libdvbv5-0 #MINVER#
  dvb_local_fe_get_stats@Base 1.12.1
  dvb_local_fe_set_parms@Base 1.12.1
  dvb_local_fe_set_sys@Base 1.12.1
+ dvb_local_get_dev_info@Base 1.14.0
+ dvb_local_seek_by_adapter@Base 1.14.0
  dvb_local_seek_by_sysname@Base 1.12.1
  dvb_mpeg_es_frame_names@Base 1.4.0
  dvb_mpeg_es_pic_start_init@Base 1.4.0
@@ -176,6 +183,8 @@ libdvbv5.so.0 libdvbv5-0 #MINVER#
  dvb_remote_fe_get_stats@Base 1.12.1
  dvb_remote_fe_set_parms@Base 1.12.1
  dvb_remote_fe_set_sys@Base 1.12.1
+ dvb_remote_get_dev_info@Base 1.14.0
+ dvb_remote_seek_by_adapter@Base 1.14.0
  dvb_remote_seek_by_sysname@Base 1.12.1 
  dvb_retrieve_entry_prop@Base 1.4.0
  dvb_s2_cnr_2_qual@Base 1.4.0
