@@ -29,6 +29,7 @@ extern "C" {
 static unsigned stream_count;
 static unsigned stream_skip;
 static int stream_sleep = -1;
+static bool stream_no_query;
 static unsigned stream_pat;
 static bool stream_loop;
 static bool stream_out_square;
@@ -87,10 +88,12 @@ void streaming_usage(void)
 	       "                     sleep for 1 second every <count> buffers. If <count> is 0,\n"
 	       "                     then sleep forever right after streaming starts. The default\n"
 	       "                     is -1 (never sleep).\n"
+#ifndef NO_STREAM_TO
 	       "  --stream-to=<file> stream to this file. The default is to discard the\n"
 	       "                     data. If <file> is '-', then the data is written to stdout\n"
 	       "                     and the --silent option is turned on automatically.\n"
 	       "  --stream-to-host=<hostname[:port]> stream to this host. The default port is %d.\n"
+#endif
 	       "  --stream-poll      use non-blocking mode and select() to stream.\n"
 	       "  --stream-mmap=<count>\n"
 	       "                     capture video using mmap() [VIDIOC_(D)QBUF]\n"
@@ -103,6 +106,7 @@ void streaming_usage(void)
 	       "  --stream-from=<file> stream from this file. The default is to generate a pattern.\n"
 	       "                     If <file> is '-', then the data is read from stdin.\n"
 	       "  --stream-from-host=<hostname[:port]> stream from this host. The default port is %d.\n"
+	       "  --stream-no-query  Do not query and set the DV timings or standard before streaming.\n"
 	       "  --stream-loop      loop when the end of the file we are streaming from is reached.\n"
 	       "                     The default is to stop.\n"
 	       "  --stream-out-pattern=<count>\n"
@@ -156,8 +160,13 @@ void streaming_usage(void)
 	       "  --list-buffers-sdr\n"
 	       "                     list all SDR RX buffers [VIDIOC_QUERYBUF]\n"
 	       "  --list-buffers-sdr-out\n"
-	       "                     list all SDR TX buffers [VIDIOC_QUERYBUF]\n",
-		V4L_STREAM_PORT, V4L_STREAM_PORT);
+	       "                     list all SDR TX buffers [VIDIOC_QUERYBUF]\n"
+	       "  --list-buffers-meta\n"
+	       "                     list all Meta RX buffers [VIDIOC_QUERYBUF]\n",
+#ifndef NO_STREAM_TO
+		V4L_STREAM_PORT,
+#endif
+	       	V4L_STREAM_PORT);
 }
 
 static void setTimeStamp(struct v4l2_buffer &buf)
@@ -325,6 +334,9 @@ void streaming_cmd(int ch, char *optarg)
 	case OptStreamSleep:
 		stream_sleep = strtol(optarg, 0L, 0);
 		break;
+	case OptStreamNoQuery:
+		stream_no_query = true;
+		break;
 	case OptStreamLoop:
 		stream_loop = true;
 		break;
@@ -437,6 +449,8 @@ public:
 			type = V4L2_BUF_TYPE_SDR_CAPTURE;
 		else if (capabilities & V4L2_CAP_SDR_OUTPUT)
 			type = V4L2_BUF_TYPE_SDR_OUTPUT;
+		else if (capabilities & V4L2_CAP_META_CAPTURE)
+			type = V4L2_BUF_TYPE_META_CAPTURE;
 		else
 			type = is_output ? vidout_buftype : vidcap_buftype;
 		if (is_output) {
@@ -1240,9 +1254,10 @@ static void streaming_set_cap(int fd)
 	int fd_flags = fcntl(fd, F_GETFL);
 	buffers b(false);
 	bool use_poll = options[OptStreamPoll];
-	unsigned count = 0;
+	unsigned count;
 	struct timespec ts_last;
-	bool eos = false;
+	bool eos;
+	bool source_change;
 	FILE *fout = NULL;
 
 	if (!(capabilities & (V4L2_CAP_VIDEO_CAPTURE |
@@ -1260,6 +1275,34 @@ static void streaming_set_cap(int fd)
 	memset(&sub, 0, sizeof(sub));
 	sub.type = V4L2_EVENT_EOS;
 	ioctl(fd, VIDIOC_SUBSCRIBE_EVENT, &sub);
+	if (use_poll) {
+		sub.type = V4L2_EVENT_SOURCE_CHANGE;
+		ioctl(fd, VIDIOC_SUBSCRIBE_EVENT, &sub);
+	}
+
+recover:
+	eos = false;
+	source_change = false;
+	count = 0;
+
+	if (!stream_no_query) {
+		struct v4l2_dv_timings new_dv_timings = {};
+		v4l2_std_id new_std;
+		struct v4l2_input in = { };
+
+		if (!test_ioctl(fd, VIDIOC_G_INPUT, &in.index) &&
+		    !test_ioctl(fd, VIDIOC_ENUMINPUT, &in)) {
+			if (in.capabilities & V4L2_IN_CAP_DV_TIMINGS) {
+				while (test_ioctl(fd, VIDIOC_QUERY_DV_TIMINGS, &new_dv_timings))
+					sleep(1);
+				test_ioctl(fd, VIDIOC_S_DV_TIMINGS, &new_dv_timings);
+				fprintf(stderr, "New timings found\n");
+			} else if (in.capabilities & V4L2_IN_CAP_STD) {
+				if (!test_ioctl(fd, VIDIOC_QUERYSTD, &new_std))
+					test_ioctl(fd, VIDIOC_S_STD, &new_std);
+			}
+		}
+	}
 
 	if (file_cap) {
 		if (!strcmp(file_cap, "-"))
@@ -1351,7 +1394,7 @@ static void streaming_set_cap(int fd)
 	if (use_poll)
 		fcntl(fd, F_SETFL, fd_flags | O_NONBLOCK);
 
-	while (!eos) {
+	while (!eos && !source_change) {
 		fd_set read_fds;
 		fd_set exception_fds;
 		struct timeval tv = { use_poll ? 2 : 0, 0 };
@@ -1379,10 +1422,15 @@ static void streaming_set_cap(int fd)
 			struct v4l2_event ev;
 
 			while (!ioctl(fd, VIDIOC_DQEVENT, &ev)) {
-				if (ev.type != V4L2_EVENT_EOS)
-					continue;
-				eos = true;
-				break;
+				switch (ev.type) {
+				case V4L2_EVENT_SOURCE_CHANGE:
+					source_change = true;
+					fprintf(stderr, "\nSource changed");
+					break;
+				case V4L2_EVENT_EOS:
+					eos = true;
+					break;
+				}
 			}
 		}
 
@@ -1399,6 +1447,8 @@ static void streaming_set_cap(int fd)
 	fprintf(stderr, "\n");
 
 	do_release_buffers(b);
+	if (source_change && !stream_no_query)
+		goto recover;
 
 done:
 	if (fout && fout != stdout) {
@@ -2005,6 +2055,10 @@ void streaming_list(int fd, int out_fd)
 
 	if (options[OptListBuffersSdrOut]) {
 		list_buffers(fd, V4L2_BUF_TYPE_SDR_OUTPUT);
+	}
+
+	if (options[OptListBuffersMeta]) {
+		list_buffers(fd, V4L2_BUF_TYPE_META_CAPTURE);
 	}
 
 	if (options[OptListPatterns]) {

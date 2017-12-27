@@ -24,11 +24,14 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <locale.h>
-#include <pthread.h>
 #include <unistd.h>
 #include <string.h>
 
 #include <config.h>
+
+#ifdef HAVE_PTHREAD
+#  include <pthread.h>
+#endif
 
 #include "dvb-fe-priv.h"
 #include "dvb-dev-priv.h"
@@ -44,12 +47,17 @@
 struct dvb_dev_local_priv {
 	dvb_dev_change_t notify_dev_change;
 
+#ifdef HAVE_PTHREAD
 	pthread_t dev_change_id;
+#endif
 
 	/* udev control fields */
 	int udev_fd;
 	struct udev *udev;
 	struct udev_monitor *mon;
+
+	/* private user data, used by event notifier*/
+	void *user_priv;
 };
 
 static int handle_device_change(struct dvb_device_priv *dvb,
@@ -102,7 +110,7 @@ static int handle_device_change(struct dvb_device_priv *dvb,
 		if (!strcmp(action,"remove")) {
 			if (priv->notify_dev_change)
 				priv->notify_dev_change(strdup(sysname),
-							DVB_DEV_REMOVE);
+							DVB_DEV_REMOVE, priv->user_priv);
 			return 0;
 		}
 		type = DVB_DEV_CHANGE;
@@ -167,6 +175,13 @@ static int handle_device_change(struct dvb_device_priv *dvb,
 
 	dvb_dev->bus_addr = buf;
 
+	/* Detect dvbloopback and ignore its control interface */
+	if (!strcmp(dvb_dev->bus_addr, "platform:dvbloopback")) {
+		char c = dvb_dev->path[strlen(dvb_dev->path) - 1] - '0';
+		if (c)
+			goto err;
+	}
+
 	/* Add new element */
 	dvb->d.num_devices++;
 	dvb_dev = realloc(dvb->d.devices, sizeof(*dvb->d.devices) * dvb->d.num_devices);
@@ -222,7 +237,7 @@ static int handle_device_change(struct dvb_device_priv *dvb,
 	}
 added:
 	if (priv->notify_dev_change)
-		priv->notify_dev_change(strdup(dvb_dev->sysname), type);
+		priv->notify_dev_change(strdup(dvb_dev->sysname), type, priv->user_priv);
 	dvb_dev_dump_device(_("Found dvb %s device: %s"), parms, dvb_dev);
 
 	return 0;
@@ -265,7 +280,7 @@ static void *monitor_device_changes(void *privdata)
 #endif
 
 static int dvb_local_find(struct dvb_device_priv *dvb,
-			  dvb_dev_change_t handler)
+			  dvb_dev_change_t handler, void *user_priv)
 {
 	struct dvb_v5_fe_parms_priv *parms = (void *)dvb->d.fe_parms;
 	struct dvb_dev_local_priv *priv = dvb->priv;
@@ -285,17 +300,19 @@ static int dvb_local_find(struct dvb_device_priv *dvb,
 		return -ENOMEM;
 	}
 
+	priv->user_priv = user_priv;
 	priv->notify_dev_change = handler;
 	if (priv->notify_dev_change) {
 #ifndef HAVE_PTHREAD
 		dvb_logerr("Need to be compiled with pthreads for monitor");
 		return -EINVAL;
-#endif
+#else
 		/* Set up a monitor to monitor dvb devices */
 		priv->mon = udev_monitor_new_from_netlink(priv->udev, "udev");
 		udev_monitor_filter_add_match_subsystem_devtype(priv->mon, "dvb", NULL);
 		udev_monitor_enable_receiving(priv->mon);
 		priv->udev_fd = udev_monitor_get_fd(priv->mon);
+#endif
 	}
 
 	/* Create a list of the devices in the 'dvb' subsystem. */
@@ -350,7 +367,7 @@ static int dvb_local_stop_monitor(struct dvb_device_priv *dvb)
 	return 0;
 }
 
-struct dvb_dev_list *dvb_local_seek_by_sysname(struct dvb_device_priv *dvb,
+struct dvb_dev_list *dvb_local_seek_by_adapter(struct dvb_device_priv *dvb,
 					       unsigned int adapter,
 					       unsigned int num,
 					       enum dvb_dev_type type)
@@ -383,14 +400,39 @@ struct dvb_dev_list *dvb_local_seek_by_sysname(struct dvb_device_priv *dvb,
 	return NULL;
 }
 
+struct dvb_dev_list *dvb_local_get_dev_info(struct dvb_device_priv *dvb,
+					    const char *sysname)
+{
+	struct dvb_v5_fe_parms_priv *parms = (void *)dvb->d.fe_parms;
+	int i;
+
+	if (!sysname) {
+		dvb_logerr(_("Device not specified"));
+		return NULL;
+	}
+
+	for (i = 0; i < dvb->d.num_devices; i++) {
+		if (!strcmp(sysname, dvb->d.devices[i].sysname)) {
+			return &dvb->d.devices[i];
+		}
+	}
+
+	dvb_logerr(_("Can't find device %s"), sysname);
+	return NULL;
+}
+
 static struct dvb_open_descriptor
 *dvb_local_open(struct dvb_device_priv *dvb,
 		const char *sysname, int flags)
 {
 	struct dvb_v5_fe_parms_priv *parms = (void *)dvb->d.fe_parms;
-	struct dvb_dev_list *dev = NULL;
+	struct dvb_dev_list *dev;
 	struct dvb_open_descriptor *open_dev, *cur;
-	int ret, i;
+	int ret;
+
+	dev = dvb_local_get_dev_info(dvb, sysname);
+	if (!dev)
+		return NULL;
 
 	open_dev = calloc(1, sizeof(*open_dev));
 	if (!open_dev) {
@@ -398,32 +440,24 @@ static struct dvb_open_descriptor
 		return NULL;
 	}
 
-	if (!sysname) {
-		dvb_logerr(_("Device not specified"));
-		free(open_dev);
-		return NULL;
-	}
-
-	for (i = 0; i < dvb->d.num_devices; i++) {
-		if (!strcmp(sysname, dvb->d.devices[i].sysname)) {
-			dev = &dvb->d.devices[i];
-			break;
-		}
-	}
-	if (!dev) {
-		dvb_logerr(_("Can't find device %s"), sysname);
-		free(open_dev);
-		return NULL;
-	}
-
 	if (dev->dvb_type == DVB_DEVICE_FRONTEND) {
 		/*
 		 * The frontend API was designed for sync frontend access.
 		 * It is not ready to handle async frontend access.
+		 * However, dvbloopback is a different beast: it only works
+		 * if opened with O_NONBLOCK.
+		 * Also, support for FE_SET_PROPERTY/FE_GET_PROPERTY
+		 * is broken with dvbloopback and recent Kernels, as it
+		 * doesn't copy from/to usermemory properly.
 		 */
-		flags &= ~O_NONBLOCK;
+		if (!strcmp(dev->bus_addr, "platform:dvbloopback")) {
+			dvb_logwarn(_("Detected dvbloopback"));
+			flags |= O_NONBLOCK;
+		} else {
+			flags &= ~O_NONBLOCK;
+		}
 
-		ret = dvb_fe_open_fname(parms, dev->path, flags);
+		ret = dvb_fe_open_fname(parms, strdup(dev->path), flags);
 		if (ret) {
 			free(open_dev);
 			return NULL;
@@ -558,9 +592,26 @@ static ssize_t dvb_local_read(struct dvb_open_descriptor *open_dev,
 		return -EINVAL;
 	}
 
-	ret = read(fd, buf, count);
+	/*
+	 * As we opened dvbloopback on non-blocking mode, we need to
+	 * check if read is ready, in order to emulate blocking mode
+	 */
+	if (!strcmp(dev->bus_addr, "platform:dvbloopback")) {
+		fd_set set;
+		FD_ZERO(&set);
+		FD_SET(fd, &set);
+		ret = TEMP_FAILURE_RETRY(select(FD_SETSIZE,
+						&set, NULL, &set, NULL));
+		if (ret == -1) {
+			if (errno != EOVERFLOW)
+				dvb_perror("read()");
+			return -errno;
+		}
+	}
+
+	ret = TEMP_FAILURE_RETRY(read(fd, buf, count));
 	if (ret == -1) {
-		if (errno != EOVERFLOW)
+		if (errno != EOVERFLOW && errno != EAGAIN)
 			dvb_perror("read()");
 		return -errno;
 	}
@@ -673,8 +724,9 @@ static int dvb_local_dmx_get_pmt_pid(struct dvb_open_descriptor *open_dev, int s
 	}
 
 	while (!patread){
-		if (((count = read(fd, buf, sizeof(buft))) < 0) && errno == EOVERFLOW)
-		count = read(fd, buf, sizeof(buft));
+		count = TEMP_FAILURE_RETRY(read(fd, buf, sizeof(buft)));
+		if (count < 0 && errno == EOVERFLOW)
+			count = TEMP_FAILURE_RETRY(read(fd, buf, sizeof(buft)));
 		if (count < 0) {
 		dvb_perror("read_sections: read error");
 		return -errno;
@@ -758,6 +810,11 @@ static void dvb_dev_local_free(struct dvb_device_priv *dvb)
 	free(priv);
 }
 
+static int dvb_local_get_fd(struct dvb_open_descriptor *open_dev)
+{
+    return open_dev->fd;
+}
+
 /* Initialize for local usage */
 void dvb_dev_local_init(struct dvb_device_priv *dvb)
 {
@@ -766,10 +823,12 @@ void dvb_dev_local_init(struct dvb_device_priv *dvb)
 	dvb->priv = calloc(1, sizeof(struct dvb_dev_local_priv));
 
 	ops->find = dvb_local_find;
-	ops->seek_by_sysname = dvb_local_seek_by_sysname;
+	ops->seek_by_adapter = dvb_local_seek_by_adapter;
+	ops->get_dev_info = dvb_local_get_dev_info;
 	ops->stop_monitor = dvb_local_stop_monitor;
 	ops->open = dvb_local_open;
 	ops->close = dvb_local_close;
+	ops->get_fd = dvb_local_get_fd;
 
 	ops->dmx_stop = dvb_local_dmx_stop;
 	ops->set_bufsize = dvb_local_set_bufsize;

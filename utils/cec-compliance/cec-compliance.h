@@ -24,12 +24,15 @@
 #include <cerrno>
 #include <string>
 #include <linux/cec-funcs.h>
+#include "cec-htng-funcs.h"
 
 #ifdef ANDROID
 #include <android-config.h>
 #else
 #include <config.h>
 #endif
+
+#include <cec-common.h>
 
 #define TAG_AUDIO_RATE_CONTROL		1
 #define TAG_ARC_CONTROL 		(1 << 1)
@@ -122,6 +125,7 @@ extern bool show_info;
 extern bool show_warnings;
 extern unsigned warnings;
 extern unsigned reply_threshold;
+extern unsigned long_timeout;
 
 struct remote {
 	bool recognized_op[256];
@@ -277,9 +281,6 @@ int cec_named_ioctl(struct node *node, const char *name,
 
 #define doioctl(n, r, p) cec_named_ioctl(n, #r, r, p)
 
-#define cec_phys_addr_exp(pa) \
-        ((pa) >> 12), ((pa) >> 8) & 0xf, ((pa) >> 4) & 0xf, (pa) & 0xf
-
 std::string opcode2s(const struct cec_msg *msg);
 
 static inline bool is_tv(unsigned la, unsigned prim_type)
@@ -342,61 +343,8 @@ static inline unsigned response_time_ms(const struct cec_msg *msg)
 	return 0;
 }
 
-static inline bool transmit_timeout(struct node *node, struct cec_msg *msg,
-				    unsigned timeout = 2000)
-{
-	struct cec_msg original_msg = *msg;
-	__u8 opcode = cec_msg_opcode(msg);
-	int res;
-
-	msg->timeout = timeout;
-	res = doioctl(node, CEC_TRANSMIT, msg);
-	if (res == ENODEV) {
-		printf("Device was disconnected.\n");
-		exit(1);
-	}
-	if (res || !(msg->tx_status & CEC_TX_STATUS_OK))
-		return false;
-
-	if (((msg->rx_status & CEC_RX_STATUS_OK) || (msg->rx_status & CEC_RX_STATUS_FEATURE_ABORT))
-	    && response_time_ms(msg) > reply_threshold)
-		warn("Waited %4ums for reply to msg 0x%02x.\n", response_time_ms(msg), opcode);
-
-	if (!cec_msg_status_is_abort(msg))
-		return true;
-
-	if (cec_msg_is_broadcast(&original_msg)) {
-		fail("Received Feature Abort in reply to broadcast message\n");
-		return false;
-	}
-
-	const char *reason;
-
-	switch (abort_reason(msg)) {
-	case CEC_OP_ABORT_UNRECOGNIZED_OP:
-	case CEC_OP_ABORT_UNDETERMINED:
-		return true;
-	case CEC_OP_ABORT_INVALID_OP:
-		reason = "Invalid operand";
-		break;
-	case CEC_OP_ABORT_NO_SOURCE:
-		reason = "Cannot provide source";
-		break;
-	case CEC_OP_ABORT_REFUSED:
-		reason = "Refused";
-		break;
-	case CEC_OP_ABORT_INCORRECT_MODE:
-		reason = "Incorrect mode";
-		break;
-	default:
-		reason = "Unknown";
-		break;
-	}
-	info("Opcode %s was replied to with Feature Abort [%s]\n",
-	     opcode2s(&original_msg).c_str(), reason);
-
-	return true;
-}
+bool transmit_timeout(struct node *node, struct cec_msg *msg,
+		      unsigned timeout = 2000);
 
 static inline bool transmit(struct node *node, struct cec_msg *msg)
 {
@@ -412,14 +360,6 @@ static inline unsigned get_ts_ms()
 }
 
 const char *ok(int res);
-const char *la2s(unsigned la);
-const char *la_type2s(unsigned type);
-const char *prim_type2s(unsigned type);
-const char *version2s(unsigned version);
-std::string status2s(const struct cec_msg &msg);
-std::string all_dev_types2s(unsigned types);
-std::string rc_src_prof2s(unsigned prof);
-std::string dev_feat2s(unsigned feat);
 const char *power_status2s(__u8 power_status);
 std::string short_audio_desc2s(const struct short_audio_desc &sad);
 void sad_decode(struct short_audio_desc *sad, __u32 descriptor);
@@ -441,6 +381,8 @@ int testReceive(struct node *node);
 int testNonBlocking(struct node *node);
 int testModes(struct node *node, struct node *node2);
 int testLostMsgs(struct node *node);
+void testAdapter(struct node &node, struct cec_log_addrs &laddrs,
+		 const char *device);
 
 // CEC core tests
 int testCore(struct node *node);

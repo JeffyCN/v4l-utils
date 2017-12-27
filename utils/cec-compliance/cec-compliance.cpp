@@ -23,6 +23,7 @@
 #include <getopt.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <fcntl.h>
 #include <ctype.h>
 #include <errno.h>
@@ -48,12 +49,14 @@ enum Option {
 	OptTestAdapter = 'A',
 	OptSetDevice = 'd',
 	OptHelp = 'h',
+	OptInteractive = 'i',
 	OptNoWarnings = 'n',
 	OptRemote = 'r',
 	OptReplyThreshold = 'R',
+	OptTimeout = 't',
 	OptTrace = 'T',
 	OptVerbose = 'v',
-	OptInteractive = 'i',
+	OptWallClock = 'w',
 
 	OptTestCore = 128,
 	OptTestAudioRateControl,
@@ -75,6 +78,26 @@ enum Option {
 	OptTestTunerControl,
 	OptTestVendorSpecificCommands,
 	OptTestStandbyResume,
+
+	OptSkipTestAudioRateControl,
+	OptSkipTestARCControl,
+	OptSkipTestCapDiscoveryControl,
+	OptSkipTestDeckControl,
+	OptSkipTestDeviceMenuControl,
+	OptSkipTestDeviceOSDTransfer,
+	OptSkipTestDynamicAutoLipsync,
+	OptSkipTestOSDDisplay,
+	OptSkipTestOneTouchPlay,
+	OptSkipTestOneTouchRecord,
+	OptSkipTestPowerStatus,
+	OptSkipTestRemoteControlPassthrough,
+	OptSkipTestRoutingControl,
+	OptSkipTestSystemAudioControl,
+	OptSkipTestSystemInformation,
+	OptSkipTestTimerProgramming,
+	OptSkipTestTunerControl,
+	OptSkipTestVendorSpecificCommands,
+	OptSkipTestStandbyResume,
 	OptLast = 256
 };
 
@@ -88,14 +111,17 @@ bool show_info;
 bool show_warnings = true;
 unsigned warnings;
 unsigned reply_threshold = 1000;
+unsigned long_timeout = 60;
 
 static struct option long_options[] = {
 	{"device", required_argument, 0, OptSetDevice},
 	{"help", no_argument, 0, OptHelp},
 	{"no-warnings", no_argument, 0, OptNoWarnings},
 	{"remote", optional_argument, 0, OptRemote},
+	{"timeout", required_argument, 0, OptTimeout},
 	{"trace", no_argument, 0, OptTrace},
 	{"verbose", no_argument, 0, OptVerbose},
+	{ "wall-clock", no_argument, 0, OptWallClock },
 	{"interactive", no_argument, 0, OptInteractive},
 	{"reply-threshold", required_argument, 0, OptReplyThreshold},
 
@@ -120,6 +146,26 @@ static struct option long_options[] = {
 	{"test-tuner-control", no_argument, 0, OptTestTunerControl},
 	{"test-vendor-specific-commands", no_argument, 0, OptTestVendorSpecificCommands},
 	{"test-standby-resume", no_argument, 0, OptTestStandbyResume},
+
+	{"skip-test-audio-rate-control", no_argument, 0, OptSkipTestAudioRateControl},
+	{"skip-test-audio-return-channel-control", no_argument, 0, OptSkipTestARCControl},
+	{"skip-test-capability-discovery-and-control", no_argument, 0, OptSkipTestCapDiscoveryControl},
+	{"skip-test-deck-control", no_argument, 0, OptSkipTestDeckControl},
+	{"skip-test-device-menu-control", no_argument, 0, OptSkipTestDeviceMenuControl},
+	{"skip-test-device-osd-transfer", no_argument, 0, OptSkipTestDeviceOSDTransfer},
+	{"skip-test-dynamic-auto-lipsync", no_argument, 0, OptSkipTestDynamicAutoLipsync},
+	{"skip-test-osd-display", no_argument, 0, OptSkipTestOSDDisplay},
+	{"skip-test-one-touch-play", no_argument, 0, OptSkipTestOneTouchPlay},
+	{"skip-test-one-touch-record", no_argument, 0, OptSkipTestOneTouchRecord},
+	{"skip-test-power-status", no_argument, 0, OptSkipTestPowerStatus},
+	{"skip-test-remote-control-passthrough", no_argument, 0, OptSkipTestRemoteControlPassthrough},
+	{"skip-test-routing-control", no_argument, 0, OptSkipTestRoutingControl},
+	{"skip-test-system-audio-control", no_argument, 0, OptSkipTestSystemAudioControl},
+	{"skip-test-system-information", no_argument, 0, OptSkipTestSystemInformation},
+	{"skip-test-timer-programming", no_argument, 0, OptSkipTestTimerProgramming},
+	{"skip-test-tuner-control", no_argument, 0, OptSkipTestTunerControl},
+	{"skip-test-vendor-specific-commands", no_argument, 0, OptSkipTestVendorSpecificCommands},
+	{"skip-test-standby-resume", no_argument, 0, OptSkipTestStandbyResume},
 	{0, 0, 0, 0}
 };
 
@@ -132,9 +178,14 @@ static void usage(void)
 	       "  -R, --reply-threshold=<timeout>\n"
 	       "                       Warn if replies take longer than this threshold (default 1000ms)\n"
 	       "  -i, --interactive    Interactive mode when doing remote tests\n"
+	       "  -t, --timeout=<secs> Set the standby/resume timeout to <secs>. Default is 60s.\n"
 	       "\n"
 	       "  -A, --test-adapter                  Test the CEC adapter API\n"
 	       "  --test-core                         Test the core functionality\n"
+	       "\n"
+	       "By changing --test to --skip-test in the following options you can skip tests\n"
+	       "instead of enabling them.\n"
+	       "\n"
 	       "  --test-audio-rate-control           Test the Audio Rate Control feature\n"
 	       "  --test-audio-return-channel-control Test the Audio Return Channel Control feature\n"
 	       "  --test-capability-discovery-and-control Test the Capability Discovery and Control feature\n"
@@ -160,142 +211,36 @@ static void usage(void)
 	       "  -n, --no-warnings  Turn off warning messages\n"
 	       "  -T, --trace        Trace all called ioctls\n"
 	       "  -v, --verbose      Turn on verbose reporting\n"
+	       "  -w, --wall-clock   Show timestamps as wall-clock time\n"
 	       );
 }
 
-static std::string caps2s(unsigned caps)
+static std::string ts2s(__u64 ts)
 {
 	std::string s;
+	struct timespec now;
+	struct timeval tv;
+	struct timeval sub;
+	struct timeval res;
+	__u64 diff;
+	char buf[64];
+	time_t t;
 
-	if (caps & CEC_CAP_PHYS_ADDR)
-		s += "\t\tPhysical Address\n";
-	if (caps & CEC_CAP_LOG_ADDRS)
-		s += "\t\tLogical Addresses\n";
-	if (caps & CEC_CAP_TRANSMIT)
-		s += "\t\tTransmit\n";
-	if (caps & CEC_CAP_PASSTHROUGH)
-		s += "\t\tPassthrough\n";
-	if (caps & CEC_CAP_RC)
-		s += "\t\tRemote Control Support\n";
-	if (caps & CEC_CAP_MONITOR_ALL)
-		s += "\t\tMonitor All\n";
-	return s;
-}
-
-static std::string laflags2s(unsigned flags)
-{
-	std::string s;
-
-	if (!flags)
-		return s;
-
-	s = "(";
-	if (flags & CEC_LOG_ADDRS_FL_ALLOW_UNREG_FALLBACK)
-		s += "Allow Fallback to Unregistered, ";
-	if (flags & CEC_LOG_ADDRS_FL_ALLOW_RC_PASSTHRU)
-		s += "Allow RC Passthrough, ";
-	if (flags & CEC_LOG_ADDRS_FL_CDC_ONLY)
-		s += "CDC-Only, ";
-	if (s.length())
-		s.erase(s.length() - 2, 2);
-	return s + ")";
-}
-
-const char *version2s(unsigned version)
-{
-	switch (version) {
-	case CEC_OP_CEC_VERSION_1_3A:
-		return "1.3a";
-	case CEC_OP_CEC_VERSION_1_4:
-		return "1.4";
-	case CEC_OP_CEC_VERSION_2_0:
-		return "2.0";
-	default:
-		return "Unknown";
+	if (!options[OptWallClock]) {
+		sprintf(buf, "%llu.%03llus", ts / 1000000000, (ts % 1000000000) / 1000000);
+		return buf;
 	}
-}
-
-const char *prim_type2s(unsigned type)
-{
-	switch (type) {
-	case CEC_OP_PRIM_DEVTYPE_TV:
-		return "TV";
-	case CEC_OP_PRIM_DEVTYPE_RECORD:
-		return "Record";
-	case CEC_OP_PRIM_DEVTYPE_TUNER:
-		return "Tuner";
-	case CEC_OP_PRIM_DEVTYPE_PLAYBACK:
-		return "Playback";
-	case CEC_OP_PRIM_DEVTYPE_AUDIOSYSTEM:
-		return "Audio System";
-	case CEC_OP_PRIM_DEVTYPE_SWITCH:
-		return "Switch";
-	case CEC_OP_PRIM_DEVTYPE_PROCESSOR:
-		return "Processor";
-	default:
-		return "Unknown";
-	}
-}
-
-const char *la_type2s(unsigned type)
-{
-	switch (type) {
-	case CEC_LOG_ADDR_TYPE_TV:
-		return "TV";
-	case CEC_LOG_ADDR_TYPE_RECORD:
-		return "Record";
-	case CEC_LOG_ADDR_TYPE_TUNER:
-		return "Tuner";
-	case CEC_LOG_ADDR_TYPE_PLAYBACK:
-		return "Playback";
-	case CEC_LOG_ADDR_TYPE_AUDIOSYSTEM:
-		return "Audio System";
-	case CEC_LOG_ADDR_TYPE_SPECIFIC:
-		return "Specific";
-	case CEC_LOG_ADDR_TYPE_UNREGISTERED:
-		return "Unregistered";
-	default:
-		return "Unknown";
-	}
-}
-
-const char *la2s(unsigned la)
-{
-	switch (la & 0xf) {
-	case 0:
-		return "TV";
-	case 1:
-		return "Recording Device 1";
-	case 2:
-		return "Recording Device 2";
-	case 3:
-		return "Tuner 1";
-	case 4:
-		return "Playback Device 1";
-	case 5:
-		return "Audio System";
-	case 6:
-		return "Tuner 2";
-	case 7:
-		return "Tuner 3";
-	case 8:
-		return "Playback Device 2";
-	case 9:
-		return "Playback Device 3";
-	case 10:
-		return "Tuner 4";
-	case 11:
-		return "Playback Device 3";
-	case 12:
-		return "Reserved 1";
-	case 13:
-		return "Reserved 2";
-	case 14:
-		return "Specific";
-	case 15:
-	default:
-		return "Unregistered";
-	}
+	clock_gettime(CLOCK_MONOTONIC, &now);
+	gettimeofday(&tv, NULL);
+	diff = now.tv_sec * 1000000000ULL + now.tv_nsec - ts;
+	sub.tv_sec = diff / 1000000000ULL;
+	sub.tv_usec = (diff % 1000000000ULL) / 1000;
+	timersub(&tv, &sub, &res);
+	t = res.tv_sec;
+	s = ctime(&t);
+	s = s.substr(0, s.length() - 6);
+	sprintf(buf, "%03lu", res.tv_usec / 1000);
+	return s + "." + buf;
 }
 
 static std::string tx_status2s(const struct cec_msg &msg)
@@ -363,69 +308,6 @@ std::string status2s(const struct cec_msg &msg)
 			s += ", ";
 		s += rx_status2s(msg.rx_status);
 	}
-	return s;
-}
-
-std::string all_dev_types2s(unsigned types)
-{
-	std::string s;
-
-	if (types & CEC_OP_ALL_DEVTYPE_TV)
-		s += "TV, ";
-	if (types & CEC_OP_ALL_DEVTYPE_RECORD)
-		s += "Record, ";
-	if (types & CEC_OP_ALL_DEVTYPE_TUNER)
-		s += "Tuner, ";
-	if (types & CEC_OP_ALL_DEVTYPE_PLAYBACK)
-		s += "Playback, ";
-	if (types & CEC_OP_ALL_DEVTYPE_AUDIOSYSTEM)
-		s += "Audio System, ";
-	if (types & CEC_OP_ALL_DEVTYPE_SWITCH)
-		s += "Switch, ";
-	if (s.length())
-		return s.erase(s.length() - 2, 2);
-	return s;
-}
-
-std::string rc_src_prof2s(unsigned prof)
-{
-	std::string s;
-
-	prof &= 0x1f;
-	if (prof == 0)
-		return "\t\tNone\n";
-	if (prof & CEC_OP_FEAT_RC_SRC_HAS_DEV_ROOT_MENU)
-		s += "\t\tSource Has Device Root Menu\n";
-	if (prof & CEC_OP_FEAT_RC_SRC_HAS_DEV_SETUP_MENU)
-		s += "\t\tSource Has Device Setup Menu\n";
-	if (prof & CEC_OP_FEAT_RC_SRC_HAS_MEDIA_CONTEXT_MENU)
-		s += "\t\tSource Has Contents Menu\n";
-	if (prof & CEC_OP_FEAT_RC_SRC_HAS_MEDIA_TOP_MENU)
-		s += "\t\tSource Has Media Top Menu\n";
-	if (prof & CEC_OP_FEAT_RC_SRC_HAS_MEDIA_CONTEXT_MENU)
-		s += "\t\tSource Has Media Context-Sensitive Menu\n";
-	return s;
-}
-
-std::string dev_feat2s(unsigned feat)
-{
-	std::string s;
-
-	feat &= 0x7e;
-	if (feat == 0)
-		return "\t\tNone\n";
-	if (feat & CEC_OP_FEAT_DEV_HAS_RECORD_TV_SCREEN)
-		s += "\t\tTV Supports <Record TV Screen>\n";
-	if (feat & CEC_OP_FEAT_DEV_HAS_SET_OSD_STRING)
-		s += "\t\tTV Supports <Set OSD String>\n";
-	if (feat & CEC_OP_FEAT_DEV_HAS_DECK_CONTROL)
-		s += "\t\tSupports Deck Control\n";
-	if (feat & CEC_OP_FEAT_DEV_HAS_SET_AUDIO_RATE)
-		s += "\t\tSource Supports <Set Audio Rate>\n";
-	if (feat & CEC_OP_FEAT_DEV_SINK_HAS_ARC_TX)
-		s += "\t\tSink Supports ARC Tx\n";
-	if (feat & CEC_OP_FEAT_DEV_SOURCE_HAS_ARC_RX)
-		s += "\t\tSource Supports ARC Rx\n";
 	return s;
 }
 
@@ -767,6 +649,9 @@ std::string opcode2s(const struct cec_msg *msg)
 	std::stringstream oss;
 	__u8 opcode = msg->msg[1];
 
+	if (msg->len == 1)
+		return "MSG_POLL";
+
 	if (opcode == CEC_MSG_CDC_MESSAGE) {
 		__u8 cdc_opcode = msg->msg[4];
 
@@ -793,19 +678,48 @@ int cec_named_ioctl(struct node *node, const char *name,
 	int e;
 	struct cec_msg *msg = (struct cec_msg *)parm;
 	__u8 opcode = 0;
+	std::string opname;
 
-	if (request == CEC_TRANSMIT)
+	if (request == CEC_TRANSMIT) {
 		opcode = cec_msg_opcode(msg);
+		opname = opcode2s(msg);
+	}
 
 	retval = ioctl(node->fd, request, parm);
 
-	e = retval == 0 ? 0 : errno;
-	if (options[OptTrace])
-		printf("\t\t%s returned %d (%s)\n",
-			name, retval, strerror(e));
+	if (request == CEC_RECEIVE) {
+		opcode = cec_msg_opcode(msg);
+		opname = opcode2s(msg);
+	}
 
-	if (retval < 0)
-		app_result = -1;
+	e = retval == 0 ? 0 : errno;
+	if (options[OptTrace] && (e || !show_info ||
+			(request != CEC_TRANSMIT && request != CEC_RECEIVE))) {
+		if (request == CEC_TRANSMIT)
+			printf("\t\t%s: %s returned %d (%s)\n",
+				opname.c_str(), name, retval, strerror(e));
+		else
+			printf("\t\t%s returned %d (%s)\n",
+				name, retval, strerror(e));
+	}
+
+	if (!retval && request == CEC_TRANSMIT && show_info) {
+		printf("\t\t%s: Sequence: %u Tx Timestamp: %s Length: %u",
+		       opname.c_str(), msg->sequence, ts2s(msg->tx_ts).c_str(), msg->len);
+		if (msg->rx_ts)
+			printf("\n\t\t\tRx Timestamp: %s Approximate response time: %u ms",
+			       ts2s(msg->rx_ts).c_str(),
+			       response_time_ms(msg));
+		if ((msg->tx_status & CEC_TX_STATUS_OK) &&
+		    (msg->tx_status & (CEC_TX_STATUS_ARB_LOST | CEC_TX_STATUS_NACK |
+				       CEC_TX_STATUS_LOW_DRIVE | CEC_TX_STATUS_ERROR)))
+			printf("\n\t\t\tStatus: %s", status2s(*msg).c_str());
+		printf("\n");
+	}
+
+	if (!retval && request == CEC_RECEIVE && show_info)
+		printf("\t\t%s: Sequence: %u Rx Timestamp: %s Length: %u\n",
+		       opname.c_str(), msg->sequence, ts2s(msg->rx_ts).c_str(), msg->len);
 
 	if (!retval) {
 		__u8 la = cec_msg_initiator(msg);
@@ -884,6 +798,136 @@ int check_0(const void *p, int len)
 	return 0;
 }
 
+#define TX_WAIT_FOR_HPD		10
+#define TX_WAIT_FOR_HPD_RETURN	30
+
+static bool wait_for_hpd(struct node *node, bool send_image_view_on)
+{
+	int fd = node->fd;
+	int flags = fcntl(node->fd, F_GETFL);
+	time_t t = time(NULL);
+
+	fcntl(node->fd, F_SETFL, flags | O_NONBLOCK);
+	for (;;) {
+		struct timeval tv = { 1, 0 };
+		fd_set ex_fds;
+		int res;
+
+		FD_ZERO(&ex_fds);
+		FD_SET(fd, &ex_fds);
+		res = select(fd + 1, NULL, NULL, &ex_fds, &tv);
+		if (res < 0) {
+			fail("select failed with error %d\n", errno);
+			return false;
+		}
+		if (FD_ISSET(fd, &ex_fds)) {
+			struct cec_event ev;
+
+			res = doioctl(node, CEC_DQEVENT, &ev);
+			if (!res && ev.event == CEC_EVENT_STATE_CHANGE &&
+			    ev.state_change.log_addr_mask)
+				break;
+		}
+
+		/*
+		 * If the HPD doesn't return after TX_WAIT_FOR_HPD seconds,
+		 * then send a IMAGE_VIEW_ON message (if possible).
+		 */
+		if (send_image_view_on && time(NULL) - t > TX_WAIT_FOR_HPD) {
+			struct cec_msg image_view_on_msg;
+
+			cec_msg_init(&image_view_on_msg, CEC_LOG_ADDR_UNREGISTERED,
+				     CEC_LOG_ADDR_TV);
+			cec_msg_image_view_on(&image_view_on_msg);
+			// So the HPD is gone (possibly due to a standby), but
+			// some TVs still have a working CEC bus, so send Image
+			// View On to attempt to wake it up again.
+			doioctl(node, CEC_TRANSMIT, &image_view_on_msg);
+			send_image_view_on = false;
+		}
+
+		if (time(NULL) - t > TX_WAIT_FOR_HPD + TX_WAIT_FOR_HPD_RETURN) {
+			fail("timed out after %d s waiting for HPD to return\n",
+			     TX_WAIT_FOR_HPD + TX_WAIT_FOR_HPD_RETURN);
+			return false;
+		}
+	}
+	fcntl(node->fd, F_SETFL, flags);
+	return true;
+}
+
+bool transmit_timeout(struct node *node, struct cec_msg *msg, unsigned timeout)
+{
+	struct cec_msg original_msg = *msg;
+	__u8 opcode = cec_msg_opcode(msg);
+	bool retried = false;
+	int res;
+
+	msg->timeout = timeout;
+retry:
+	res = doioctl(node, CEC_TRANSMIT, msg);
+	if (res == ENODEV) {
+		printf("Device was disconnected.\n");
+		exit(1);
+	}
+	if (res == ENONET) {
+		if (retried) {
+			fail("HPD was lost twice, that can't be right\n");
+			return false;
+		}
+		warn("HPD was lost, wait for it to come up again.\n");
+
+		if (!wait_for_hpd(node, !(node->caps & CEC_CAP_NEEDS_HPD) &&
+				  cec_msg_destination(msg) == CEC_LOG_ADDR_TV))
+			return false;
+
+		retried = true;
+		goto retry;
+	}
+
+	if (res || !(msg->tx_status & CEC_TX_STATUS_OK))
+		return false;
+
+	if (((msg->rx_status & CEC_RX_STATUS_OK) || (msg->rx_status & CEC_RX_STATUS_FEATURE_ABORT))
+	    && response_time_ms(msg) > reply_threshold)
+		warn("Waited %4ums for reply to msg 0x%02x.\n", response_time_ms(msg), opcode);
+
+	if (!cec_msg_status_is_abort(msg))
+		return true;
+
+	if (cec_msg_is_broadcast(&original_msg)) {
+		fail("Received Feature Abort in reply to broadcast message\n");
+		return false;
+	}
+
+	const char *reason;
+
+	switch (abort_reason(msg)) {
+	case CEC_OP_ABORT_UNRECOGNIZED_OP:
+	case CEC_OP_ABORT_UNDETERMINED:
+		return true;
+	case CEC_OP_ABORT_INVALID_OP:
+		reason = "Invalid operand";
+		break;
+	case CEC_OP_ABORT_NO_SOURCE:
+		reason = "Cannot provide source";
+		break;
+	case CEC_OP_ABORT_REFUSED:
+		reason = "Refused";
+		break;
+	case CEC_OP_ABORT_INCORRECT_MODE:
+		reason = "Incorrect mode";
+		break;
+	default:
+		reason = "Unknown";
+		break;
+	}
+	info("Opcode %s was replied to with Feature Abort [%s]\n",
+	     opcode2s(&original_msg).c_str(), reason);
+
+	return true;
+}
+
 static int poll_remote_devs(struct node *node)
 {
 	node->remote_la_mask = 0;
@@ -893,7 +937,7 @@ static int poll_remote_devs(struct node *node)
 	for (unsigned i = 0; i < 15; i++) {
 		struct cec_msg msg;
 
-		cec_msg_init(&msg, 0xf, i);
+		cec_msg_init(&msg, node->log_addr[0], i);
 
 		fail_on_test(doioctl(node, CEC_TRANSMIT, &msg));
 		if (msg.tx_status & CEC_TX_STATUS_OK)
@@ -905,14 +949,16 @@ static int poll_remote_devs(struct node *node)
 static void topology_probe_device(struct node *node, unsigned i, unsigned la)
 {
 	struct cec_msg msg = { };
+	bool ok;
 
 	printf("\tSystem Information for device %d (%s) from device %d (%s):\n",
 	       i, la2s(i), la, la2s(la));
 
 	cec_msg_init(&msg, la, i);
 	cec_msg_get_cec_version(&msg, true);
+	ok = !transmit_timeout(node, &msg) || timed_out_or_abort(&msg);
 	printf("\t\tCEC Version                : ");
-	if (!transmit_timeout(node, &msg) || timed_out_or_abort(&msg)) {
+	if (ok) {
 		printf("%s\n", status2s(msg).c_str());
 		node->remote[i].cec_version = CEC_OP_CEC_VERSION_1_4;
 	}
@@ -933,8 +979,9 @@ static void topology_probe_device(struct node *node, unsigned i, unsigned la)
 
 	cec_msg_init(&msg, la, i);
 	cec_msg_give_physical_addr(&msg, true);
+	ok = !transmit_timeout(node, &msg) || timed_out_or_abort(&msg);
 	printf("\t\tPhysical Address           : ");
-	if (!transmit_timeout(node, &msg) || timed_out_or_abort(&msg)) {
+	if (ok) {
 		printf("%s\n", status2s(msg).c_str());
 		node->remote[i].phys_addr = CEC_PHYS_ADDR_INVALID;
 	}
@@ -949,8 +996,9 @@ static void topology_probe_device(struct node *node, unsigned i, unsigned la)
 
 	cec_msg_init(&msg, la, i);
 	cec_msg_give_device_vendor_id(&msg, true);
+	ok = !transmit_timeout(node, &msg) || timed_out_or_abort(&msg);
 	printf("\t\tVendor ID                  : ");
-	if (!transmit_timeout(node, &msg) || timed_out_or_abort(&msg))
+	if (ok)
 		printf("%s\n", status2s(msg).c_str());
 	else
 		printf("0x%02x%02x%02x\n",
@@ -958,10 +1006,11 @@ static void topology_probe_device(struct node *node, unsigned i, unsigned la)
 
 	cec_msg_init(&msg, la, i);
 	cec_msg_give_osd_name(&msg, true);
+	ok = !transmit_timeout(node, &msg) || timed_out_or_abort(&msg);
 	printf("\t\tOSD Name                   : ");
-	if (!transmit_timeout(node, &msg) || timed_out_or_abort(&msg))
+	if (ok) {
 		printf("%s\n", status2s(msg).c_str());
-	else {
+	} else {
 		char osd_name[15];
 
 		cec_ops_set_osd_name(&msg, osd_name);
@@ -980,10 +1029,11 @@ static void topology_probe_device(struct node *node, unsigned i, unsigned la)
 
 	cec_msg_init(&msg, la, i);
 	cec_msg_give_device_power_status(&msg, true);
+	ok = !transmit_timeout(node, &msg) || timed_out_or_abort(&msg);
 	printf("\t\tPower Status               : ");
-	if (!transmit_timeout(node, &msg) || timed_out_or_abort(&msg))
+	if (ok) {
 		printf("%s\n", status2s(msg).c_str());
-	else {
+	} else {
 		__u8 pwr;
 
 		cec_ops_report_power_status(&msg, &pwr);
@@ -1073,6 +1123,9 @@ int main(int argc, char **argv)
 			break;
 		case OptReplyThreshold:
 			reply_threshold = strtoul(optarg, NULL, 0);
+			break;
+		case OptTimeout:
+			long_timeout = strtoul(optarg, NULL, 0);
 			break;
 		case OptNoWarnings:
 			show_warnings = false;
@@ -1172,6 +1225,45 @@ int main(int argc, char **argv)
 	if (!test_tags && !options[OptTestCore])
 		test_tags = TAG_ALL;
 
+	if (options[OptSkipTestAudioRateControl])
+		test_tags &= ~TAG_AUDIO_RATE_CONTROL;
+	if (options[OptSkipTestARCControl])
+		test_tags &= ~TAG_ARC_CONTROL;
+	if (options[OptSkipTestCapDiscoveryControl])
+		test_tags &= ~TAG_CAP_DISCOVERY_CONTROL;
+	if (options[OptSkipTestDeckControl])
+		test_tags &= ~TAG_DECK_CONTROL;
+	if (options[OptSkipTestDeviceMenuControl])
+		test_tags &= ~TAG_DEVICE_MENU_CONTROL;
+	if (options[OptSkipTestDeviceOSDTransfer])
+		test_tags &= ~TAG_DEVICE_OSD_TRANSFER;
+	if (options[OptSkipTestDynamicAutoLipsync])
+		test_tags &= ~TAG_DYNAMIC_AUTO_LIPSYNC;
+	if (options[OptSkipTestOSDDisplay])
+		test_tags &= ~TAG_OSD_DISPLAY;
+	if (options[OptSkipTestOneTouchPlay])
+		test_tags &= ~TAG_ONE_TOUCH_PLAY;
+	if (options[OptSkipTestOneTouchRecord])
+		test_tags &= ~TAG_ONE_TOUCH_RECORD;
+	if (options[OptSkipTestPowerStatus])
+		test_tags &= ~TAG_POWER_STATUS;
+	if (options[OptSkipTestRemoteControlPassthrough])
+		test_tags &= ~TAG_REMOTE_CONTROL_PASSTHROUGH;
+	if (options[OptSkipTestRoutingControl])
+		test_tags &= ~TAG_ROUTING_CONTROL;
+	if (options[OptSkipTestSystemAudioControl])
+		test_tags &= ~TAG_SYSTEM_AUDIO_CONTROL;
+	if (options[OptSkipTestSystemInformation])
+		test_tags &= ~TAG_SYSTEM_INFORMATION;
+	if (options[OptSkipTestTimerProgramming])
+		test_tags &= ~TAG_TIMER_PROGRAMMING;
+	if (options[OptSkipTestTunerControl])
+		test_tags &= ~TAG_TUNER_CONTROL;
+	if (options[OptSkipTestVendorSpecificCommands])
+		test_tags &= ~TAG_VENDOR_SPECIFIC_COMMANDS;
+	if (options[OptSkipTestStandbyResume])
+		test_tags &= ~(TAG_POWER_STATUS | TAG_STANDBY_RESUME);
+
 	if (options[OptInteractive])
 		test_tags |= TAG_INTERACTIVE;
 
@@ -1182,90 +1274,43 @@ int main(int argc, char **argv)
 #else
 	printf("cec-compliance SHA                 : not available\n");
 #endif
-	printf("\nDriver Info:\n");
-	printf("\tDriver Name                : %s\n", caps.driver);
-	printf("\tAdapter Name               : %s\n", caps.name);
-	printf("\tCapabilities               : 0x%08x\n", caps.capabilities);
-	printf("%s", caps2s(caps.capabilities).c_str());
-	printf("\tDriver version             : %d.%d.%d\n",
-			caps.version >> 16,
-			(caps.version >> 8) & 0xff,
-			caps.version & 0xff);
-	printf("\tAvailable Logical Addresses: %u\n",
-	       caps.available_log_addrs);
 
 	node.phys_addr = CEC_PHYS_ADDR_INVALID;
 	doioctl(&node, CEC_ADAP_G_PHYS_ADDR, &node.phys_addr);
 
-	printf("\tPhysical Address           : %x.%x.%x.%x\n",
-	       cec_phys_addr_exp(node.phys_addr));
-
 	struct cec_log_addrs laddrs = { };
 	doioctl(&node, CEC_ADAP_G_LOG_ADDRS, &laddrs);
 
-	printf("\tLogical Address Mask       : 0x%04x\n", laddrs.log_addr_mask);
-	printf("\tCEC Version                : %s\n", version2s(laddrs.cec_version));
-	if (laddrs.vendor_id != CEC_VENDOR_ID_NONE)
-		printf("\tVendor ID                  : 0x%06x\n", laddrs.vendor_id);
-	printf("\tLogical Addresses          : %u %s\n",
-	       laddrs.num_log_addrs, laflags2s(laddrs.flags).c_str());
-	for (unsigned i = 0; i < laddrs.num_log_addrs; i++) {
-		if (laddrs.log_addr[i] == CEC_LOG_ADDR_INVALID)
-			printf("\n\t  Logical Address          : Not Allocated\n");
-		else
-			printf("\n\t  Logical Address          : %d\n",
-			       laddrs.log_addr[i]);
-		printf("\t    Primary Device Type    : %s\n",
-		       prim_type2s(laddrs.primary_device_type[i]));
-		printf("\t    Logical Address Type   : %s\n",
-		       la_type2s(laddrs.log_addr_type[i]));
-		if (laddrs.cec_version < CEC_OP_CEC_VERSION_2_0)
-			continue;
-		printf("\t    All Device Types       : %s\n",
-		       all_dev_types2s(laddrs.all_device_types[i]).c_str());
+	if (node.phys_addr == CEC_PHYS_ADDR_INVALID &&
+	    !(node.caps & (CEC_CAP_PHYS_ADDR | CEC_CAP_NEEDS_HPD)) &&
+	    laddrs.num_log_addrs) {
+		struct cec_msg msg;
 
-		bool is_dev_feat = false;
-		for (unsigned idx = 0; idx < sizeof(laddrs.features[0]); idx++) {
-			__u8 byte = laddrs.features[i][idx];
+		/*
+		 * Special corner case: if PA is invalid, then you can still try
+		 * to poll a TV. If found, try to wake it up.
+		 */
+		cec_msg_init(&msg, CEC_LOG_ADDR_UNREGISTERED, CEC_LOG_ADDR_TV);
 
-			if (!is_dev_feat) {
-				if (byte & 0x40) {
-					printf("\t    RC Source Profile      :\n%s",
-					       rc_src_prof2s(byte).c_str());
-				} else {
-					const char *s = "Reserved";
+		fail_on_test(doioctl(&node, CEC_TRANSMIT, &msg));
+		if (msg.tx_status & CEC_TX_STATUS_OK) {
+			unsigned cnt = 0;
 
-					switch (byte & 0xf) {
-					case 0:
-						s = "None";
-						break;
-					case 2:
-						s = "RC Profile 1";
-						break;
-					case 6:
-						s = "RC Profile 2";
-						break;
-					case 10:
-						s = "RC Profile 3";
-						break;
-					case 14:
-						s = "RC Profile 4";
-						break;
-					}
-					printf("\t    RC TV Profile          : %s\n", s);
+			cec_msg_image_view_on(&msg);
+			fail_on_test(doioctl(&node, CEC_TRANSMIT, &msg));
+			while ((msg.tx_status & CEC_TX_STATUS_OK) && cnt++ <= long_timeout) {
+				fail_on_test(doioctl(&node, CEC_ADAP_G_PHYS_ADDR, &node.phys_addr));
+				if (node.phys_addr != CEC_PHYS_ADDR_INVALID) {
+					doioctl(&node, CEC_ADAP_G_LOG_ADDRS, &laddrs);
+					break;
 				}
-			} else {
-				printf("\t    Device Features        :\n%s",
-				       dev_feat2s(byte).c_str());
+				sleep(1);
 			}
-			if (byte & CEC_OP_FEAT_EXT)
-				continue;
-			if (!is_dev_feat)
-				is_dev_feat = true;
-			else
-				break;
 		}
+
 	}
+
+	cec_driver_info(caps, laddrs, node.phys_addr);
 
 	bool missing_pa = node.phys_addr == CEC_PHYS_ADDR_INVALID && (node.caps & CEC_CAP_PHYS_ADDR);
 	bool missing_la = laddrs.num_log_addrs == 0 && (node.caps & CEC_CAP_LOG_ADDRS);
@@ -1296,58 +1341,8 @@ int main(int argc, char **argv)
 	printf("Find remote devices:\n");
 	printf("\tPolling: %s\n", ok(poll_remote_devs(&node)));
 
-	if (options[OptTestAdapter]) {
-		/* Required ioctls */
-
-		printf("\nCEC API:\n");
-		printf("\tCEC_ADAP_G_CAPS: %s\n", ok(testCap(&node)));
-		printf("\tCEC_DQEVENT: %s\n", ok(testDQEvent(&node)));
-		printf("\tCEC_ADAP_G/S_PHYS_ADDR: %s\n", ok(testAdapPhysAddr(&node)));
-		if (node.caps & CEC_CAP_PHYS_ADDR)
-			doioctl(&node, CEC_ADAP_S_PHYS_ADDR, &node.phys_addr);
-		if (node.phys_addr == CEC_PHYS_ADDR_INVALID) {
-			fprintf(stderr, "FAIL: without a valid physical address this test cannot proceed.\n");
-			fprintf(stderr, "Make sure that this CEC adapter is connected to another HDMI sink or source.\n");
-			exit(1);
-		}
-		printf("\tCEC_ADAP_G/S_LOG_ADDRS: %s\n", ok(testAdapLogAddrs(&node)));
-		fcntl(node.fd, F_SETFL, fcntl(node.fd, F_GETFL) & ~O_NONBLOCK);
-		if (node.caps & CEC_CAP_LOG_ADDRS) {
-			struct cec_log_addrs clear = { };
-
-			doioctl(&node, CEC_ADAP_S_LOG_ADDRS, &clear);
-			doioctl(&node, CEC_ADAP_S_LOG_ADDRS, &laddrs);
-		}
-		doioctl(&node, CEC_ADAP_G_LOG_ADDRS, &laddrs);
-		if (laddrs.log_addr_mask != node.adap_la_mask)
-			printf("\tNew Logical Address Mask   : 0x%04x\n", laddrs.log_addr_mask);
-		// The LAs may have changed after these tests, so update these node fields
-		node.num_log_addrs = laddrs.num_log_addrs;
-		memcpy(node.log_addr, laddrs.log_addr, laddrs.num_log_addrs);
-		node.adap_la_mask = laddrs.log_addr_mask;
-
-		printf("\tCEC_TRANSMIT: %s\n", ok(testTransmit(&node)));
-		printf("\tCEC_RECEIVE: %s\n", ok(testReceive(&node)));
-		__u32 mode = CEC_MODE_INITIATOR;
-		doioctl(&node, CEC_S_MODE, &mode);
-		printf("\tCEC_TRANSMIT/RECEIVE (non-blocking): %s\n", ok(testNonBlocking(&node)));
-		fcntl(node.fd, F_SETFL, fcntl(node.fd, F_GETFL) & ~O_NONBLOCK);
-		doioctl(&node, CEC_S_MODE, &mode);
-
-		struct node node2 = node;
-
-		if ((node2.fd = open(device, O_RDWR)) < 0) {
-			fprintf(stderr, "Failed to open %s: %s\n", device,
-				strerror(errno));
-			exit(1);
-		}
-
-		printf("\tCEC_G/S_MODE: %s\n", ok(testModes(&node, &node2)));
-		close(node2.fd);
-		doioctl(&node, CEC_S_MODE, &mode);
-		printf("\tCEC_EVENT_LOST_MSGS: %s\n", ok(testLostMsgs(&node)));
-		fcntl(node.fd, F_SETFL, fcntl(node.fd, F_GETFL) & ~O_NONBLOCK);
-	}
+	if (options[OptTestAdapter])
+		testAdapter(node, laddrs, device);
 	printf("\n");
 
 	printf("Network topology:\n");

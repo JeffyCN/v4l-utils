@@ -90,14 +90,19 @@ build_triplet = @build@
 host_triplet = @host@
 bin_PROGRAMS = v4l2-ctl$(EXEEXT)
 @WITH_V4L2_CTL_LIBV4L_FALSE@am__append_1 = -DNO_LIBV4L2
+@WITH_V4L2_CTL_STREAM_TO_FALSE@am__append_2 = -DNO_STREAM_TO
 subdir = utils/v4l2-ctl
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/ac_define_dir.m4 \
 	$(top_srcdir)/m4/ax_prog_doxygen.m4 \
-	$(top_srcdir)/m4/ax_pthread.m4 $(top_srcdir)/m4/libtool.m4 \
-	$(top_srcdir)/m4/ltoptions.m4 $(top_srcdir)/m4/ltsugar.m4 \
-	$(top_srcdir)/m4/ltversion.m4 $(top_srcdir)/m4/lt~obsolete.m4 \
-	$(top_srcdir)/m4/mode_t.m4 $(top_srcdir)/configure.ac
+	$(top_srcdir)/m4/ax_pthread.m4 $(top_srcdir)/m4/gettext.m4 \
+	$(top_srcdir)/m4/iconv.m4 $(top_srcdir)/m4/lib-ld.m4 \
+	$(top_srcdir)/m4/lib-link.m4 $(top_srcdir)/m4/lib-prefix.m4 \
+	$(top_srcdir)/m4/libtool.m4 $(top_srcdir)/m4/ltoptions.m4 \
+	$(top_srcdir)/m4/ltsugar.m4 $(top_srcdir)/m4/ltversion.m4 \
+	$(top_srcdir)/m4/lt~obsolete.m4 $(top_srcdir)/m4/mode_t.m4 \
+	$(top_srcdir)/m4/nls.m4 $(top_srcdir)/m4/po.m4 \
+	$(top_srcdir)/m4/progtest.m4 $(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 DIST_COMMON = $(srcdir)/Makefile.am $(am__DIST_COMMON)
@@ -123,7 +128,8 @@ am_v4l2_ctl_OBJECTS = v4l2_ctl-v4l2-ctl.$(OBJEXT) \
 	v4l2_ctl-v4l2-ctl-edid.$(OBJEXT) \
 	v4l2_ctl-v4l2-ctl-modes.$(OBJEXT) \
 	v4l2_ctl-v4l2-tpg-colors.$(OBJEXT) \
-	v4l2_ctl-v4l2-tpg-core.$(OBJEXT) v4l2_ctl-v4l-stream.$(OBJEXT)
+	v4l2_ctl-v4l2-tpg-core.$(OBJEXT) v4l2_ctl-v4l-stream.$(OBJEXT) \
+	v4l2_ctl-v4l2-ctl-meta.$(OBJEXT)
 v4l2_ctl_OBJECTS = $(am_v4l2_ctl_OBJECTS)
 @WITH_V4L2_CTL_LIBV4L_TRUE@v4l2_ctl_DEPENDENCIES =  \
 @WITH_V4L2_CTL_LIBV4L_TRUE@	../../lib/libv4l2/libv4l2.la \
@@ -265,7 +271,7 @@ CXXCPP = @CXXCPP@
 CXXDEPMODE = @CXXDEPMODE@
 CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
-DEFS := $(am__append_1)
+DEFS := $(am__append_1) $(am__append_2)
 DEPDIR = @DEPDIR@
 DLLTOOL = @DLLTOOL@
 DLOPEN_LIBS = @DLOPEN_LIBS@
@@ -384,6 +390,8 @@ QT_CFLAGS = @QT_CFLAGS@
 QT_LIBS = @QT_LIBS@
 RANLIB = @RANLIB@
 RCC = @RCC@
+SDL2_CFLAGS = @SDL2_CFLAGS@
+SDL2_LIBS = @SDL2_LIBS@
 SED = @SED@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
@@ -470,9 +478,9 @@ v4l2_ctl_SOURCES = v4l2-ctl.cpp v4l2-ctl.h v4l2-ctl-common.cpp v4l2-ctl-tuner.cp
 	v4l2-ctl-io.cpp v4l2-ctl-stds.cpp v4l2-ctl-vidcap.cpp v4l2-ctl-vidout.cpp \
 	v4l2-ctl-overlay.cpp v4l2-ctl-vbi.cpp v4l2-ctl-selection.cpp v4l2-ctl-misc.cpp \
 	v4l2-ctl-streaming.cpp v4l2-ctl-sdr.cpp v4l2-ctl-edid.cpp v4l2-ctl-modes.cpp \
-	v4l2-tpg-colors.c v4l2-tpg-core.c v4l-stream.c
+	v4l2-tpg-colors.c v4l2-tpg-core.c v4l-stream.c v4l2-ctl-meta.cpp
 
-v4l2_ctl_CPPFLAGS = -I../common
+v4l2_ctl_CPPFLAGS = -I$(top_srcdir)/utils/common
 @WITH_V4L2_CTL_LIBV4L_TRUE@v4l2_ctl_LDADD = ../../lib/libv4l2/libv4l2.la ../../lib/libv4lconvert/libv4lconvert.la -lrt -lpthread
 EXTRA_DIST = Android.mk v4l2-ctl.1
 all: all-am
@@ -574,6 +582,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_ctl-v4l2-ctl-common.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_ctl-v4l2-ctl-edid.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_ctl-v4l2-ctl-io.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_ctl-v4l2-ctl-meta.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_ctl-v4l2-ctl-misc.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_ctl-v4l2-ctl-modes.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/v4l2_ctl-v4l2-ctl-overlay.Po@am__quote@
@@ -888,6 +897,20 @@ v4l2_ctl-v4l2-ctl-modes.obj: v4l2-ctl-modes.cpp
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl-modes.cpp' object='v4l2_ctl-v4l2-ctl-modes.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl-modes.obj `if test -f 'v4l2-ctl-modes.cpp'; then $(CYGPATH_W) 'v4l2-ctl-modes.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl-modes.cpp'; fi`
+
+v4l2_ctl-v4l2-ctl-meta.o: v4l2-ctl-meta.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl-meta.o -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl-meta.Tpo -c -o v4l2_ctl-v4l2-ctl-meta.o `test -f 'v4l2-ctl-meta.cpp' || echo '$(srcdir)/'`v4l2-ctl-meta.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl-meta.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl-meta.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl-meta.cpp' object='v4l2_ctl-v4l2-ctl-meta.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl-meta.o `test -f 'v4l2-ctl-meta.cpp' || echo '$(srcdir)/'`v4l2-ctl-meta.cpp
+
+v4l2_ctl-v4l2-ctl-meta.obj: v4l2-ctl-meta.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT v4l2_ctl-v4l2-ctl-meta.obj -MD -MP -MF $(DEPDIR)/v4l2_ctl-v4l2-ctl-meta.Tpo -c -o v4l2_ctl-v4l2-ctl-meta.obj `if test -f 'v4l2-ctl-meta.cpp'; then $(CYGPATH_W) 'v4l2-ctl-meta.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl-meta.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/v4l2_ctl-v4l2-ctl-meta.Tpo $(DEPDIR)/v4l2_ctl-v4l2-ctl-meta.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='v4l2-ctl-meta.cpp' object='v4l2_ctl-v4l2-ctl-meta.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(v4l2_ctl_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o v4l2_ctl-v4l2-ctl-meta.obj `if test -f 'v4l2-ctl-meta.cpp'; then $(CYGPATH_W) 'v4l2-ctl-meta.cpp'; else $(CYGPATH_W) '$(srcdir)/v4l2-ctl-meta.cpp'; fi`
 
 mostlyclean-libtool:
 	-rm -f *.lo

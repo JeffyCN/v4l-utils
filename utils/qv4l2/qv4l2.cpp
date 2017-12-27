@@ -17,7 +17,7 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
 
-#ifdef ENABLE_ASLA
+#ifdef ENABLE_ALSA
 extern "C" {
 #include "alsa_stream.h"
 }
@@ -274,6 +274,7 @@ ApplicationWindow::ApplicationWindow() :
 
 	} else {
 		m_renderMethod = QV4L2_RENDER_QT;
+		m_useGLAct = m_useBlendingAct = m_useLinearAct = NULL;
 	}
 	m_capMenu->addAction(m_resetScalingAct);
 	
@@ -1521,6 +1522,9 @@ void ApplicationWindow::capStart(bool start)
 	case V4L2_PIX_FMT_ABGR32:
 	case V4L2_PIX_FMT_YUV32:
 		dstFmt = QImage::Format_ARGB32;
+		break;
+	case V4L2_PIX_FMT_INZI:
+		height *= 2;
 		break;
 	}
 	m_capImage = new QImage(width, height, dstFmt);

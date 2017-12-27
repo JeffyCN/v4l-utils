@@ -1,7 +1,6 @@
 SUBDIRS = \
 	libv4l2util \
 	libmedia_dev \
-	decode_tm6000 \
 	ivtv-ctl \
 	ir-ctl \
 	cx18-ctl \
@@ -19,16 +18,6 @@ SUBDIRS = \
 if WITH_LIBDVBV5
 SUBDIRS += \
 	dvb
-endif
-
-if LINUX_OS
-SUBDIRS += \
-	xc3028-firmware
-
-if HAVE_LINUX_I2C_DEV
-SUBDIRS += \
-	rds
-endif
 endif
 
 if WITH_QV4L2

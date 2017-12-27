@@ -107,6 +107,9 @@ struct dvb_dev_remote_priv {
 	char default_charset[256];
 
 	struct queued_msg msgs;
+
+	/* private user data, used by event notifier*/
+	void *user_priv;
 };
 
 void stack_dump(struct dvb_v5_fe_parms_priv *parms)
@@ -631,7 +634,8 @@ static void *receive_data(void *privdata)
 			dvb_dev_remote_disconnect(priv);
 			return NULL;
 		}
-		size = be32toh(*(int32_t *)buf);
+		size = (uint32_t)buf[0] << 24 | (uint32_t)buf[1] << 16 |
+		       (uint32_t)buf[2] << 8 | (uint32_t)buf[3];
 		ret = recv(priv->fd, buf, size, MSG_WAITALL);
 		if (ret != size) {
 			if (size < 0)
@@ -675,11 +679,11 @@ static void *receive_data(void *privdata)
 				 * implement a function and always monitor
 				 * changes on remote devices. This way, we
 				 * can avoid leaking memory with the current
-				 * implementation of dvb_remote_seek_by_sysname
+				 * implementation of dvb_remote_seek_by_adapter
 				 */
 				if (ret > 0) {
 					if (priv->notify_dev_change)
-						priv->notify_dev_change(strdup(cmd), retval);
+						priv->notify_dev_change(strdup(cmd), retval, priv->user_priv);
 					args += ret;
 					args_size -= ret;
 				}
@@ -807,7 +811,7 @@ error:
 }
 
 static int dvb_remote_find(struct dvb_device_priv *dvb,
-			   dvb_dev_change_t handler)
+			   dvb_dev_change_t handler, void *user_priv)
 {
 	struct dvb_v5_fe_parms_priv *parms = (void *)dvb->d.fe_parms;
 	struct dvb_dev_remote_priv *priv = dvb->priv;
@@ -822,6 +826,7 @@ static int dvb_remote_find(struct dvb_device_priv *dvb,
 	else
 		enable_monitor = 0;
 
+	priv->user_priv = user_priv;
 	priv->notify_dev_change = handler;
 
 	msg = send_fmt(dvb, priv->fd, "dev_find", "%i", enable_monitor);
@@ -876,7 +881,7 @@ error:
 	return ret;
 }
 
-struct dvb_dev_list *dvb_remote_seek_by_sysname(struct dvb_device_priv *dvb,
+struct dvb_dev_list *dvb_remote_seek_by_adapter(struct dvb_device_priv *dvb,
 						unsigned int adapter,
 						unsigned int num,
 						enum dvb_dev_type type)
@@ -890,8 +895,74 @@ struct dvb_dev_list *dvb_remote_seek_by_sysname(struct dvb_device_priv *dvb,
 	if (priv->disconnected)
 		return NULL;
 
-	msg = send_fmt(dvb, priv->fd, "dev_seek_by_sysname", "%i%i%i",
+	msg = send_fmt(dvb, priv->fd, "dev_seek_by_adapter", "%i%i%i",
 				adapter, num, type);
+	if (!msg)
+		return NULL;
+
+	ret = pthread_cond_wait(&msg->cond, &msg->lock);
+	if (ret < 0) {
+		dvb_logerr("error waiting for %s response", msg->cmd);
+		goto error;
+	}
+	if (msg->retval < 0)
+		goto error;
+
+	/*
+	 * FIXME: dev should be freed. The best would actually to implement
+	 * this locally, but that would require device insert/removal
+	 * notifications. So, let's postpone it.
+	 */
+	dev = calloc(1, sizeof(*dev));
+	if (!dev)
+		goto error;
+	dev->syspath = malloc(msg->args_size);
+	dev->path = malloc(msg->args_size);
+	dev->sysname = malloc(msg->args_size);
+	dev->bus_addr = malloc(msg->args_size);
+	dev->bus_id = malloc(msg->args_size);
+	dev->manufacturer = malloc(msg->args_size);
+	dev->product = malloc(msg->args_size);
+	dev->serial = malloc(msg->args_size);
+
+	ret = scan_data(parms, msg->args, msg->args_size, "%s%s%s%i%s%s%s%s%s",
+			dev->syspath, dev->path, dev->sysname,
+			&int_type, dev->bus_addr, dev->bus_id,
+			dev->manufacturer, dev->product, dev->serial);
+
+	if (ret < 0) {
+		dvb_logerr("Can't get return value");
+		goto error;
+	}
+	if (!*dev->syspath) {
+		free(dev);
+		dev = NULL;
+		goto error;
+	}
+
+	dev->dvb_type = int_type;
+
+error:
+	msg->seq = 0; /* Avoids any risk of a recursive call */
+	pthread_mutex_unlock(&msg->lock);
+
+	free_msg(dvb, msg);
+	return dev;
+}
+
+struct dvb_dev_list *dvb_remote_get_dev_info(struct dvb_device_priv *dvb,
+					     const char *sysname)
+{
+	struct dvb_v5_fe_parms_priv *parms = (void *)dvb->d.fe_parms;
+	struct dvb_dev_remote_priv *priv = dvb->priv;
+	struct dvb_dev_list *dev = NULL;
+	struct queued_msg *msg;
+	int ret, int_type;
+
+	if (priv->disconnected)
+		return NULL;
+
+	msg = send_fmt(dvb, priv->fd, "dev_get_dev_info", "%s", sysname);
 	if (!msg)
 		return NULL;
 
@@ -1682,7 +1753,8 @@ int dvb_dev_remote_init(struct dvb_device *d, char *server, int port)
 
 	/* Everything is OK, initialize data structs */
 	ops->find = dvb_remote_find;
-	ops->seek_by_sysname = dvb_remote_seek_by_sysname;
+	ops->seek_by_adapter = dvb_remote_seek_by_adapter;
+	ops->get_dev_info = dvb_remote_get_dev_info;
 	ops->stop_monitor = dvb_remote_stop_monitor;
 	ops->open = dvb_remote_open;
 	ops->close = dvb_remote_close;

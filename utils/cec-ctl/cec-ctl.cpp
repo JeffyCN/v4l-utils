@@ -23,6 +23,8 @@
 #include <getopt.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/time.h>
+#include <dirent.h>
 #include <fcntl.h>
 #include <ctype.h>
 #include <errno.h>
@@ -31,8 +33,10 @@
 #include <cerrno>
 #include <string>
 #include <vector>
+#include <map>
 #include <algorithm>
 #include <linux/cec-funcs.h>
+#include "cec-htng-funcs.h"
 
 #ifdef __ANDROID__
 #include <android-config.h>
@@ -40,10 +44,19 @@
 #include <config.h>
 #endif
 
+#include "cec-ctl.h"
+
 #define CEC_MAX_ARGS 16
 
 #define xstr(s) str(s)
 #define str(s) #s
+
+static struct timespec start_monotonic;
+static struct timeval start_timeofday;
+static bool ignore_la[16];
+
+#define POLL_FAKE_OPCODE 256
+static unsigned short ignore_opcode[257];
 
 struct cec_enum_values {
 	const char *type_name;
@@ -491,6 +504,7 @@ static void log_features(const struct arg *arg, const char *arg_name, const __u8
 static void log_ui_command(const char *arg_name, const struct cec_op_ui_command *ui_cmd);
 static void log_descriptors(const char *arg_name, unsigned num, const __u32 *descriptors);
 static void log_u8_array(const char *arg_name, unsigned num, const __u8 *vals);
+static void log_htng_unknown_msg(const struct cec_msg *msg);
 static void log_unknown_msg(const struct cec_msg *msg);
 
 #define VENDOR_EXTRA \
@@ -642,11 +656,15 @@ enum Option {
 	OptNoReply = 'n',
 	OptOsdName = 'o',
 	OptPhysAddr = 'p',
+	OptPoll = 'P',
+	OptShowRaw = 'r',
+	OptSkipInfo = 's',
 	OptShowTopology = 'S',
 	OptTo = 't',
 	OptTrace = 'T',
 	OptVerbose = 'v',
 	OptVendorID = 'V',
+	OptWallClock = 'w',
 
 	OptTV = 128,
 	OptRecord,
@@ -661,7 +679,13 @@ enum Option {
 	OptAllowUnregFallback,
 	OptNoRC,
 	OptReplyToFollowers,
+	OptListDevices,
 	OptTimeout,
+	OptMonitorTime,
+	OptMonitorPin,
+	OptIgnore,
+	OptStorePin,
+	OptAnalyzePin,
 	OptListUICommands,
 	OptRcTVProfile1,
 	OptRcTVProfile2,
@@ -690,6 +714,8 @@ struct node {
 	unsigned caps;
 	unsigned available_log_addrs;
 	unsigned num_log_addrs;
+	__u16 log_addr_mask;
+	__u16 phys_addr;
 	__u8 log_addr[CEC_MAX_LOG_ADDRS];
 };
 
@@ -712,6 +738,7 @@ static struct option long_options[] = {
 	{ "help", no_argument, 0, OptHelp },
 	{ "trace", no_argument, 0, OptTrace },
 	{ "verbose", no_argument, 0, OptVerbose },
+	{ "wall-clock", no_argument, 0, OptWallClock },
 	{ "osd-name", required_argument, 0, OptOsdName },
 	{ "phys-addr", required_argument, 0, OptPhysAddr },
 	{ "vendor-id", required_argument, 0, OptVendorID },
@@ -723,10 +750,19 @@ static struct option long_options[] = {
 	{ "clear", no_argument, 0, OptClear },
 	{ "monitor", no_argument, 0, OptMonitor },
 	{ "monitor-all", no_argument, 0, OptMonitorAll },
+	{ "monitor-pin", no_argument, 0, OptMonitorPin },
+	{ "monitor-time", required_argument, 0, OptMonitorTime },
+	{ "ignore", required_argument, 0, OptIgnore },
+	{ "store-pin", required_argument, 0, OptStorePin },
+	{ "analyze-pin", required_argument, 0, OptAnalyzePin },
 	{ "no-reply", no_argument, 0, OptNoReply },
 	{ "to", required_argument, 0, OptTo },
 	{ "from", required_argument, 0, OptFrom },
+	{ "skip-info", no_argument, 0, OptSkipInfo },
+	{ "show-raw", no_argument, 0, OptShowRaw },
 	{ "show-topology", no_argument, 0, OptShowTopology },
+	{ "list-devices", no_argument, 0, OptListDevices },
+	{ "poll", no_argument, 0, OptPoll },
 	{ "list-ui-commands", no_argument, 0, OptListUICommands },
 	{ "rc-tv-profile-1", no_argument, 0, OptRcTVProfile1 },
 	{ "rc-tv-profile-2", no_argument, 0, OptRcTVProfile2 },
@@ -773,23 +809,26 @@ static void usage(void)
 	       "  -o, --osd-name=<name>    Use this OSD name\n"
 	       "  -V, --vendor-id=<id>     Use this vendor ID\n"
 	       "  -C, --clear              Clear all logical addresses\n"
-	       "  -m, --monitor            Monitor CEC traffic\n"
-	       "  -M, --monitor-all        Monitor all CEC traffic\n"
 	       "  -n, --no-reply           Don't wait for a reply\n"
 	       "  -t, --to=<la>            Send message to the given logical address\n"
 	       "  -f, --from=<la>          Send message from the given logical address\n"
 	       "                           By default use the first assigned logical address\n"
+	       "  -r, --show-raw           Show the raw CEC message (hex values)\n"
+	       "  -s, --skip-info          Skip Driver Info output\n"
 	       "  -S, --show-topology      Show the CEC topology\n"
+	       "  -P, --poll               Send poll message\n"
 	       "  -h, --help               Display this help message\n"
 	       "  --help-all               Show all help messages\n"
 	       "  -T, --trace              Trace all called ioctls\n"
 	       "  -v, --verbose            Turn on verbose reporting\n"
+	       "  -w, --wall-clock         Show timestamps as wall-clock time\n"
 	       "  --cec-version-1.4        Use CEC Version 1.4 instead of 2.0\n"
 	       "  --allow-unreg-fallback   Allow fallback to Unregistered\n"
 	       "  --no-rc-passthrough      Disable the RC passthrough\n"
 	       "  --reply-to-followers     The reply will be sent to followers as well\n"
 	       "  --timeout=<ms>           Set the reply timeout in milliseconds (default is 1000 ms)\n"
 	       "  --list-ui-commands       List all UI commands that can be used with --user-control-pressed\n"
+	       "  --list-devices           List all cec devices\n"
 	       "\n"
 	       "  --tv                     This is a TV\n"
 	       "  --record                 This is a recording and playback device\n"
@@ -819,27 +858,21 @@ static void usage(void)
 	       "  --rc-src-media-top       Signal that the RC source has a Media Top Menu\n"
 	       "  --rc-src-media-context   Signal that the RC source has a Media Context Menu\n"
 	       "\n"
+	       "  -m, --monitor            Monitor CEC traffic\n"
+	       "  -M, --monitor-all        Monitor all CEC traffic\n"
+	       "  --monitor-pin            Monitor low-level CEC pin\n"
+	       "  --monitor-time=<secs>    Monitor for <secs> seconds (default is forever)\n"
+	       "  --ignore=<la>,<opcode>   Ignore messages from logical address <la> and opcode\n"
+	       "                           <opcode> when monitoring. 'all' can be used for <la>\n"
+	       "                           or <opcode> to match all logical addresses or opcodes.\n"
+	       "                           To ignore poll messages use 'poll' as <opcode>.\n"
+	       "  --store-pin=<to>         Store the low-level CEC pin changes to the file <to>.\n"
+	       "                           Use - for stdout.\n"
+	       "  --analyze-pin=<from>     Analyze the low-level CEC pin changes from the file <from>.\n"
+	       "                           Use - for stdin.\n"
+	       "\n"
 	       CEC_USAGE
 	       );
-}
-
-static std::string caps2s(unsigned caps)
-{
-	std::string s;
-
-	if (caps & CEC_CAP_PHYS_ADDR)
-		s += "\t\tPhysical Address\n";
-	if (caps & CEC_CAP_LOG_ADDRS)
-		s += "\t\tLogical Addresses\n";
-	if (caps & CEC_CAP_TRANSMIT)
-		s += "\t\tTransmit\n";
-	if (caps & CEC_CAP_PASSTHROUGH)
-		s += "\t\tPassthrough\n";
-	if (caps & CEC_CAP_RC)
-		s += "\t\tRemote Control Support\n";
-	if (caps & CEC_CAP_MONITOR_ALL)
-		s += "\t\tMonitor All\n";
-	return s;
 }
 
 static const char *power_status2s(__u8 power_status)
@@ -856,185 +889,6 @@ static const char *power_status2s(__u8 power_status)
 	default:
 		return "Unknown";
 	}
-}
-
-static const char *version2s(unsigned version)
-{
-	switch (version) {
-	case CEC_OP_CEC_VERSION_1_3A:
-		return "1.3a";
-	case CEC_OP_CEC_VERSION_1_4:
-		return "1.4";
-	case CEC_OP_CEC_VERSION_2_0:
-		return "2.0";
-	default:
-		return "Unknown";
-	}
-}
-
-static const char *prim_type2s(unsigned type)
-{
-	switch (type) {
-	case CEC_OP_PRIM_DEVTYPE_TV:
-		return "TV";
-	case CEC_OP_PRIM_DEVTYPE_RECORD:
-		return "Record";
-	case CEC_OP_PRIM_DEVTYPE_TUNER:
-		return "Tuner";
-	case CEC_OP_PRIM_DEVTYPE_PLAYBACK:
-		return "Playback";
-	case CEC_OP_PRIM_DEVTYPE_AUDIOSYSTEM:
-		return "Audio System";
-	case CEC_OP_PRIM_DEVTYPE_SWITCH:
-		return "Switch";
-	case CEC_OP_PRIM_DEVTYPE_PROCESSOR:
-		return "Processor";
-	default:
-		return "Unknown";
-	}
-}
-
-static const char *la_type2s(unsigned type)
-{
-	switch (type) {
-	case CEC_LOG_ADDR_TYPE_TV:
-		return "TV";
-	case CEC_LOG_ADDR_TYPE_RECORD:
-		return "Record";
-	case CEC_LOG_ADDR_TYPE_TUNER:
-		return "Tuner";
-	case CEC_LOG_ADDR_TYPE_PLAYBACK:
-		return "Playback";
-	case CEC_LOG_ADDR_TYPE_AUDIOSYSTEM:
-		return "Audio System";
-	case CEC_LOG_ADDR_TYPE_SPECIFIC:
-		return "Specific";
-	case CEC_LOG_ADDR_TYPE_UNREGISTERED:
-		return "Unregistered";
-	default:
-		return "Unknown";
-	}
-}
-
-static const char *la2s(unsigned la)
-{
-	switch (la & 0xf) {
-	case 0:
-		return "TV";
-	case 1:
-		return "Recording Device 1";
-	case 2:
-		return "Recording Device 2";
-	case 3:
-		return "Tuner 1";
-	case 4:
-		return "Playback Device 1";
-	case 5:
-		return "Audio System";
-	case 6:
-		return "Tuner 2";
-	case 7:
-		return "Tuner 3";
-	case 8:
-		return "Playback Device 2";
-	case 9:
-		return "Playback Device 3";
-	case 10:
-		return "Tuner 4";
-	case 11:
-		return "Playback Device 3";
-	case 12:
-		return "Reserved 1";
-	case 13:
-		return "Reserved 2";
-	case 14:
-		return "Specific";
-	case 15:
-	default:
-		return "Unregistered";
-	}
-}
-
-static std::string laflags2s(unsigned flags)
-{
-	std::string s;
-
-	if (!flags)
-		return s;
-
-	s = "(";
-	if (flags & CEC_LOG_ADDRS_FL_ALLOW_UNREG_FALLBACK)
-		s += "Allow Fallback to Unregistered, ";
-	if (flags & CEC_LOG_ADDRS_FL_ALLOW_RC_PASSTHRU)
-		s += "Allow RC Passthrough, ";
-	if (flags & CEC_LOG_ADDRS_FL_CDC_ONLY)
-		s += "CDC-Only, ";
-	if (s.length())
-		s.erase(s.length() - 2, 2);
-	return s + ")";
-}
-
-static std::string all_dev_types2s(unsigned types)
-{
-	std::string s;
-
-	if (types & CEC_OP_ALL_DEVTYPE_TV)
-		s += "TV, ";
-	if (types & CEC_OP_ALL_DEVTYPE_RECORD)
-		s += "Record, ";
-	if (types & CEC_OP_ALL_DEVTYPE_TUNER)
-		s += "Tuner, ";
-	if (types & CEC_OP_ALL_DEVTYPE_PLAYBACK)
-		s += "Playback, ";
-	if (types & CEC_OP_ALL_DEVTYPE_AUDIOSYSTEM)
-		s += "Audio System, ";
-	if (types & CEC_OP_ALL_DEVTYPE_SWITCH)
-		s += "Switch, ";
-	if (s.length())
-		return s.erase(s.length() - 2, 2);
-	return s;
-}
-
-static std::string rc_src_prof2s(unsigned prof, const std::string &prefix)
-{
-	std::string s;
-
-	prof &= 0x1f;
-	if (prof == 0)
-		return prefix + "\t\tNone\n";
-	if (prof & CEC_OP_FEAT_RC_SRC_HAS_DEV_ROOT_MENU)
-		s += prefix + "\t\tSource Has Device Root Menu\n";
-	if (prof & CEC_OP_FEAT_RC_SRC_HAS_DEV_SETUP_MENU)
-		s += prefix + "\t\tSource Has Device Setup Menu\n";
-	if (prof & CEC_OP_FEAT_RC_SRC_HAS_MEDIA_CONTEXT_MENU)
-		s += prefix + "\t\tSource Has Contents Menu\n";
-	if (prof & CEC_OP_FEAT_RC_SRC_HAS_MEDIA_TOP_MENU)
-		s += prefix + "\t\tSource Has Media Top Menu\n";
-	if (prof & CEC_OP_FEAT_RC_SRC_HAS_MEDIA_CONTEXT_MENU)
-		s += prefix + "\t\tSource Has Media Context-Sensitive Menu\n";
-	return s;
-}
-
-static std::string dev_feat2s(unsigned feat, const std::string &prefix)
-{
-	std::string s;
-
-	feat &= 0x7e;
-	if (feat == 0)
-		return prefix + "\t\tNone\n";
-	if (feat & CEC_OP_FEAT_DEV_HAS_RECORD_TV_SCREEN)
-		s += prefix + "\t\tTV Supports <Record TV Screen>\n";
-	if (feat & CEC_OP_FEAT_DEV_HAS_SET_OSD_STRING)
-		s += prefix + "\t\tTV Supports <Set OSD String>\n";
-	if (feat & CEC_OP_FEAT_DEV_HAS_DECK_CONTROL)
-		s += prefix + "\t\tSupports Deck Control\n";
-	if (feat & CEC_OP_FEAT_DEV_HAS_SET_AUDIO_RATE)
-		s += prefix + "\t\tSource Supports <Set Audio Rate>\n";
-	if (feat & CEC_OP_FEAT_DEV_SINK_HAS_ARC_TX)
-		s += prefix + "\t\tSink Supports ARC Tx\n";
-	if (feat & CEC_OP_FEAT_DEV_SOURCE_HAS_ARC_RX)
-		s += prefix + "\t\tSource Supports ARC Rx\n";
-	return s;
 }
 
 /*
@@ -1103,6 +957,30 @@ static const char *vendor2s(unsigned vendor)
 	}
 }
 
+std::string ts2s(__u64 ts)
+{
+	std::string s;
+	struct timeval sub;
+	struct timeval res;
+	__u64 diff;
+	char buf[64];
+	time_t t;
+
+	if (!options[OptWallClock]) {
+		sprintf(buf, "%llu.%03llus", ts / 1000000000, (ts % 1000000000) / 1000000);
+		return buf;
+	}
+	diff = ts - start_monotonic.tv_sec * 1000000000ULL - start_monotonic.tv_nsec;
+	sub.tv_sec = diff / 1000000000ULL;
+	sub.tv_usec = (diff % 1000000000ULL) / 1000;
+	timeradd(&start_timeofday, &sub, &res);
+	t = res.tv_sec;
+	s = ctime(&t);
+	s = s.substr(0, s.length() - 6);
+	sprintf(buf, "%03lu", res.tv_usec / 1000);
+	return s + "." + buf;
+}
+
 int cec_named_ioctl(int fd, const char *name,
 		    unsigned long int request, void *parm)
 {
@@ -1117,6 +995,31 @@ int cec_named_ioctl(int fd, const char *name,
 	return retval == -1 ? e : (retval ? -1 : 0);
 }
 
+static void log_raw_msg(const struct cec_msg *msg)
+{
+	printf("\tRaw: ");
+	for (unsigned i = 0; i < msg->len; i++)
+		printf("%02x ", msg->msg[i]);
+	printf("\n");
+}
+
+static void log_htng_unknown_msg(const struct cec_msg *msg)
+{
+	__u32 vendor_id;
+	const __u8 *bytes;
+	__u8 size;
+	unsigned i;
+
+	cec_ops_vendor_command_with_id(msg, &vendor_id, &size, &bytes);
+	printf("CEC_MSG_VENDOR_COMMAND_WITH_ID (0x%02x):\n",
+	       CEC_MSG_VENDOR_COMMAND_WITH_ID);
+	log_arg(&arg_vendor_id, "vendor-id", vendor_id);
+	printf("\tvendor-specific-data:");
+	for (i = 0; i < size; i++)
+		printf(" 0x%02x", bytes[i]);
+	printf("\n");
+}
+
 static void log_unknown_msg(const struct cec_msg *msg)
 {
 	__u32 vendor_id;
@@ -1127,7 +1030,8 @@ static void log_unknown_msg(const struct cec_msg *msg)
 
 	switch (msg->msg[1]) {
 	case CEC_MSG_VENDOR_COMMAND:
-		printf("CEC_MSG_VENDOR_COMMAND:\n");
+		printf("CEC_MSG_VENDOR_COMMAND (0x%02x):\n",
+		       CEC_MSG_VENDOR_COMMAND);
 		cec_ops_vendor_command(msg, &size, &bytes);
 		printf("\tvendor-specific-data:");
 		for (i = 0; i < size; i++)
@@ -1135,16 +1039,25 @@ static void log_unknown_msg(const struct cec_msg *msg)
 		printf("\n");
 		break;
 	case CEC_MSG_VENDOR_COMMAND_WITH_ID:
-		printf("CEC_MSG_VENDOR_COMMAND_WITH_ID:\n");
 		cec_ops_vendor_command_with_id(msg, &vendor_id, &size, &bytes);
-		log_arg(&arg_vendor_id, "vendor-id", vendor_id);
-		printf("\tvendor-specific-data:");
-		for (i = 0; i < size; i++)
-			printf(" 0x%02x", bytes[i]);
-		printf("\n");
+		switch (vendor_id) {
+		case VENDOR_ID_HTNG:
+			log_htng_msg(msg);
+			break;
+		default:
+			printf("CEC_MSG_VENDOR_COMMAND_WITH_ID (0x%02x):\n",
+			       CEC_MSG_VENDOR_COMMAND_WITH_ID);
+			log_arg(&arg_vendor_id, "vendor-id", vendor_id);
+			printf("\tvendor-specific-data:");
+			for (i = 0; i < size; i++)
+				printf(" 0x%02x", bytes[i]);
+			printf("\n");
+			break;
+		}
 		break;
 	case CEC_MSG_VENDOR_REMOTE_BUTTON_DOWN:
-		printf("CEC_MSG_VENDOR_REMOTE_BUTTON_DOWN:\n");
+		printf("CEC_MSG_VENDOR_REMOTE_BUTTON_DOWN (0x%02x):\n",
+		       CEC_MSG_VENDOR_REMOTE_BUTTON_DOWN);
 		cec_ops_vendor_remote_button_down(msg, &size, &bytes);
 		printf("\tvendor-specific-rc-code:");
 		for (i = 0; i < size; i++)
@@ -1154,7 +1067,8 @@ static void log_unknown_msg(const struct cec_msg *msg)
 	case CEC_MSG_CDC_MESSAGE:
 		phys_addr = (msg->msg[2] << 8) | msg->msg[3];
 
-		printf("CEC_MSG_CDC 0x%02x:\n", msg->msg[4]);
+		printf("CEC_MSG_CDC_MESSAGE (0x%02x): 0x%02x:\n",
+		       CEC_MSG_CDC_MESSAGE, msg->msg[4]);
 		log_arg(&arg_u16, "phys-addr", phys_addr);
 		printf("\tpayload:");
 		for (i = 5; i < msg->len; i++)
@@ -1170,34 +1084,58 @@ static void log_unknown_msg(const struct cec_msg *msg)
 	}
 }
 
-static void log_event(struct cec_event &ev)
+static void log_event(struct cec_event &ev, bool show)
 {
+	bool is_high = ev.event == CEC_EVENT_PIN_CEC_HIGH;
 	__u16 pa;
 
-	printf("\n");
-	if (ev.flags & CEC_EVENT_FL_INITIAL_STATE)
+	if (ev.event != CEC_EVENT_PIN_CEC_LOW && ev.event != CEC_EVENT_PIN_CEC_HIGH &&
+	    ev.event != CEC_EVENT_PIN_HPD_LOW && ev.event != CEC_EVENT_PIN_HPD_HIGH)
+		printf("\n");
+	if ((ev.flags & CEC_EVENT_FL_DROPPED_EVENTS) && show)
+		printf("(Note: events were lost)\n");
+	if ((ev.flags & CEC_EVENT_FL_INITIAL_STATE) && show)
 		printf("Initial ");
 	switch (ev.event) {
 	case CEC_EVENT_STATE_CHANGE:
 		pa = ev.state_change.phys_addr;
-		printf("Event: State Change: PA: %x.%x.%x.%x, LA mask: 0x%04x\n",
-		       pa >> 12, (pa >> 8) & 0xf,
-		       (pa >> 4) & 0xf, pa & 0xf,
-		       ev.state_change.log_addr_mask);
+		if (show)
+			printf("Event: State Change: PA: %x.%x.%x.%x, LA mask: 0x%04x\n",
+			       pa >> 12, (pa >> 8) & 0xf,
+			       (pa >> 4) & 0xf, pa & 0xf,
+			       ev.state_change.log_addr_mask);
 		break;
 	case CEC_EVENT_LOST_MSGS:
-		printf("Event: Lost Messages\n");
+		if (show)
+			printf("Event: Lost Messages\n");
+		break;
+	case CEC_EVENT_PIN_CEC_LOW:
+	case CEC_EVENT_PIN_CEC_HIGH:
+		if ((ev.flags & CEC_EVENT_FL_INITIAL_STATE) && show)
+			printf("Event: CEC Pin %s\n", is_high ? "High" : "Low");
+
+		log_event_pin(is_high, ev.ts, show);
+		return;
+	case CEC_EVENT_PIN_HPD_LOW:
+	case CEC_EVENT_PIN_HPD_HIGH:
+		if (show)
+			printf("Event: HPD Pin %s\n",
+			       ev.event == CEC_EVENT_PIN_HPD_HIGH ? "High" : "Low");
 		break;
 	default:
-		printf("Event: Unknown (0x%x)\n", ev.event);
+		if (show)
+			printf("Event: Unknown (0x%x)\n", ev.event);
 		break;
 	}
-	if (show_info)
-		printf("\tTimestamp: %llu.%03llus\n", ev.ts / 1000000000,
-		       (ev.ts % 1000000000) / 1000000);
+	if (show_info && show)
+		printf("\tTimestamp: %s\n", ts2s(ev.ts).c_str());
 }
 
-static __u16 phys_addrs[16];
+/*
+ * Bits 23-8 contain the physical address, bits 0-3 the logical address
+ * (equal to the index).
+ */
+static __u32 phys_addrs[16];
 
 static int showTopologyDevice(struct node *node, unsigned i, unsigned la)
 {
@@ -1205,7 +1143,7 @@ static int showTopologyDevice(struct node *node, unsigned i, unsigned la)
 	char osd_name[15];
 
 	printf("\tSystem Information for device %d (%s) from device %d (%s):\n",
-	       i, la2s(i), la, la2s(la));
+	       i, la2s(i), la & 0xf, la2s(la));
 
 	cec_msg_init(&msg, la, i);
 	cec_msg_get_cec_version(&msg, true);
@@ -1227,7 +1165,7 @@ static int showTopologyDevice(struct node *node, unsigned i, unsigned la)
 		       (phys_addr >> 4) & 0xf, phys_addr & 0xf);
 		printf("\t\tPrimary Device Type        : %s\n",
 		       prim_type2s(msg.msg[4]));
-		phys_addrs[i] = phys_addr;
+		phys_addrs[i] = (phys_addr << 8) | i;
 	}
 
 	cec_msg_init(&msg, la, i);
@@ -1349,7 +1287,7 @@ static int showTopology(struct node *node)
 	for (unsigned i = 0; i < 15; i++) {
 		int ret;
 
-		cec_msg_init(&msg, 0xf, i);
+		cec_msg_init(&msg, laddrs.log_addr[0], i);
 		ret = doioctl(node, CEC_TRANSMIT, &msg);
 
 		if (ret)
@@ -1361,20 +1299,20 @@ static int showTopology(struct node *node)
 			printf("\t\t%s for addr %d\n", status2s(msg).c_str(), i);
 	}
 
-	__u16 pas[16];
+	__u32 pas[16];
 
 	memcpy(pas, phys_addrs, sizeof(pas));
 	std::sort(pas, pas + 16);
 	unsigned level = 0;
 	unsigned last_pa_mask = 0;
 
-	if (pas[0] == 0xffff)
+	if ((pas[0] >> 8) == 0xffff)
 		return 0;
 
 	printf("\n\tTopology:\n\n");
 	for (unsigned i = 0; i < 16; i++) {
-		__u16 pa = pas[i];
-		unsigned la_for_pa = 0;
+		__u16 pa = pas[i] >> 8;
+		__u8 la = pas[i] & 0xf;
 
 		if (pa == 0xffff)
 			break;
@@ -1392,15 +1330,10 @@ static int showTopology(struct node *node)
 		printf("\t");
 		for (unsigned j = 0; j < level; j++)
 			printf("    ");
-		for (unsigned j = 0; j < 16; j++)
-			if (pa == phys_addrs[j]) {
-				la_for_pa = j;
-				break;
-			}
 		printf("%x.%x.%x.%x: %s\n",
 		       pa >> 12, (pa >> 8) & 0xf,
 		       (pa >> 4) & 0xf, pa & 0xf,
-		       la2s(la_for_pa));
+		       la2s(la));
 	}
 	return 0;
 }
@@ -1416,6 +1349,345 @@ static inline unsigned response_time_ms(const struct cec_msg &msg)
 	return 0;
 }
 
+static void generate_eob_event(__u64 ts, FILE *fstore)
+{
+	if (!eob_ts || eob_ts_max >= ts)
+		return;
+
+	struct cec_event ev_eob = {
+		eob_ts,
+		CEC_EVENT_PIN_CEC_HIGH
+	};
+
+	if (fstore) {
+		fprintf(fstore, "%llu.%09llu %d\n",
+			ev_eob.ts / 1000000000, ev_eob.ts % 1000000000,
+			ev_eob.event - CEC_EVENT_PIN_CEC_LOW);
+		fflush(fstore);
+	}
+	log_event(ev_eob, fstore != stdout);
+}
+
+static void monitor(struct node &node, __u32 monitor_time, const char *store_pin)
+{
+	__u32 monitor = CEC_MODE_MONITOR;
+	fd_set rd_fds;
+	fd_set ex_fds;
+	int fd = node.fd;
+	FILE *fstore = NULL;
+	time_t t;
+	
+	if (options[OptMonitorAll])
+		monitor = CEC_MODE_MONITOR_ALL;
+	else if (options[OptMonitorPin] || options[OptStorePin])
+		monitor = CEC_MODE_MONITOR_PIN;
+
+	if (!(node.caps & CEC_CAP_MONITOR_ALL) && monitor == CEC_MODE_MONITOR_ALL) {
+		fprintf(stderr, "Monitor All mode is not supported, falling back to regular monitoring\n");
+		monitor = CEC_MODE_MONITOR;
+	}
+	if (!(node.caps & CEC_CAP_MONITOR_PIN) && monitor == CEC_MODE_MONITOR_PIN) {
+		fprintf(stderr, "Monitor Pin mode is not supported\n");
+		usage();
+		exit(1);
+	}
+
+	if (doioctl(&node, CEC_S_MODE, &monitor)) {
+		fprintf(stderr, "Selecting monitor mode failed, you may have to run this as root.\n");
+		return;
+	}
+
+	if (store_pin) {
+		if (!strcmp(store_pin, "-"))
+			fstore = stdout;
+		else
+			fstore = fopen(store_pin, "w+");
+		if (fstore == NULL) {
+			fprintf(stderr, "Failed to open %s: %s\n", store_pin,
+				strerror(errno));
+			exit(1);
+		}
+		fprintf(fstore, "# cec-ctl --store-pin\n");
+		fprintf(fstore, "# version 1\n");
+		fprintf(fstore, "# start_monotonic %lu.%09lu\n",
+			start_monotonic.tv_sec, start_monotonic.tv_nsec);
+		fprintf(fstore, "# start_timeofday %lu.%06lu\n",
+			start_timeofday.tv_sec, start_timeofday.tv_usec);
+		fprintf(fstore, "# log_addr_mask 0x%04x\n", node.log_addr_mask);
+		fprintf(fstore, "# phys_addr %x.%x.%x.%x\n",
+		       node.phys_addr >> 12, (node.phys_addr >> 8) & 0xf,
+		       (node.phys_addr >> 4) & 0xf, node.phys_addr & 0xf);
+	}
+
+	if (fstore != stdout)
+		printf("\n");
+
+	fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
+	t = time(NULL) + monitor_time;
+
+	while (!monitor_time || time(NULL) < t) {
+		struct timeval tv = { 1, 0 };
+		bool pin_event = false;
+		int res;
+
+		fflush(stdout);
+		FD_ZERO(&rd_fds);
+		FD_ZERO(&ex_fds);
+		FD_SET(fd, &rd_fds);
+		FD_SET(fd, &ex_fds);
+		res = select(fd + 1, &rd_fds, NULL, &ex_fds, &tv);
+		if (res < 0)
+			break;
+		if (FD_ISSET(fd, &rd_fds)) {
+			struct cec_msg msg = { };
+			__u8 from, to;
+
+			res = doioctl(&node, CEC_RECEIVE, &msg);
+			if (res == ENODEV) {
+				fprintf(stderr, "Device was disconnected.\n");
+				break;
+			}
+			if (res || fstore == stdout)
+				continue;
+			from = cec_msg_initiator(&msg);
+			to = cec_msg_destination(&msg);
+			if (ignore_la[from])
+				continue;
+			if ((msg.len == 1 && (ignore_opcode[POLL_FAKE_OPCODE] & (1 << from))) ||
+			    (msg.len > 1 && (ignore_opcode[msg.msg[1]] & (1 << from))))
+				continue;
+
+			bool transmitted = msg.tx_status != 0;
+			printf("%s %s to %s (%d to %d): ",
+			       transmitted ? "Transmitted by" : "Received from",
+			       la2s(from), to == 0xf ? "all" : la2s(to), from, to);
+			log_msg(&msg);
+			if (options[OptShowRaw])
+				log_raw_msg(&msg);
+			if (show_info && transmitted)
+				printf("\tSequence: %u Tx Timestamp: %s\n",
+				       msg.sequence, ts2s(msg.tx_ts).c_str());
+			else if (show_info && !transmitted)
+				printf("\tSequence: %u Rx Timestamp: %s\n",
+				       msg.sequence, ts2s(msg.rx_ts).c_str());
+		}
+		if (FD_ISSET(fd, &ex_fds)) {
+			struct cec_event ev;
+
+			if (doioctl(&node, CEC_DQEVENT, &ev))
+				continue;
+			if (ev.event == CEC_EVENT_PIN_CEC_LOW ||
+			    ev.event == CEC_EVENT_PIN_CEC_HIGH ||
+			    ev.event == CEC_EVENT_PIN_HPD_LOW ||
+			    ev.event == CEC_EVENT_PIN_HPD_HIGH)
+				pin_event = true;
+			generate_eob_event(ev.ts, fstore);
+			if (pin_event && fstore) {
+				fprintf(fstore, "%llu.%09llu %d\n",
+					ev.ts / 1000000000, ev.ts % 1000000000,
+					ev.event - CEC_EVENT_PIN_CEC_LOW);
+				fflush(fstore);
+			}
+			if (!pin_event || options[OptMonitorPin])
+				log_event(ev, fstore != stdout);
+		}
+		if (!res && eob_ts) {
+			struct timespec ts;
+			__u64 ts64;
+
+			clock_gettime(CLOCK_MONOTONIC, &ts);
+			ts64 = ts.tv_sec * 1000000000ULL + ts.tv_nsec;
+			generate_eob_event(ts64, fstore);
+		}
+	}
+	if (fstore && fstore != stdout)
+		fclose(fstore);
+}
+
+static void analyze(const char *analyze_pin)
+{
+	FILE *fanalyze;
+	struct cec_event ev = { };
+	unsigned long tv_sec, tv_nsec, tv_usec;
+	unsigned version;
+	unsigned log_addr_mask;
+	unsigned pa1, pa2, pa3, pa4;
+	unsigned line = 1;
+	char s[100];
+
+	if (!strcmp(analyze_pin, "-"))
+		fanalyze = stdin;
+	else
+		fanalyze = fopen(analyze_pin, "r");
+	if (fanalyze == NULL) {
+		fprintf(stderr, "Failed to open %s: %s\n", analyze_pin,
+			strerror(errno));
+		exit(1);
+	}
+	if (!fgets(s, sizeof(s), fanalyze) ||
+	    strcmp(s, "# cec-ctl --store-pin\n"))
+		goto err;
+	line++;
+	if (!fgets(s, sizeof(s), fanalyze) ||
+	    sscanf(s, "# version %u\n", &version) != 1 ||
+	    version != 1)
+		goto err;
+	line++;
+	if (!fgets(s, sizeof(s), fanalyze) ||
+	    sscanf(s, "# start_monotonic %lu.%09lu\n", &tv_sec, &tv_nsec) != 2 ||
+	    tv_nsec >= 1000000000)
+		goto err;
+	start_monotonic.tv_sec = tv_sec;
+	start_monotonic.tv_nsec = tv_nsec;
+	line++;
+	if (!fgets(s, sizeof(s), fanalyze) ||
+	    sscanf(s, "# start_timeofday %lu.%06lu\n", &tv_sec, &tv_usec) != 2 ||
+	    tv_usec >= 1000000)
+		goto err;
+	start_timeofday.tv_sec = tv_sec;
+	start_timeofday.tv_usec = tv_usec;
+	line++;
+	if (!fgets(s, sizeof(s), fanalyze) ||
+	    sscanf(s, "# log_addr_mask 0x%04x\n", &log_addr_mask) != 1)
+		goto err;
+	line++;
+	if (!fgets(s, sizeof(s), fanalyze) ||
+	    sscanf(s, "# phys_addr %x.%x.%x.%x\n", &pa1, &pa2, &pa3, &pa4) != 4)
+		goto err;
+	line++;
+
+	printf("Physical Address:     %x.%x.%x.%x\n", pa1, pa2, pa3, pa4);
+	printf("Logical Address Mask: 0x%04x\n\n", log_addr_mask);
+
+	while (fgets(s, sizeof(s), fanalyze)) {
+		unsigned event;
+
+		if (s[0] == '#' || s[0] == '\n') {
+			line++;
+			continue;
+		}
+		if (sscanf(s, "%lu.%09lu %d\n", &tv_sec, &tv_nsec, &event) != 3 || event > 3) {
+			fprintf(stderr, "malformed data at line %d\n", line);
+			break;
+		}
+		ev.ts = tv_sec * 1000000000ULL + tv_nsec;
+		ev.event = event + CEC_EVENT_PIN_CEC_LOW;
+		log_event(ev, true);
+		line++;
+	}
+
+	if (eob_ts) {
+		ev.event = CEC_EVENT_PIN_CEC_HIGH;
+		ev.ts = eob_ts;
+		log_event(ev, true);
+	}
+
+	if (fanalyze != stdin)
+		fclose(fanalyze);
+	return;
+
+err:
+	fprintf(stderr, "Not a pin store file: malformed data at line %d\n", line);
+	exit(1);
+}
+
+static int calc_node_val(const char *s)
+{
+	s = strrchr(s, '/') + 1;
+
+	if (!memcmp(s, "cec", 3))
+		return atol(s + 3);
+	return 0;
+}
+
+static bool sort_on_device_name(const std::string &s1, const std::string &s2)
+{
+	int n1 = calc_node_val(s1.c_str());
+	int n2 = calc_node_val(s2.c_str());
+
+	return n1 < n2;
+}
+
+typedef std::vector<std::string> dev_vec;
+typedef std::map<std::string, std::string> dev_map;
+
+static void list_devices()
+{
+	DIR *dp;
+	struct dirent *ep;
+	dev_vec files;
+	dev_map links;
+	dev_map cards;
+	struct cec_caps caps;
+
+	dp = opendir("/dev");
+	if (dp == NULL) {
+		perror ("Couldn't open the directory");
+		return;
+	}
+	while ((ep = readdir(dp)))
+		if (!memcmp(ep->d_name, "cec", 3) && isdigit(ep->d_name[3]))
+			files.push_back(std::string("/dev/") + ep->d_name);
+	closedir(dp);
+
+	/* Find device nodes which are links to other device nodes */
+	for (dev_vec::iterator iter = files.begin();
+			iter != files.end(); ) {
+		char link[64+1];
+		int link_len;
+		std::string target;
+
+		link_len = readlink(iter->c_str(), link, 64);
+		if (link_len < 0) {	/* Not a link or error */
+			iter++;
+			continue;
+		}
+		link[link_len] = '\0';
+
+		/* Only remove from files list if target itself is in list */
+		if (link[0] != '/')	/* Relative link */
+			target = std::string("/dev/");
+		target += link;
+		if (find(files.begin(), files.end(), target) == files.end()) {
+			iter++;
+			continue;
+		}
+
+		/* Move the device node from files to links */
+		if (links[target].empty())
+			links[target] = *iter;
+		else
+			links[target] += ", " + *iter;
+		iter = files.erase(iter);
+	}
+
+	std::sort(files.begin(), files.end(), sort_on_device_name);
+
+	for (dev_vec::iterator iter = files.begin();
+			iter != files.end(); ++iter) {
+		int fd = open(iter->c_str(), O_RDWR);
+		std::string cec_info;
+
+		if (fd < 0)
+			continue;
+		int err = ioctl(fd, CEC_ADAP_G_CAPS, &caps);
+		close(fd);
+		if (err)
+			continue;
+		cec_info = std::string(caps.driver) + " (" + caps.name + ")";
+		if (cards[cec_info].empty())
+			cards[cec_info] += cec_info + ":\n";
+		cards[cec_info] += "\t" + (*iter);
+		if (!(links[*iter].empty()))
+			cards[cec_info] += " <- " + links[*iter];
+		cards[cec_info] += "\n";
+	}
+	for (dev_map::iterator iter = cards.begin();
+			iter != cards.end(); ++iter) {
+		printf("%s\n", iter->second.c_str());
+	}
+}
+
 int main(int argc, char **argv)
 {
 	const char *device = "/dev/cec0";	/* -d device */
@@ -1423,6 +1695,7 @@ int main(int argc, char **argv)
 	msg_vec msgs;
 	char short_options[26 * 2 * 2 + 1];
 	__u32 timeout = 1000;
+	__u32 monitor_time = 0;
 	__u32 vendor_id = 0x000c03; /* HDMI LLC vendor ID */
 	__u16 phys_addr;
 	__u8 from = 0, to = 0;
@@ -1430,6 +1703,8 @@ int main(int argc, char **argv)
 	__u8 rc_tv = 0;
 	__u8 rc_src = 0;
 	const char *osd_name = "";
+	const char *store_pin = NULL;
+	const char *analyze_pin = NULL;
 	bool reply = true;
 	int idx = 0;
 	int fd = -1;
@@ -1457,7 +1732,7 @@ int main(int argc, char **argv)
 		if (ch == -1)
 			break;
 
-		if (ch > OptMessages)
+		if (ch > OptMessages || ch == OptPoll)
 			cec_msg_init(&msg, 0, 0);
 		options[(int)ch] = 1;
 
@@ -1485,6 +1760,55 @@ int main(int argc, char **argv)
 			break;
 		case OptTimeout:
 			timeout = strtoul(optarg, NULL, 0);
+			break;
+		case OptMonitorTime:
+			monitor_time = strtoul(optarg, NULL, 0);
+			break;
+		case OptIgnore: {
+			bool all_la = !strncmp(optarg, "all", 3);
+			bool all_opcodes = true;
+			const char *sep = strchr(optarg, ',');
+			unsigned la_mask = 0xffff, opcode, la = 0;
+
+			if (sep)
+				all_opcodes = !strncmp(sep + 1, "all", 3);
+			if (!all_la) {
+				la = strtoul(optarg, NULL, 0);
+
+				if (la > 15) {
+					fprintf(stderr, "invalid logical address (> 15)\n");
+					usage();
+					return 1;
+				}
+				la_mask = 1 << la;
+			}
+			if (!all_opcodes) {
+				if (!strncmp(sep + 1, "poll", 4)) {
+					opcode = POLL_FAKE_OPCODE;
+				} else {
+					opcode = strtoul(sep + 1, NULL, 0);
+					if (opcode > 255) {
+						fprintf(stderr, "invalid opcode (> 255)\n");
+						usage();
+						return 1;
+					}
+				}
+				ignore_opcode[opcode] |= la_mask;
+				break;
+			}
+			if (all_la && all_opcodes) {
+				fprintf(stderr, "all,all is invalid\n");
+				usage();
+				return 1;
+			}
+			ignore_la[la] = true;
+			break;
+		}
+		case OptStorePin:
+			store_pin = optarg;
+			break;
+		case OptAnalyzePin:
+			analyze_pin = optarg;
 			break;
 		case OptNoReply:
 			reply = false;
@@ -1727,6 +2051,14 @@ int main(int argc, char **argv)
 			}
 			break;
 		}
+		case OptPoll:
+			msgs.push_back(msg);
+			break;
+
+		case OptListDevices:
+			list_devices();
+			break;
+
 		default:
 			if (ch >= OptHelpAll) {
 				usage_options(ch);
@@ -1741,13 +2073,33 @@ int main(int argc, char **argv)
 		}
 	}
 	if (optind < argc) {
-		printf("unknown arguments: ");
+		fprintf(stderr, "unknown arguments: ");
 		while (optind < argc)
-			printf("%s ", argv[optind++]);
-		printf("\n");
+			fprintf(stderr, "%s ", argv[optind++]);
+		fprintf(stderr, "\n");
 		usage();
 		return 1;
 	}
+
+	if (store_pin && analyze_pin) {
+		fprintf(stderr, "--store-pin and --analyze-pin options cannot be combined.\n\n");
+		usage();
+		return 1;
+	}
+
+	if (analyze_pin && options[OptSetDevice]) {
+		fprintf(stderr, "--device and --analyze-pin options cannot be combined.\n\n");
+		usage();
+		return 1;
+	}
+
+	if (analyze_pin) {
+		analyze(analyze_pin);
+		return 0;
+	}
+
+	if (store_pin && !strcmp(store_pin, "-"))
+		options[OptSkipInfo] = 1;
 
 	if (rc_tv && rc_src) {
 		fprintf(stderr, "--rc-tv- and --rc-src- options cannot be combined.\n\n");
@@ -1782,6 +2134,9 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
+	clock_gettime(CLOCK_MONOTONIC, &start_monotonic);
+	gettimeofday(&start_timeofday, NULL);
+
 	if ((fd = open(device, O_RDWR)) < 0) {
 		fprintf(stderr, "Failed to open %s: %s\n", device,
 			strerror(errno));
@@ -1796,6 +2151,9 @@ int main(int argc, char **argv)
 	doioctl(&node, CEC_ADAP_G_CAPS, &caps);
 	node.caps = caps.capabilities;
 	node.available_log_addrs = caps.available_log_addrs;
+
+	if (options[OptPhysAddr] && !(node.caps & CEC_CAP_PHYS_ADDR))
+		fprintf(stderr, "The CEC adapter doesn't allow setting the physical address manually, ignore this option.\n\n");
 
 	unsigned flags = 0;
 
@@ -1839,18 +2197,6 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	printf("Driver Info:\n");
-	printf("\tDriver Name                : %s\n", caps.driver);
-	printf("\tAdapter Name               : %s\n", caps.name);
-	printf("\tCapabilities               : 0x%08x\n", caps.capabilities);
-	printf("%s", caps2s(caps.capabilities).c_str());
-	printf("\tDriver version             : %d.%d.%d\n",
-			caps.version >> 16,
-			(caps.version >> 8) & 0xff,
-			caps.version & 0xff);
-	printf("\tAvailable Logical Addresses: %u\n",
-	       caps.available_log_addrs);
-
 	bool set_log_addrs = (node.caps & CEC_CAP_LOG_ADDRS) && flags;
 	bool set_phys_addr = (node.caps & CEC_CAP_PHYS_ADDR) && options[OptPhysAddr];
 	bool clear_log_addrs = (node.caps & CEC_CAP_LOG_ADDRS) && options[OptClear];
@@ -1866,12 +2212,6 @@ int main(int argc, char **argv)
 		doioctl(&node, CEC_ADAP_S_PHYS_ADDR, &phys_addr);
 
 	doioctl(&node, CEC_ADAP_G_PHYS_ADDR, &phys_addr);
-	printf("\tPhysical Address           : %x.%x.%x.%x\n",
-	       phys_addr >> 12, (phys_addr >> 8) & 0xf,
-	       (phys_addr >> 4) & 0xf, phys_addr & 0xf);
-	if (!options[OptPhysAddr] && phys_addr == 0xffff &&
-	    (node.caps & CEC_CAP_PHYS_ADDR))
-		printf("Perhaps you should use option --phys-addr?\n");
 
 	if (set_log_addrs) {
 		struct cec_log_addrs laddrs = {};
@@ -1953,82 +2293,30 @@ int main(int argc, char **argv)
 	struct cec_log_addrs laddrs = { };
 	doioctl(&node, CEC_ADAP_G_LOG_ADDRS, &laddrs);
 	node.num_log_addrs = laddrs.num_log_addrs;
-	printf("\tLogical Address Mask       : 0x%04x\n", laddrs.log_addr_mask);
-	printf("\tCEC Version                : %s\n", version2s(laddrs.cec_version));
-	if (laddrs.vendor_id != CEC_VENDOR_ID_NONE)
-		printf("\tVendor ID                  : 0x%06x%s\n",
-		       laddrs.vendor_id, vendor2s(laddrs.vendor_id));
-	printf("\tOSD Name                   : '%s'\n", laddrs.osd_name);
-	printf("\tLogical Addresses          : %u %s\n",
-	       laddrs.num_log_addrs, laflags2s(laddrs.flags).c_str());
-	for (unsigned i = 0; i < laddrs.num_log_addrs; i++) {
-		if (laddrs.log_addr[i] == CEC_LOG_ADDR_INVALID) {
-			printf("\n\t  Logical Address          : Not Allocated\n");
-		} else {
-			printf("\n\t  Logical Address          : %d (%s)\n",
-			       laddrs.log_addr[i], la2s(laddrs.log_addr[i]));
-			phys_addrs[laddrs.log_addr[i]] = phys_addr;
-		}
-		printf("\t    Primary Device Type    : %s\n",
-		       prim_type2s(laddrs.primary_device_type[i]));
-		printf("\t    Logical Address Type   : %s\n",
-		       la_type2s(laddrs.log_addr_type[i]));
-		if (laddrs.cec_version < CEC_OP_CEC_VERSION_2_0)
-			continue;
-		printf("\t    All Device Types       : %s\n",
-		       all_dev_types2s(laddrs.all_device_types[i]).c_str());
+	node.log_addr_mask = laddrs.log_addr_mask;
+	node.phys_addr = phys_addr;
 
-		bool is_dev_feat = false;
-		for (unsigned idx = 0; idx < sizeof(laddrs.features[0]); idx++) {
-			__u8 byte = laddrs.features[i][idx];
+	for (i = 0; i < laddrs.num_log_addrs; i++) {
+		__u8 la = laddrs.log_addr[i];
 
-			if (!is_dev_feat) {
-				if (byte & 0x40) {
-					printf("\t    RC Source Profile      :\n%s",
-					       rc_src_prof2s(byte, "").c_str());
-				} else {
-					const char *s = "Reserved";
-
-					switch (byte & 0xf) {
-					case 0:
-						s = "None";
-						break;
-					case 2:
-						s = "RC Profile 1";
-						break;
-					case 6:
-						s = "RC Profile 2";
-						break;
-					case 10:
-						s = "RC Profile 3";
-						break;
-					case 14:
-						s = "RC Profile 4";
-						break;
-					}
-					printf("\t    RC TV Profile          : %s\n", s);
-				}
-			} else {
-				printf("\t    Device Features        :\n%s",
-				       dev_feat2s(byte, "").c_str());
-			}
-			if (byte & CEC_OP_FEAT_EXT)
-				continue;
-			if (!is_dev_feat)
-				is_dev_feat = true;
-			else
-				break;
-		}
+		if (la != CEC_LOG_ADDR_INVALID)
+			phys_addrs[la] = (phys_addr << 8) | la;
 	}
+
+	if (!options[OptSkipInfo])
+		cec_driver_info(caps, laddrs, phys_addr);
+
 	if (node.num_log_addrs == 0) {
-		if (options[OptMonitor] || options[OptMonitorAll])
+		if (options[OptMonitor] || options[OptMonitorAll] ||
+		    options[OptMonitorPin] || options[OptStorePin])
 			goto skip_la;
 		return 0;
 	}
-	printf("\n");
+	if (!options[OptSkipInfo])
+		printf("\n");
 
 	if (!options[OptFrom])
-		from = laddrs.log_addr[0];
+		from = laddrs.log_addr[0] & 0xf;
 
 	if (options[OptShowTopology])
 		showTopology(&node);
@@ -2036,6 +2324,7 @@ int main(int argc, char **argv)
 	for (msg_vec::iterator iter = msgs.begin(); iter != msgs.end(); ++iter) {
 		struct cec_msg msg = *iter;
 
+		fflush(stdout);
 		if (!cec_msg_is_broadcast(&msg) && !options[OptTo]) {
 			fprintf(stderr, "attempting to send message without --to\n");
 			exit(1);
@@ -2053,92 +2342,26 @@ int main(int argc, char **argv)
 			printf("    Received from %s (%d):\n    ", la2s(cec_msg_initiator(&msg)),
 			       cec_msg_initiator(&msg));
 			log_msg(&msg);
+			if (options[OptShowRaw])
+				log_raw_msg(&msg);
 		}
-		printf("\tSequence: %u Tx Timestamp: %llu.%03llus",
-			msg.sequence,
-			msg.tx_ts / 1000000000,
-			(msg.tx_ts % 1000000000) / 1000000);
+		printf("\tSequence: %u Tx Timestamp: %s",
+			msg.sequence, ts2s(msg.tx_ts).c_str());
 		if (msg.rx_ts)
-			printf(" Rx Timestamp: %llu.%03llus\n\tApproximate response time: %u ms",
-				msg.rx_ts / 1000000000,
-				(msg.rx_ts % 1000000000) / 1000000,
+			printf(" Rx Timestamp: %s\n\tApproximate response time: %u ms",
+				ts2s(msg.rx_ts).c_str(),
 				response_time_ms(msg));
 		printf("\n");
-		if (!cec_msg_status_is_ok(&msg))
+		if (!cec_msg_status_is_ok(&msg) || show_info)
 			printf("\t%s\n", status2s(msg).c_str());
 	}
+	fflush(stdout);
 
 skip_la:
-	if (options[OptMonitor] || options[OptMonitorAll]) {
-		__u32 monitor = options[OptMonitorAll] ?
-			CEC_MODE_MONITOR_ALL : CEC_MODE_MONITOR;
-		fd_set rd_fds;
-		fd_set ex_fds;
-		int fd = node.fd;
-
-		printf("\n");
-		if (!(node.caps & CEC_CAP_MONITOR_ALL) &&
-		    monitor == CEC_MODE_MONITOR_ALL) {
-			printf("Monitor All mode is not supported, falling back to regular monitoring\n");
-			monitor = CEC_MODE_MONITOR;
-		}
-		if (doioctl(&node, CEC_S_MODE, &monitor)) {
-			printf("Selecting monitor mode failed, you may have to run this as root.\n");
-			goto skip_mon;
-		}
-
-		fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
-		while (1) {
-			int res;
-
-			FD_ZERO(&rd_fds);
-			FD_ZERO(&ex_fds);
-			FD_SET(fd, &rd_fds);
-			FD_SET(fd, &ex_fds);
-			res = select(fd + 1, &rd_fds, NULL, &ex_fds, NULL);
-			if (res <= 0)
-				break;
-			if (FD_ISSET(fd, &rd_fds)) {
-				struct cec_msg msg = { };
-				__u8 from, to;
-
-				res = doioctl(&node, CEC_RECEIVE, &msg);
-				if (res == ENODEV) {
-					printf("Device was disconnected.\n");
-					break;
-				}
-				if (res)
-					continue;
-
-				from = cec_msg_initiator(&msg);
-				to = cec_msg_destination(&msg);
-				bool transmitted = msg.tx_status != 0;
-				printf("%s %s to %s (%d to %d): ",
-				       transmitted ? "Transmitted by" : "Received from",
-				       la2s(from), to == 0xf ? "all" : la2s(to), from, to);
-				log_msg(&msg);
-				if (show_info && transmitted)
-					printf("\tSequence: %u Tx Timestamp: %llu.%03llus\n",
-					       msg.sequence,
-					       msg.tx_ts / 1000000000,
-					       (msg.tx_ts % 1000000000) / 1000000);
-				else if (show_info && !transmitted)
-					printf("\tSequence: %u Rx Timestamp: %llu.%03llus\n",
-					       msg.sequence,
-					       msg.rx_ts / 1000000000,
-					       (msg.rx_ts % 1000000000) / 1000000);
-			}
-			if (FD_ISSET(fd, &ex_fds)) {
-				struct cec_event ev;
-
-				if (doioctl(&node, CEC_DQEVENT, &ev))
-					continue;
-				log_event(ev);
-			}
-		}
-	}
-
-skip_mon:
+	if (options[OptMonitor] || options[OptMonitorAll] ||
+	    options[OptMonitorPin] || options[OptStorePin])
+		monitor(node, monitor_time, store_pin);
+	fflush(stdout);
 	close(fd);
 	return 0;
 }

@@ -48,7 +48,7 @@ static int system_info_polling(struct node *node, unsigned me, unsigned la, bool
 {
 	struct cec_msg msg = { };
 
-	cec_msg_init(&msg, 0xf, la);
+	cec_msg_init(&msg, me, la);
 	fail_on_test(doioctl(node, CEC_TRANSMIT, &msg));
 	if (node->remote_la_mask & (1 << la)) {
 		if (!cec_msg_status_is_ok(&msg))
@@ -165,8 +165,8 @@ static int system_info_give_features(struct node *node, unsigned me, unsigned la
 	fail_on_test(cec_version != node->remote[la].cec_version);
 	fail_on_test(rc_profile == NULL || dev_features == NULL);
 	info("All Device Types: \t\t%s\n", all_dev_types2s(all_device_types).c_str());
-	info("RC Profile: \t%s", rc_src_prof2s(*rc_profile).c_str());
-	info("Device Features: \t%s", dev_feat2s(*dev_features).c_str());
+	info("RC Profile: \t%s", rc_src_prof2s(*rc_profile, "").c_str());
+	info("Device Features: \t%s", dev_feat2s(*dev_features, "").c_str());
 
 	if (!(cec_has_playback(1 << la) || cec_has_record(1 << la) || cec_has_tuner(1 << la)) &&
 		node->remote[la].has_aud_rate) {
@@ -195,6 +195,7 @@ static struct remote_subtest system_info_subtests[] = {
 static int core_unknown(struct node *node, unsigned me, unsigned la, bool interactive)
 {
 	struct cec_msg msg = { };
+	const __u8 unknown_opcode = 0xfe;
 
 	/* Unknown opcodes should be responded to with Feature Abort, with abort
 	   reason Unknown Opcode.
@@ -203,7 +204,7 @@ static int core_unknown(struct node *node, unsigned me, unsigned la, bool intera
 	   needs to be updated for future CEC versions. */
 	cec_msg_init(&msg, me, la);
 	msg.len = 2;
-	msg.msg[1] = 0xfe;
+	msg.msg[1] = unknown_opcode;
 	fail_on_test(!transmit_timeout(node, &msg));
 	fail_on_test(timed_out(&msg));
 	fail_on_test(!cec_msg_status_is_abort(&msg));
@@ -213,6 +214,14 @@ static int core_unknown(struct node *node, unsigned me, unsigned la, bool intera
 	cec_ops_feature_abort(&msg, &abort_msg, &reason);
 	fail_on_test(reason != CEC_OP_ABORT_UNRECOGNIZED_OP);
 	fail_on_test(abort_msg != 0xfe);
+
+	/* Unknown opcodes that are broadcast should be ignored */
+	cec_msg_init(&msg, me, CEC_LOG_ADDR_BROADCAST);
+	msg.len = 2;
+	msg.msg[1] = unknown_opcode;
+	fail_on_test(!transmit_timeout(node, &msg));
+	fail_on_test(!timed_out(&msg));
+
 	return 0;
 }
 
@@ -468,17 +477,17 @@ static int routing_control_set_stream_path(struct node *node, unsigned me, unsig
 	__u16 phys_addr;
 
 	/* Send Set Stream Path with the remote physical address. We expect the
-	   source to eventually send Active Source. The timeout of 60 seconds is
-	   necessary because the device might have to wake up from standby.
+	   source to eventually send Active Source. The timeout of long_timeout
+	   seconds is necessary because the device might have to wake up from standby.
 
 	   In CEC 2.0 it is mandatory for sources to send Active Source. */
 	if (is_tv(la, node->remote[la].prim_type))
 		interactive_info(true, "Please ensure that the device is in standby.");
-	announce("Sending Set Stream Path and waiting for reply. This may take up to 60 s.");
+	announce("Sending Set Stream Path and waiting for reply. This may take up to %u s.", long_timeout);
 	cec_msg_init(&msg, me, la);
 	cec_msg_set_stream_path(&msg, node->remote[la].phys_addr);
 	msg.reply = CEC_MSG_ACTIVE_SOURCE;
-	fail_on_test(!transmit_timeout(node, &msg, 60000));
+	fail_on_test(!transmit_timeout(node, &msg, long_timeout * 1000));
 	if (timed_out(&msg) && is_tv(la, node->remote[la].prim_type))
 		return NOTSUPPORTED;
 	if (timed_out(&msg) && node->remote[la].cec_version < CEC_OP_CEC_VERSION_2_0) {

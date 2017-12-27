@@ -49,7 +49,7 @@ static const char doc[] = N_(
 	"\nOn the options below, the arguments are:\n"
 	"  ADAPTER      - the dvb adapter to control\n"
 	"  FRONTEND     - the dvb frontend to control\n"
-	"  SERVER       - server address whith is running the dvb5-daemon\n"
+	"  SERVER       - server address which is running the dvb5-daemon\n"
 	"  PORT         - server port used by the dvb5-daemon\n");
 
 static const struct argp_option options[] = {
@@ -58,7 +58,7 @@ static const struct argp_option options[] = {
 	{"frontend",	'f',	N_("FRONTEND"),	0,	N_("dvb frontend"), 0},
 	{"set-delsys",	'd',	N_("PARAMS"),	0,	N_("set delivery system"), 0},
 	{"femon",	'm',	0,		0,	N_("monitors frontend stats on an streaming frontend"), 0},
-	{"acoustical",	'A',	0,		0,	N_("bips if signal quality is good. Also enables femon mode. Please notice that console bip should be enabled on your wm."), 0},
+	{"acoustical",	'A',	0,		0,	N_("beeps if signal quality is good. Also enables femon mode. Please notice that console beep should be enabled on your wm."), 0},
 #if 0 /* Currently not implemented */
 	{"set",		's',	N_("PARAMS"),	0,	N_("set frontend"), 0},
 #endif
@@ -292,14 +292,14 @@ static void get_show_stats(struct dvb_v5_fe_parms *parms)
 	} while (!timeout_flag);
 }
 
-static const char const *event_type[] = {
+static const char * const event_type[] = {
 	[DVB_DEV_ADD] = "added",
 	[DVB_DEV_CHANGE] = "changed",
 	[DVB_DEV_REMOVE] = "removed",
 };
 
 static int dev_change_monitor(char *sysname,
-			       enum dvb_dev_change_type type)
+			       enum dvb_dev_change_type type, void *user_priv)
 {
 	if (type > ARRAY_SIZE(event_type))
 		printf("unknown event on device %s\n", sysname);
@@ -351,15 +351,15 @@ int main(int argc, char *argv[])
 
 	dvb_dev_set_log(dvb, verbose, NULL);
 	if (device_mon) {
-		dvb_dev_find(dvb, &dev_change_monitor);
+		dvb_dev_find(dvb, &dev_change_monitor, NULL);
 		while (1) {
 			usleep(1000000);
 		}
 	}
-	dvb_dev_find(dvb, NULL);
+	dvb_dev_find(dvb, NULL, NULL);
 	parms = dvb->fe_parms;
 
-	dvb_dev = dvb_dev_seek_by_sysname(dvb, adapter, frontend,
+	dvb_dev = dvb_dev_seek_by_adapter(dvb, adapter, frontend,
 					  DVB_DEVICE_FRONTEND);
 	if (!dvb_dev)
 		return -1;

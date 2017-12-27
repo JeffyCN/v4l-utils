@@ -18,15 +18,20 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <poll.h>
 #include <stdlib.h>
 #include <string.h>
 #include <linux/input.h>
+#include <linux/lirc.h>
 #include <sys/ioctl.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <dirent.h>
 #include <argp.h>
+#include <time.h>
 #include <stdbool.h>
 
+#include "ir-encode.h"
 #include "parse.h"
 
 #ifdef ENABLE_NLS
@@ -106,6 +111,7 @@ enum sysfs_protocols {
 	SYSFS_RC6		= (1 << 10),
 	SYSFS_SHARP		= (1 << 11),
 	SYSFS_XMP		= (1 << 12),
+	SYSFS_CEC		= (1 << 13),
 	SYSFS_INVALID		= 0,
 };
 
@@ -120,9 +126,7 @@ const struct protocol_map_entry protocol_map[] = {
 	{ "other",	NULL,		SYSFS_OTHER	},
 	{ "lirc",	NULL,		SYSFS_LIRC	},
 	{ "rc-5",	"/rc5_decoder",	SYSFS_RC5	},
-	{ "rc5",	NULL,		SYSFS_RC5	},
 	{ "rc-5x",	NULL,		SYSFS_INVALID	},
-	{ "rc5x",	NULL,		SYSFS_INVALID	},
 	{ "rc-5-sz",	NULL,		SYSFS_RC5_SZ	},
 	{ "jvc",	"/jvc_decoder",	SYSFS_JVC	},
 	{ "sony",	"/sony_decoder",SYSFS_SONY	},
@@ -132,9 +136,7 @@ const struct protocol_map_entry protocol_map[] = {
 	{ "nec",	"/nec_decoder",	SYSFS_NEC	},
 	{ "sanyo",	NULL,		SYSFS_SANYO	},
 	{ "mce_kbd",	NULL,		SYSFS_MCE_KBD	},
-	{ "mce-kbd",	NULL,		SYSFS_MCE_KBD	},
 	{ "rc-6",	"/rc6_decoder",	SYSFS_RC6	},
-	{ "rc6",	NULL,		SYSFS_RC6	},
 	{ "rc-6-0",	NULL,		SYSFS_INVALID	},
 	{ "rc-6-6a-20",	NULL,		SYSFS_INVALID	},
 	{ "rc-6-6a-24",	NULL,		SYSFS_INVALID	},
@@ -142,8 +144,24 @@ const struct protocol_map_entry protocol_map[] = {
 	{ "rc-6-mce",	NULL,		SYSFS_INVALID	},
 	{ "sharp",	NULL,		SYSFS_SHARP	},
 	{ "xmp",	"/xmp_decoder",	SYSFS_XMP	},
+	{ "cec",	NULL,		SYSFS_CEC	},
 	{ NULL,		NULL,		SYSFS_INVALID	},
 };
+
+static bool protocol_like(const char *a, const char *b)
+{
+	while (*a && *b) {
+		if (*a == '-' || *a == '_')
+			a++;
+		if (*b == '-' || *b == '_')
+			b++;
+		if (tolower(*a) != tolower(*b))
+			return false;
+		a++; b++;
+	}
+
+	return !*a && !*b;
+}
 
 static enum sysfs_protocols parse_sysfs_protocol(const char *name, bool all_allowed)
 {
@@ -156,7 +174,7 @@ static enum sysfs_protocols parse_sysfs_protocol(const char *name, bool all_allo
 		return ~0;
 
 	for (pme = protocol_map; pme->name; pme++) {
-		if (!strcasecmp(name, pme->name))
+		if (protocol_like(name, pme->name))
 			return pme->sysfs_protocol;
 	}
 
@@ -230,14 +248,14 @@ static const char args_doc[] = N_(
 	"[for using the rc0 sysdev]");
 
 /* Static vars to store the parameters */
-static char *devclass = "rc0";
+static char *devclass = NULL;
 static char *devicename = NULL;
 static int readtable = 0;
 static int clear = 0;
 static int debug = 0;
 static int test = 0;
-static int delay = 0;
-static int period = 0;
+static int delay = -1;
+static int period = -1;
 static enum sysfs_protocols ch_proto = 0;
 
 struct cfgfile cfg = {
@@ -257,7 +275,9 @@ static int sysfs = 0;
 struct rc_device {
 	char *sysfs_name;	/* Device sysfs node name */
 	char *input_name;	/* Input device file name */
+	char *lirc_name;	/* Lirc device file name */
 	char *drv_name;		/* Kernel driver that implements it */
+	char *dev_name;		/* Kernel device name */
 	char *keytable_name;	/* Keycode table name */
 
 	enum sysfs_ver version; /* sysfs version */
@@ -462,10 +482,14 @@ static error_t parse_opt(int k, char *arg, struct argp_state *state)
 		clear++;
 		break;
 	case 'D':
-		delay = atoi(arg);
+		delay = strtol(arg, &p, 10);
+		if (!p || *p || delay < 0)
+			argp_error(state, _("Invalid delay: %s"), arg);
 		break;
 	case 'P':
-		period = atoi(arg);
+		period = strtol(arg, &p, 10);
+		if (!p || *p || period < 0)
+			argp_error(state, _("Invalid period: %s"), arg);
 		break;
 	case 'd':
 		devicename = arg;
@@ -481,7 +505,7 @@ static error_t parse_opt(int k, char *arg, struct argp_state *state)
 
 		rc = parse_keyfile(arg, &name);
 		if (rc)
-			goto err_inval;
+			argp_error(state, _("Failed to read table file %s"), arg);
 		if (name)
 			fprintf(stderr, _("Read %s table\n"), name);
 		break;
@@ -489,7 +513,7 @@ static error_t parse_opt(int k, char *arg, struct argp_state *state)
 	case 'a': {
 		rc = parse_cfgfile(arg);
 		if (rc)
-			goto err_inval;
+			argp_error(state, _("Failed to read config file %s"), arg);
 		break;
 	}
 	case 'k':
@@ -497,8 +521,10 @@ static error_t parse_opt(int k, char *arg, struct argp_state *state)
 		do {
 			struct keytable_entry *ke;
 
-			if (!p)
-				goto err_inval;
+			if (!p) {
+				argp_error(state, _("Missing scancode: %s"), arg);
+				break;
+			}
 
 			ke = calloc(1, sizeof(*ke));
 			if (!ke) {
@@ -509,13 +535,15 @@ static error_t parse_opt(int k, char *arg, struct argp_state *state)
 			ke->scancode = strtoul(p, NULL, 0);
 			if (errno) {
 				free(ke);
-				goto err_inval;
+				argp_error(state, _("Invalid scancode: %s"), p);
+				break;
 			}
 
 			p = strtok(NULL, ",;");
 			if (!p) {
 				free(ke);
-				goto err_inval;
+				argp_error(state, _("Missing keycode"));
+				break;
 			}
 
 			key = parse_code(p);
@@ -523,7 +551,8 @@ static error_t parse_opt(int k, char *arg, struct argp_state *state)
 				key = strtol(p, NULL, 0);
 				if (errno) {
 					free(ke);
-					goto err_inval;
+					argp_error(state, _("Unknown keycode: %s"), p);
+					break;
 				}
 			}
 
@@ -544,8 +573,10 @@ static error_t parse_opt(int k, char *arg, struct argp_state *state)
 			enum sysfs_protocols protocol;
 
 			protocol = parse_sysfs_protocol(p, true);
-			if (protocol == SYSFS_INVALID)
-				goto err_inval;
+			if (protocol == SYSFS_INVALID) {
+				argp_error(state, _("Unknown protocol: %s"), p);
+				break;
+			}
 
 			ch_proto |= protocol;
 		}
@@ -565,12 +596,8 @@ static error_t parse_opt(int k, char *arg, struct argp_state *state)
 	default:
 		return ARGP_ERR_UNKNOWN;
 	}
+
 	return 0;
-
-err_inval:
-	fprintf(stderr, _("Invalid parameter(s)\n"));
-	return ARGP_ERR_UNKNOWN;
-
 }
 
 static struct argp argp = {
@@ -644,8 +671,10 @@ static struct sysfs_names *seek_sysfs_dir(char *dname, char *node_name)
 	closedir(dir);
 
 	if (names == cur_name) {
-		fprintf(stderr, _("Couldn't find any node at %s%s*.\n"),
-			dname, node_name);
+		if (debug)
+			fprintf(stderr, _("Couldn't find any node at %s%s*.\n"),
+				dname, node_name);
+
 		free (names);
 		names = NULL;
 	}
@@ -752,8 +781,10 @@ static struct sysfs_names *find_device(char *name)
 	snprintf(dname, sizeof(dname), "/sys/class/rc/");
 
 	names = seek_sysfs_dir(dname, input);
-	if (!names)
+	if (!names) {
+		fprintf(stderr, _("No devices found\n"));
 		return NULL;
+	}
 
 	if (debug) {
 		for (cur = names; cur->next; cur = cur->next) {
@@ -977,9 +1008,15 @@ static int v2_set_protocols(struct rc_device *rc_dev)
 {
 	FILE *fp;
 	char name[4096];
+	struct stat st;
 
 	strcpy(name, rc_dev->sysfs_name);
 	strcat(name, "/protocols");
+
+	if (!stat(name, &st) && !(st.st_mode & 0222)) {
+		fprintf(stderr, _("Protocols for device can not be changed\n"));
+		return 0;
+	}
 
 	fp = fopen(name, "w");
 	if (!fp) {
@@ -1003,31 +1040,51 @@ static int v2_set_protocols(struct rc_device *rc_dev)
 static int get_attribs(struct rc_device *rc_dev, char *sysfs_name)
 {
 	struct uevents  *uevent;
-	char		*input = "input", *event = "event";
+	char		*input = "input", *event = "event", *lirc = "lirc";
 	char		*DEV = "/dev/";
-	static struct sysfs_names *input_names, *event_names, *attribs, *cur;
+	static struct sysfs_names *input_names, *event_names, *attribs, *cur, *lirc_names;
 
 	/* Clean the attributes */
 	memset(rc_dev, 0, sizeof(*rc_dev));
 
 	rc_dev->sysfs_name = sysfs_name;
 
+	lirc_names = seek_sysfs_dir(rc_dev->sysfs_name, lirc);
+	if (lirc_names) {
+		uevent = read_sysfs_uevents(lirc_names->name);
+		free_names(lirc_names);
+		if (uevent) {
+			while (uevent->next) {
+				if (!strcmp(uevent->key, "DEVNAME")) {
+					rc_dev->lirc_name = malloc(strlen(uevent->value) + strlen(DEV) + 1);
+					strcpy(rc_dev->lirc_name, DEV);
+					strcat(rc_dev->lirc_name, uevent->value);
+					break;
+				}
+				uevent = uevent->next;
+			}
+			free_uevent(uevent);
+		}
+	}
+
 	input_names = seek_sysfs_dir(rc_dev->sysfs_name, input);
 	if (!input_names)
 		return EINVAL;
 	if (input_names->next->next) {
-		fprintf(stderr, _("Found more than one input interface.This is currently unsupported\n"));
+		fprintf(stderr, _("Found more than one input interface. This is currently unsupported\n"));
 		return EINVAL;
 	}
 	if (debug)
 		fprintf(stderr, _("Input sysfs node is %s\n"), input_names->name);
 
 	event_names = seek_sysfs_dir(input_names->name, event);
-	free_names(input_names);
 	if (!event_names) {
-		free_names(event_names);
+		fprintf(stderr, _("Couldn't find any node at %s%s*.\n"),
+			input_names->name, event);
+		free_names(input_names);
 		return EINVAL;
 	}
+	free_names(input_names);
 	if (event_names->next->next) {
 		free_names(event_names);
 		fprintf(stderr, _("Found more than one event interface. This is currently unsupported\n"));
@@ -1064,6 +1121,10 @@ static int get_attribs(struct rc_device *rc_dev, char *sysfs_name)
 		if (!strcmp(uevent->key, "DRV_NAME")) {
 			rc_dev->drv_name = malloc(strlen(uevent->value) + 1);
 			strcpy(rc_dev->drv_name, uevent->value);
+		}
+		if (!strcmp(uevent->key, "DEV_NAME")) {
+			rc_dev->dev_name = malloc(strlen(uevent->value) + 1);
+			strcpy(rc_dev->dev_name, uevent->value);
 		}
 		if (!strcmp(uevent->key, "NAME")) {
 			rc_dev->keytable_name = malloc(strlen(uevent->value) + 1);
@@ -1251,16 +1312,100 @@ static char *get_event_name(struct parse_event *event, u_int16_t code)
 	return "";
 }
 
-static void test_event(int fd)
+static void print_scancodes(const struct lirc_scancode *scancodes, unsigned count)
+{
+	unsigned i;
+
+	for (i=0; i< count; i++)  {
+		const char *p = protocol_name(scancodes[i].rc_proto);
+
+		printf(_("%llu.%06llu: "),
+			scancodes[i].timestamp / 1000000000ull,
+			(scancodes[i].timestamp % 1000000000ull) / 1000ull);
+
+		if (p)
+			printf(_("lirc protocol(%s): scancode = 0x%llx"),
+				p, scancodes[i].scancode);
+		else
+			printf(_("lirc protocol(%d): scancode = 0x%llx"),
+				scancodes[i].rc_proto, scancodes[i].scancode);
+
+		if (scancodes[i].flags & LIRC_SCANCODE_FLAG_REPEAT)
+			printf(_(" repeat"));
+		if (scancodes[i].flags & LIRC_SCANCODE_FLAG_TOGGLE)
+			printf(_(" toggle=1"));
+
+		printf("\n");
+	}
+}
+
+static void test_event(struct rc_device *rc_dev, int fd)
 {
 	struct input_event ev[64];
-	int rd, i;
+	struct lirc_scancode sc[64];
+	int rd, i, lircfd = -1;
+	unsigned mode;
+
+	/* LIRC reports time in monotonic, set event to same */
+	mode = CLOCK_MONOTONIC;
+	ioctl(fd, EVIOCSCLOCKID, &mode);
+
+	if (rc_dev->lirc_name) {
+		lircfd = open(rc_dev->lirc_name, O_RDONLY | O_NONBLOCK);
+		if (lircfd == -1) {
+			perror(_("Can't open lirc device"));
+			return;
+		}
+		unsigned features;
+		if (ioctl(lircfd, LIRC_GET_FEATURES, &features)) {
+			perror(_("Can't get lirc features"));
+			return;
+		}
+
+		if (!(features & LIRC_CAN_REC_SCANCODE)) {
+			close(lircfd);
+			lircfd = -1;
+		}
+		else {
+			unsigned mode = LIRC_MODE_SCANCODE;
+			if (ioctl(lircfd, LIRC_SET_REC_MODE, &mode)) {
+				perror(_("Can't set lirc scancode mode"));
+				return;
+			}
+		}
+	}
 
 	printf (_("Testing events. Please, press CTRL-C to abort.\n"));
 	while (1) {
+		struct pollfd pollstruct[2] = {
+			{ .fd = fd, .events = POLLIN },
+			{ .fd = lircfd, .events = POLLIN },
+		};
+
+		if (poll(pollstruct, 2, -1) < 0) {
+			if (errno == EINTR)
+				continue;
+
+			perror(_("poll returned error"));
+		}
+
+		if (lircfd != -1) {
+			rd = read(lircfd, sc, sizeof(sc));
+
+			if (rd != -1) {
+				print_scancodes(sc, rd / sizeof(struct lirc_scancode));
+			} else if (errno != EAGAIN) {
+				perror(_("Error reading lirc scancode"));
+				return;
+			}
+		}
+
 		rd = read(fd, ev, sizeof(ev));
 
 		if (rd < (int) sizeof(struct input_event)) {
+			if (errno == EAGAIN)
+				continue;
+
 			perror(_("Error reading event"));
 			return;
 		}
@@ -1283,13 +1428,13 @@ static void test_event(int fd)
 			case EV_REL:
 				printf(_(": %s (0x%04x) value=%d\n"),
 					get_event_name(rel_events, ev[i].code),
-					ev[i].type,
+					ev[i].code,
 					ev[i].value);
 				break;
 			case EV_ABS:
 				printf(_(": %s (0x%04x) value=%d\n"),
 					get_event_name(abs_events, ev[i].code),
-					ev[i].type,
+					ev[i].code,
 					ev[i].value);
 				break;
 			case EV_MSC:
@@ -1405,9 +1550,8 @@ static void show_evdev_attribs(int fd)
 	get_rate(fd, &delay, &period);
 }
 
-static void device_info(int fd, char *prepend)
+static void device_name(int fd, char *prepend)
 {
-	struct input_id id;
 	char buf[32];
 	int rc;
 
@@ -1416,6 +1560,12 @@ static void device_info(int fd, char *prepend)
 		fprintf(stderr,_("%sName: %.*s\n"),prepend, rc, buf);
 	else
 		perror ("EVIOCGNAME");
+}
+
+static void device_info(int fd, char *prepend)
+{
+	struct input_id id;
+	int rc;
 
 	rc = ioctl(fd, EVIOCGID, &id);
 	if (rc >= 0)
@@ -1426,30 +1576,38 @@ static void device_info(int fd, char *prepend)
 		perror ("EVIOCGID");
 }
 
-static int show_sysfs_attribs(struct rc_device *rc_dev)
+static int show_sysfs_attribs(struct rc_device *rc_dev, char *name)
 {
 	static struct sysfs_names *names, *cur;
 	int fd;
 
-	names = find_device(NULL);
+	names = find_device(name);
 	if (!names)
 		return -1;
-	for (cur = names; cur->next; cur = cur->next) {
+	for (cur = names; cur; cur = cur->next) {
 		if (cur->name) {
 			if (get_attribs(rc_dev, cur->name))
-				return -1;
+				continue;
 			fprintf(stderr, _("Found %s (%s) with:\n"),
 				rc_dev->sysfs_name,
 				rc_dev->input_name);
-			fprintf(stderr, _("\tDriver %s, table %s\n"),
+			if (rc_dev->dev_name)
+				fprintf(stderr, _("\tName: %s\n"),
+					rc_dev->dev_name);
+			fprintf(stderr, _("\tDriver: %s, table: %s\n"),
 				rc_dev->drv_name,
 				rc_dev->keytable_name);
+			if (rc_dev->lirc_name)
+				fprintf(stderr, _("\tlirc device: %s\n"),
+					rc_dev->lirc_name);
 			fprintf(stderr, _("\tSupported protocols: "));
 			write_sysfs_protocols(rc_dev->supported, stderr, "%s ");
 			fprintf(stderr, "\n\t");
 			display_proto(rc_dev);
 			fd = open(rc_dev->input_name, O_RDONLY);
 			if (fd > 0) {
+				if (!rc_dev->dev_name)
+					device_name(fd, "\t");
 				device_info(fd, "\t");
 				show_evdev_attribs(fd);
 				close(fd);
@@ -1474,25 +1632,29 @@ int main(int argc, char *argv[])
 	textdomain (PACKAGE);
 #endif
 
-	argp_parse(&argp, argc, argv, ARGP_NO_HELP | ARGP_NO_EXIT, 0, 0);
+	argp_parse(&argp, argc, argv, ARGP_NO_HELP, 0, 0);
 
 	/* Just list all devices */
-	if (!clear && !readtable && !keytable && !ch_proto && !cfg.next && !test && !delay && !period) {
+	if (!clear && !readtable && !keytable && !ch_proto && !cfg.next && !test && delay < 0 && period < 0) {
 		if (devicename) {
 			fd = open(devicename, O_RDONLY);
 			if (fd < 0) {
 				perror(_("Can't open device"));
 				return -1;
 			}
+			device_name(fd, "");
 			device_info(fd, "");
 			close(fd);
 			return 0;
 		}
-		if (show_sysfs_attribs(&rc_dev))
+		if (show_sysfs_attribs(&rc_dev, devclass))
 			return -1;
 
 		return 0;
 	}
+
+	if (!devclass)
+		devclass = "rc0";
 
 	if (cfg.next && (clear || keytable || ch_proto || devicename)) {
 		fprintf (stderr, _("Auto-mode can be used only with --read, --debug and --sysdev options\n"));
@@ -1571,7 +1733,7 @@ int main(int argc, char *argv[])
 
 	if (debug)
 		fprintf(stderr, _("Opening %s\n"), devicename);
-	fd = open(devicename, O_RDONLY);
+	fd = open(devicename, O_RDONLY | O_NONBLOCK);
 	if (fd < 0) {
 		perror(devicename);
 		return -1;
@@ -1619,18 +1781,18 @@ int main(int argc, char *argv[])
 	/*
 	 * Fiveth step: change repeat rate/delay
 	 */
-	if (delay || period) {
+	if (delay >= 0 || period >= 0) {
 		unsigned int new_delay, new_period;
 		get_rate(fd, &new_delay, &new_period);
-		if (delay)
+		if (delay >= 0)
 			new_delay = delay;
-		if (period)
+		if (period >= 0)
 			new_period = period;
 		set_rate(fd, new_delay, new_period);
 	}
 
 	if (test)
-		test_event(fd);
+		test_event(&rc_dev, fd);
 
 	return 0;
 }

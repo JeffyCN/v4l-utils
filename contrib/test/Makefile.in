@@ -92,17 +92,22 @@ noinst_PROGRAMS = ioctl-test$(EXEEXT) sliced-vbi-test$(EXEEXT) \
 	sliced-vbi-detect$(EXEEXT) v4l2grab$(EXEEXT) \
 	driver-test$(EXEEXT) mc_nextgen_test$(EXEEXT) \
 	stress-buffer$(EXEEXT) capture-example$(EXEEXT) \
-	$(am__EXEEXT_1) $(am__EXEEXT_2)
+	$(am__EXEEXT_1) $(am__EXEEXT_2) $(am__EXEEXT_3)
 @HAVE_X11_TRUE@am__append_1 = pixfmt-test
 @HAVE_GLU_TRUE@am__append_2 = v4l2gl
+@HAVE_SDL_TRUE@am__append_3 = sdlcam
 subdir = contrib/test
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/ac_define_dir.m4 \
 	$(top_srcdir)/m4/ax_prog_doxygen.m4 \
-	$(top_srcdir)/m4/ax_pthread.m4 $(top_srcdir)/m4/libtool.m4 \
-	$(top_srcdir)/m4/ltoptions.m4 $(top_srcdir)/m4/ltsugar.m4 \
-	$(top_srcdir)/m4/ltversion.m4 $(top_srcdir)/m4/lt~obsolete.m4 \
-	$(top_srcdir)/m4/mode_t.m4 $(top_srcdir)/configure.ac
+	$(top_srcdir)/m4/ax_pthread.m4 $(top_srcdir)/m4/gettext.m4 \
+	$(top_srcdir)/m4/iconv.m4 $(top_srcdir)/m4/lib-ld.m4 \
+	$(top_srcdir)/m4/lib-link.m4 $(top_srcdir)/m4/lib-prefix.m4 \
+	$(top_srcdir)/m4/libtool.m4 $(top_srcdir)/m4/ltoptions.m4 \
+	$(top_srcdir)/m4/ltsugar.m4 $(top_srcdir)/m4/ltversion.m4 \
+	$(top_srcdir)/m4/lt~obsolete.m4 $(top_srcdir)/m4/mode_t.m4 \
+	$(top_srcdir)/m4/nls.m4 $(top_srcdir)/m4/po.m4 \
+	$(top_srcdir)/m4/progtest.m4 $(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 DIST_COMMON = $(srcdir)/Makefile.am $(am__DIST_COMMON)
@@ -112,6 +117,7 @@ CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 @HAVE_X11_TRUE@am__EXEEXT_1 = pixfmt-test$(EXEEXT)
 @HAVE_GLU_TRUE@am__EXEEXT_2 = v4l2gl$(EXEEXT)
+@HAVE_SDL_TRUE@am__EXEEXT_3 = sdlcam$(EXEEXT)
 PROGRAMS = $(noinst_PROGRAMS)
 am_capture_example_OBJECTS = capture-example.$(OBJEXT)
 capture_example_OBJECTS = $(am_capture_example_OBJECTS)
@@ -139,6 +145,13 @@ pixfmt_test_LDADD = $(LDADD)
 pixfmt_test_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(pixfmt_test_CFLAGS) \
 	$(CFLAGS) $(pixfmt_test_LDFLAGS) $(LDFLAGS) -o $@
+sdlcam_SOURCES = sdlcam.c
+sdlcam_OBJECTS = sdlcam-sdlcam.$(OBJEXT)
+sdlcam_DEPENDENCIES = ../../lib/libv4l2/libv4l2.la \
+	../../lib/libv4lconvert/libv4lconvert.la
+sdlcam_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(sdlcam_CFLAGS) $(CFLAGS) \
+	$(sdlcam_LDFLAGS) $(LDFLAGS) -o $@
 am_sliced_vbi_detect_OBJECTS = sliced-vbi-detect.$(OBJEXT)
 sliced_vbi_detect_OBJECTS = $(am_sliced_vbi_detect_OBJECTS)
 sliced_vbi_detect_LDADD = $(LDADD)
@@ -198,12 +211,14 @@ am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
 SOURCES = $(capture_example_SOURCES) $(driver_test_SOURCES) \
 	$(ioctl_test_SOURCES) mc_nextgen_test.c $(pixfmt_test_SOURCES) \
-	$(sliced_vbi_detect_SOURCES) $(sliced_vbi_test_SOURCES) \
-	$(stress_buffer_SOURCES) $(v4l2gl_SOURCES) $(v4l2grab_SOURCES)
+	sdlcam.c $(sliced_vbi_detect_SOURCES) \
+	$(sliced_vbi_test_SOURCES) $(stress_buffer_SOURCES) \
+	$(v4l2gl_SOURCES) $(v4l2grab_SOURCES)
 DIST_SOURCES = $(capture_example_SOURCES) $(driver_test_SOURCES) \
 	$(ioctl_test_SOURCES) mc_nextgen_test.c $(pixfmt_test_SOURCES) \
-	$(sliced_vbi_detect_SOURCES) $(sliced_vbi_test_SOURCES) \
-	$(stress_buffer_SOURCES) $(v4l2gl_SOURCES) $(v4l2grab_SOURCES)
+	sdlcam.c $(sliced_vbi_detect_SOURCES) \
+	$(sliced_vbi_test_SOURCES) $(stress_buffer_SOURCES) \
+	$(v4l2gl_SOURCES) $(v4l2grab_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -372,6 +387,8 @@ QT_CFLAGS = @QT_CFLAGS@
 QT_LIBS = @QT_LIBS@
 RANLIB = @RANLIB@
 RCC = @RCC@
+SDL2_CFLAGS = @SDL2_CFLAGS@
+SDL2_LIBS = @SDL2_LIBS@
 SED = @SED@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
@@ -464,6 +481,9 @@ v4l2grab_LDADD = ../../lib/libv4l2/libv4l2.la ../../lib/libv4lconvert/libv4lconv
 v4l2gl_SOURCES = v4l2gl.c
 v4l2gl_LDFLAGS = $(X11_LIBS) $(GL_LIBS) $(GLU_LIBS) $(ARGP_LIBS)
 v4l2gl_LDADD = ../../lib/libv4l2/libv4l2.la ../../lib/libv4lconvert/libv4lconvert.la
+sdlcam_LDFLAGS = $(JPEG_LIBS) $(SDL2_LIBS) -lm -ldl -lrt
+sdlcam_CFLAGS = -I../.. $(SDL2_CFLAGS)
+sdlcam_LDADD = ../../lib/libv4l2/libv4l2.la  ../../lib/libv4lconvert/libv4lconvert.la
 mc_nextgen_test_CFLAGS = $(LIBUDEV_CFLAGS)
 mc_nextgen_test_LDFLAGS = $(LIBUDEV_LIBS)
 ioctl_test_SOURCES = ioctl-test.c ioctl-test.h ioctl_32.h ioctl_64.h
@@ -537,6 +557,10 @@ pixfmt-test$(EXEEXT): $(pixfmt_test_OBJECTS) $(pixfmt_test_DEPENDENCIES) $(EXTRA
 	@rm -f pixfmt-test$(EXEEXT)
 	$(AM_V_CCLD)$(pixfmt_test_LINK) $(pixfmt_test_OBJECTS) $(pixfmt_test_LDADD) $(LIBS)
 
+sdlcam$(EXEEXT): $(sdlcam_OBJECTS) $(sdlcam_DEPENDENCIES) $(EXTRA_sdlcam_DEPENDENCIES) 
+	@rm -f sdlcam$(EXEEXT)
+	$(AM_V_CCLD)$(sdlcam_LINK) $(sdlcam_OBJECTS) $(sdlcam_LDADD) $(LIBS)
+
 sliced-vbi-detect$(EXEEXT): $(sliced_vbi_detect_OBJECTS) $(sliced_vbi_detect_DEPENDENCIES) $(EXTRA_sliced_vbi_detect_DEPENDENCIES) 
 	@rm -f sliced-vbi-detect$(EXEEXT)
 	$(AM_V_CCLD)$(LINK) $(sliced_vbi_detect_OBJECTS) $(sliced_vbi_detect_LDADD) $(LIBS)
@@ -568,6 +592,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ioctl-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/mc_nextgen_test-mc_nextgen_test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/pixfmt_test-pixfmt-test.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/sdlcam-sdlcam.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/sliced-vbi-detect.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/sliced-vbi-test.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/stress-buffer.Po@am__quote@
@@ -625,6 +650,20 @@ pixfmt_test-pixfmt-test.obj: pixfmt-test.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='pixfmt-test.c' object='pixfmt_test-pixfmt-test.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(pixfmt_test_CFLAGS) $(CFLAGS) -c -o pixfmt_test-pixfmt-test.obj `if test -f 'pixfmt-test.c'; then $(CYGPATH_W) 'pixfmt-test.c'; else $(CYGPATH_W) '$(srcdir)/pixfmt-test.c'; fi`
+
+sdlcam-sdlcam.o: sdlcam.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(sdlcam_CFLAGS) $(CFLAGS) -MT sdlcam-sdlcam.o -MD -MP -MF $(DEPDIR)/sdlcam-sdlcam.Tpo -c -o sdlcam-sdlcam.o `test -f 'sdlcam.c' || echo '$(srcdir)/'`sdlcam.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/sdlcam-sdlcam.Tpo $(DEPDIR)/sdlcam-sdlcam.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='sdlcam.c' object='sdlcam-sdlcam.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(sdlcam_CFLAGS) $(CFLAGS) -c -o sdlcam-sdlcam.o `test -f 'sdlcam.c' || echo '$(srcdir)/'`sdlcam.c
+
+sdlcam-sdlcam.obj: sdlcam.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(sdlcam_CFLAGS) $(CFLAGS) -MT sdlcam-sdlcam.obj -MD -MP -MF $(DEPDIR)/sdlcam-sdlcam.Tpo -c -o sdlcam-sdlcam.obj `if test -f 'sdlcam.c'; then $(CYGPATH_W) 'sdlcam.c'; else $(CYGPATH_W) '$(srcdir)/sdlcam.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/sdlcam-sdlcam.Tpo $(DEPDIR)/sdlcam-sdlcam.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='sdlcam.c' object='sdlcam-sdlcam.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(sdlcam_CFLAGS) $(CFLAGS) -c -o sdlcam-sdlcam.obj `if test -f 'sdlcam.c'; then $(CYGPATH_W) 'sdlcam.c'; else $(CYGPATH_W) '$(srcdir)/sdlcam.c'; fi`
 
 mostlyclean-libtool:
 	-rm -f *.lo

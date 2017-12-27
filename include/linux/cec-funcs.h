@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: ((GPL-2.0 WITH Linux-syscall-note) OR BSD-3-Clause) */
 /*
  * cec - HDMI Consumer Electronics Control message functions
  *
@@ -895,6 +896,7 @@ static inline void cec_ops_report_features(const struct cec_msg *msg,
 	*cec_version = msg->msg[2];
 	*all_device_types = msg->msg[3];
 	*rc_profile = p;
+	*dev_features = NULL;
 	while (p < &msg->msg[14] && (*p & CEC_OP_FEAT_EXT))
 		p++;
 	if (!(*p & CEC_OP_FEAT_EXT)) {
@@ -1665,14 +1667,15 @@ static inline void cec_msg_report_current_latency(struct cec_msg *msg,
 						  __u8 audio_out_compensated,
 						  __u8 audio_out_delay)
 {
-	msg->len = 7;
+	msg->len = 6;
 	msg->msg[0] |= 0xf; /* broadcast */
 	msg->msg[1] = CEC_MSG_REPORT_CURRENT_LATENCY;
 	msg->msg[2] = phys_addr >> 8;
 	msg->msg[3] = phys_addr & 0xff;
 	msg->msg[4] = video_latency;
 	msg->msg[5] = (low_latency_mode << 2) | audio_out_compensated;
-	msg->msg[6] = audio_out_delay;
+	if (audio_out_compensated == 3)
+		msg->msg[msg->len++] = audio_out_delay;
 }
 
 static inline void cec_ops_report_current_latency(const struct cec_msg *msg,
@@ -1686,7 +1689,10 @@ static inline void cec_ops_report_current_latency(const struct cec_msg *msg,
 	*video_latency = msg->msg[4];
 	*low_latency_mode = (msg->msg[5] >> 2) & 1;
 	*audio_out_compensated = msg->msg[5] & 3;
-	*audio_out_delay = msg->msg[6];
+	if (*audio_out_compensated == 3 && msg->len >= 7)
+		*audio_out_delay = msg->msg[6];
+	else
+		*audio_out_delay = 0;
 }
 
 static inline void cec_msg_request_current_latency(struct cec_msg *msg,

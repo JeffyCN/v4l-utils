@@ -609,6 +609,16 @@ static int fill_entry(struct dvb_entry *entry, char *key, char *value)
 		return 0;
 	}
 
+	if (!strcasecmp(key, "NETWORK_ID")) {
+		entry->network_id = atol(value);
+		return 0;
+	}
+
+	if (!strcasecmp(key, "TRANSPORT_ID")) {
+		entry->transport_id = atol(value);
+		return 0;
+	}
+
 	if (!strcasecmp(key, "VCHANNEL")) {
 		entry->vchannel = strdup(value);
 		return 0;
@@ -842,6 +852,7 @@ int dvb_write_file(const char *fname, struct dvb_file *dvb_file)
 	FILE *fp;
 	int i;
 	struct dvb_entry *entry = dvb_file->first_entry;
+	static const char *off = "OFF";
 
 	fp = fopen(fname, "w");
 	if (!fp) {
@@ -861,6 +872,12 @@ int dvb_write_file(const char *fname, struct dvb_file *dvb_file)
 
 		if (entry->service_id)
 			fprintf(fp, "\tSERVICE_ID = %d\n", entry->service_id);
+
+		if (entry->network_id)
+			fprintf(fp, "\tNETWORK_ID = %d\n", entry->network_id);
+
+		if (entry->transport_id)
+			fprintf(fp, "\tTRANSPORT_ID = %d\n", entry->transport_id);
 
 		if (entry->video_pid_len){
 			fprintf(fp, "\tVIDEO_PID =");
@@ -926,12 +943,17 @@ int dvb_write_file(const char *fname, struct dvb_file *dvb_file)
 				attr_name = &buf;
 			}
 
-			/* Handle parameters with optional values */
 			switch (entry->props[i].cmd) {
+			/* Handle parameters with optional values */
 			case DTV_PLS_CODE:
 			case DTV_PLS_MODE:
-				if (entry->props[i].u.data == -1)
-				continue;
+				if (entry->props[i].u.data == (unsigned)-1)
+					continue;
+				break;
+			case DTV_PILOT:
+				if (entry->props[i].u.data == (unsigned)-1)
+					attr_name = &off;
+				break;
 			}
 
 			if (!attr_name || !*attr_name)
@@ -1102,6 +1124,8 @@ static int get_program_and_store(struct dvb_v5_fe_parms_priv *parms,
 				 struct dvb_file *dvb_file,
 				 struct dvb_v5_descriptors *dvb_scan_handler,
 				 const uint16_t service_id,
+				 const uint16_t network_id,
+				 const uint16_t transport_id,
 				 char *channel,
 				 char *vchannel,
 				 int get_detected, int get_nit)
@@ -1156,6 +1180,8 @@ static int get_program_and_store(struct dvb_v5_fe_parms_priv *parms,
 
 	/* Initialize data */
 	entry->service_id = service_id;
+	entry->network_id = network_id;
+	entry->transport_id = transport_id;
 	entry->vchannel = vchannel;
 	entry->sat_number = parms->p.sat_number;
 	entry->freq_bpf = parms->p.freq_bpf;
@@ -1275,7 +1301,7 @@ int dvb_store_channel(struct dvb_file **dvb_file,
 					vchannel, channel);
 
 			rc = get_program_and_store(parms, *dvb_file, dvb_scan_handler,
-						d->program_number,
+						d->program_number, 0, 0,
 						channel, vchannel,
 						get_detected, get_nit);
 			if (rc < 0)
@@ -1288,6 +1314,7 @@ int dvb_store_channel(struct dvb_file **dvb_file,
 	dvb_sdt_service_foreach(service, dvb_scan_handler->sdt) {
 		char *channel = NULL;
 		char *vchannel = NULL;
+		uint16_t network_id = 0, transport_id = 0;
 		int r;
 
 		dvb_desc_find(struct dvb_desc_service, desc, service, service_descriptor) {
@@ -1315,8 +1342,15 @@ int dvb_store_channel(struct dvb_file **dvb_file,
 			dvb_log(_("Storing as channel %s"), channel);
 		vchannel = dvb_vchannel(parms, dvb_scan_handler->nit, service->service_id);
 
+		if (dvb_scan_handler->nit->transport) {
+			network_id = dvb_scan_handler->nit->transport->network_id;
+			transport_id = dvb_scan_handler->nit->transport->transport_id;
+		}
+
 		rc = get_program_and_store(parms, *dvb_file, dvb_scan_handler,
 					   service->service_id,
+					   network_id,
+					   transport_id,
 					   channel, vchannel,
 					   get_detected, get_nit);
 		if (rc < 0)
@@ -1355,7 +1389,8 @@ int dvb_store_channel(struct dvb_file **dvb_file,
 			}
 
 			rc = get_program_and_store(parms, *dvb_file, dvb_scan_handler,
-						   service_id, NULL, NULL,
+						   service_id, 0, 0,
+						   NULL, NULL,
 						   get_detected, get_nit);
 			if (rc < 0)
 				return rc;

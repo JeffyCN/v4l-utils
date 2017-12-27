@@ -287,6 +287,7 @@ void CaptureWinGLEngine::initializeGL()
 		glEnable(GL_FRAMEBUFFER_SRGB);
 	m_hasGLRed = glGetString(GL_VERSION)[0] >= '3';
 	m_glRed = m_hasGLRed ? GL_RED : GL_LUMINANCE;
+	m_glRed16 = m_hasGLRed ? GL_R16 : GL_LUMINANCE;
 	m_glRedGreen = m_hasGLRed ? GL_RG : GL_LUMINANCE_ALPHA;
 
 	glClearColor(1.0f, 1.0f, 1.0f, 0.0f);
@@ -396,6 +397,10 @@ bool CaptureWinGLEngine::hasNativeFormat(__u32 format)
 		V4L2_PIX_FMT_YUV565,
 		V4L2_PIX_FMT_YUV32,
 		V4L2_PIX_FMT_GREY,
+		V4L2_PIX_FMT_Z16,
+		V4L2_PIX_FMT_INZI,
+		V4L2_PIX_FMT_Y10,
+		V4L2_PIX_FMT_Y12,
 		V4L2_PIX_FMT_Y16,
 		V4L2_PIX_FMT_Y16_BE,
 		V4L2_PIX_FMT_HSV24,
@@ -507,6 +512,10 @@ void CaptureWinGLEngine::changeShader()
 	case V4L2_PIX_FMT_ARGB32:
 	case V4L2_PIX_FMT_ABGR32:
 	case V4L2_PIX_FMT_GREY:
+	case V4L2_PIX_FMT_Z16:
+	case V4L2_PIX_FMT_INZI:
+	case V4L2_PIX_FMT_Y10:
+	case V4L2_PIX_FMT_Y12:
 	case V4L2_PIX_FMT_Y16:
 	case V4L2_PIX_FMT_Y16_BE:
 	case V4L2_PIX_FMT_HSV24:
@@ -630,6 +639,10 @@ void CaptureWinGLEngine::paintGL()
 		break;
 
 	case V4L2_PIX_FMT_GREY:
+	case V4L2_PIX_FMT_Z16:
+	case V4L2_PIX_FMT_INZI:
+	case V4L2_PIX_FMT_Y10:
+	case V4L2_PIX_FMT_Y12:
 	case V4L2_PIX_FMT_Y16:
 	case V4L2_PIX_FMT_Y16_BE:
 	case V4L2_PIX_FMT_RGB332:
@@ -684,8 +697,7 @@ QString CaptureWinGLEngine::codeYUVNormalize()
 		    m_ycbcr_enc != V4L2_YCBCR_ENC_XV709)
 			return "";
 		/*
-		 * xv709 and xv601 have full range quantization, but they still
-		 * need to be normalized as if they were limited range. But the
+		 * xv709 and xv601 always have limited range quantization. But the
 		 * result are values outside the normal 0-1 range, which is the
 		 * point of these extended gamut encodings.
 		 */
@@ -795,9 +807,11 @@ QString CaptureWinGLEngine::codeTransformToLinear()
 			       "   r = pow(max(r, 0.0), m2);"
 			       "   g = pow(max(g, 0.0), m2);"
 			       "   b = pow(max(b, 0.0), m2);"
-			       "   r = pow(max(r - c1, 0.0) / (c2 - c3 * r), m1);"
-			       "   g = pow(max(g - c1, 0.0) / (c2 - c3 * g), m1);"
-			       "   b = pow(max(b - c1, 0.0) / (c2 - c3 * b), m1);");
+			       // The factor 100 is because SMPTE-2084 maps to 0-10000 cd/m^2
+			       // whereas other transfer functions map to 0-100 cd/m^2.
+			       "   r = pow(max(r - c1, 0.0) / (c2 - c3 * r), m1) * 100.0;"
+			       "   g = pow(max(g - c1, 0.0) / (c2 - c3 * g), m1) * 100.0;"
+			       "   b = pow(max(b - c1, 0.0) / (c2 - c3 * b), m1) * 100.0;");
 	case V4L2_XFER_FUNC_NONE:
 		return "";
 	case V4L2_XFER_FUNC_709:
@@ -1544,6 +1558,10 @@ void CaptureWinGLEngine::shader_RGB(__u32 format)
                           m_xfer_func != V4L2_XFER_FUNC_SRGB ||
 			  format == V4L2_PIX_FMT_BGR666 ||
 			  format == V4L2_PIX_FMT_GREY ||
+			  format == V4L2_PIX_FMT_Z16 ||
+			  format == V4L2_PIX_FMT_INZI ||
+			  format == V4L2_PIX_FMT_Y10 ||
+			  format == V4L2_PIX_FMT_Y12 ||
 			  format == V4L2_PIX_FMT_Y16 ||
 			  format == V4L2_PIX_FMT_Y16_BE ||
 			  format == V4L2_PIX_FMT_HSV24 ||
@@ -1614,9 +1632,13 @@ void CaptureWinGLEngine::shader_RGB(__u32 format)
 		glTexImage2D(GL_TEXTURE_2D, 0, m_glRed, m_frameWidth, m_frameHeight, 0,
 			     m_glRed, GL_UNSIGNED_BYTE, NULL);
 		break;
+	case V4L2_PIX_FMT_Z16:
+	case V4L2_PIX_FMT_INZI:
+	case V4L2_PIX_FMT_Y10:
+	case V4L2_PIX_FMT_Y12:
 	case V4L2_PIX_FMT_Y16:
 	case V4L2_PIX_FMT_Y16_BE:
-		glTexImage2D(GL_TEXTURE_2D, 0, m_glRed, m_frameWidth, m_frameHeight, 0,
+		glTexImage2D(GL_TEXTURE_2D, 0, m_glRed16, m_frameWidth, m_frameHeight, 0,
 			     m_glRed, GL_UNSIGNED_SHORT, NULL);
 		break;
 	case V4L2_PIX_FMT_RGB24:
@@ -1662,7 +1684,23 @@ void CaptureWinGLEngine::shader_RGB(__u32 format)
 			    "   float g = color.g;"
 			    "   float b = color.r;";
 		break;
+	case V4L2_PIX_FMT_Y10:
+		codeHead += "   float r = color.r * (65535.0 / 1023.0);"
+			    "   float g = r;"
+			    "   float b = r;";
+		break;
+	case V4L2_PIX_FMT_Y12:
+		codeHead += "   float r = color.r * (65535.0 / 4095.0);"
+			    "   float g = r;"
+			    "   float b = r;";
+		break;
+	case V4L2_PIX_FMT_INZI:
+		codeHead += "   float r = color.r * (ycoord < floor(tex_h / 2.0) ? 65535.0 / 1023.0 : 1.0);"
+			    "   float g = r;"
+			    "   float b = r;";
+		break;
 	case V4L2_PIX_FMT_GREY:
+	case V4L2_PIX_FMT_Z16:
 	case V4L2_PIX_FMT_Y16:
 	case V4L2_PIX_FMT_Y16_BE:
 		codeHead += "   float r = color.r;"
@@ -1746,7 +1784,11 @@ void CaptureWinGLEngine::render_RGB(__u32 format)
 				m_glRed, GL_UNSIGNED_BYTE, m_frameData);
 		break;
 
+	case V4L2_PIX_FMT_Y10:
+	case V4L2_PIX_FMT_Y12:
 	case V4L2_PIX_FMT_Y16:
+	case V4L2_PIX_FMT_Z16:
+	case V4L2_PIX_FMT_INZI:
 		glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, m_frameWidth, m_frameHeight,
 				m_glRed, GL_UNSIGNED_SHORT, m_frameData);
 		break;
@@ -1832,7 +1874,7 @@ void CaptureWinGLEngine::shader_Bayer(__u32 format)
 	case V4L2_PIX_FMT_SGBRG12:
 	case V4L2_PIX_FMT_SGRBG12:
 	case V4L2_PIX_FMT_SRGGB12:
-		glTexImage2D(GL_TEXTURE_2D, 0, m_glRed, m_frameWidth, m_frameHeight, 0,
+		glTexImage2D(GL_TEXTURE_2D, 0, m_glRed16, m_frameWidth, m_frameHeight, 0,
 			     m_glRed, GL_UNSIGNED_SHORT, NULL);
 		break;
 	}

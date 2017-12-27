@@ -553,12 +553,13 @@ static ssize_t scan_data(char *buf, int buf_size, const char *fmt, ...)
 /*
  * Remote log
  */
-void dvb_remote_log(int level, const char *fmt, ...)
+void dvb_remote_log(void *priv, int level, const char *fmt, ...)
 {
 	int ret;
 	char *buf;
 
 	va_list ap;
+	int fd = *(int*)priv;
 
 	va_start(ap, fmt);
 	ret = vasprintf(&buf, fmt, ap);
@@ -569,8 +570,8 @@ void dvb_remote_log(int level, const char *fmt, ...)
 
 	va_end(ap);
 
-	if (dvb_fd > 0)
-		send_data(dvb_fd, "%i%s%i%s", 0, "log", level, buf);
+	if (fd >= 0)
+		send_data(fd, "%i%s%i%s", 0, "log", level, buf);
 	else
 		local_log(level, buf);
 
@@ -578,7 +579,7 @@ void dvb_remote_log(int level, const char *fmt, ...)
 }
 
 static int dev_change_monitor(char *sysname,
-			      enum dvb_dev_change_type type)
+			      enum dvb_dev_change_type type, void *user_priv)
 {
 	send_data(dvb_fd, "%i%s%i%s", 0, "dev_change", type, sysname);
 
@@ -609,7 +610,7 @@ static int dev_find(uint32_t seq, char *cmd, int fd, char *buf, ssize_t size)
 	if (enable_monitor)
 		handler = &dev_change_monitor;
 
-	ret = dvb_dev_find(dvb, handler);
+	ret = dvb_dev_find(dvb, handler, NULL);
 
 error:
 	return send_data(fd, "%i%s%i", seq, cmd, ret);
@@ -623,7 +624,7 @@ static int dev_stop_monitor(uint32_t seq, char *cmd, int fd,
 	return send_data(fd, "%i%s%i", seq, cmd, 0);
 }
 
-static int dev_seek_by_sysname(uint32_t seq, char *cmd, int fd,
+static int dev_seek_by_adapter(uint32_t seq, char *cmd, int fd,
 			       char *buf, ssize_t size)
 {
 	struct dvb_dev_list *dev;
@@ -633,7 +634,30 @@ static int dev_seek_by_sysname(uint32_t seq, char *cmd, int fd,
 	if (ret < 0)
 		goto error;
 
-	dev = dvb_dev_seek_by_sysname(dvb, adapter, num, type);
+	dev = dvb_dev_seek_by_adapter(dvb, adapter, num, type);
+	if (!dev)
+		goto error;
+
+	return send_data(fd, "%i%s%i%s%s%s%i%s%s%s%s%s", seq, cmd, ret,
+			 dev->syspath, dev->path, dev->sysname, dev->dvb_type,
+			 dev->bus_addr, dev->bus_id, dev->manufacturer,
+			 dev->product, dev->serial);
+error:
+	return send_data(fd, "%i%s%i", seq, cmd, ret);
+}
+
+static int dev_get_dev_info(uint32_t seq, char *cmd, int fd,
+			       char *buf, ssize_t size)
+{
+	struct dvb_dev_list *dev;
+	char sysname[REMOTE_BUF_SIZE];
+	int ret;
+
+	ret = scan_data(buf, size, "%s", sysname);
+	if (ret < 0)
+		goto error;
+
+	dev = dvb_get_dev_info(dvb, sysname);
 	if (!dev)
 		goto error;
 
@@ -765,7 +789,7 @@ static int dev_open(uint32_t seq, char *cmd, int fd, char *buf, ssize_t size)
 		goto error;
 	}
 
-	ret = scan_data(buf, size, "%s%i",  sysname, &flags);
+	ret = scan_data(buf, size, "%s%i", sysname, &flags);
 	if (ret < 0) {
 		free(desc);
 		goto error;
@@ -1288,11 +1312,12 @@ struct method_types {
 	int locks_dvb;
 };
 
-static const struct method_types const methods[] = {
+static const struct method_types methods[] = {
 	{"daemon_get_version", &daemon_get_version, 1},
 	{"dev_find", &dev_find, 0},
 	{"dev_stop_monitor", &dev_stop_monitor, 0},
-	{"dev_seek_by_sysname", &dev_seek_by_sysname, 0},
+	{"dev_seek_by_adapter", &dev_seek_by_adapter, 0},
+	{"dev_get_dev_info", &dev_get_dev_info, 0},
 	{"dev_open", &dev_open, 0},
 	{"dev_close", &dev_close, 0},
 	{"dev_dmx_stop", &dev_dmx_stop, 0},
@@ -1336,7 +1361,8 @@ static void *start_server(void *fd_pointer)
 		size = recv(fd, buf, 4, MSG_WAITALL);
 		if (size <= 0)
 			break;
-		size = be32toh(*(int32_t *)buf);
+		size = (uint32_t)buf[0] << 24 | (uint32_t)buf[1] << 16 |
+		       (uint32_t)buf[2] << 8 | (uint32_t)buf[3];
 		size = recv(fd, buf, size, MSG_WAITALL);
 		if (size <= 0)
 			break;
@@ -1438,7 +1464,7 @@ int main(int argc, char *argv[])
 		return -1;
 	}
 
-	dvb_dev_find(dvb, 0);
+	dvb_dev_find(dvb, 0, NULL);
 
 	/* Create a socket */
 	sockfd = socket(AF_INET, SOCK_STREAM, 0);
@@ -1461,7 +1487,7 @@ int main(int argc, char *argv[])
 	}
 
 	/* FIXME: should allow the caller to set the verbosity */
-	dvb_dev_set_log(dvb, 1, dvb_remote_log);
+	dvb_dev_set_logpriv(dvb, 1, dvb_remote_log, &dvb_fd);
 
 	/* Listen up to 5 connections */
 	listen(sockfd, 5);

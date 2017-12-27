@@ -46,6 +46,7 @@
 #include <vector>
 #include <map>
 #include <algorithm>
+#include <fstream>
 
 char options[OptLast];
 
@@ -81,6 +82,7 @@ static struct option long_options[] = {
 	{"help-overlay", no_argument, 0, OptHelpOverlay},
 	{"help-vbi", no_argument, 0, OptHelpVbi},
 	{"help-sdr", no_argument, 0, OptHelpSdr},
+	{"help-meta", no_argument, 0, OptHelpMeta},
 	{"help-selection", no_argument, 0, OptHelpSelection},
 	{"help-misc", no_argument, 0, OptHelpMisc},
 	{"help-streaming", no_argument, 0, OptHelpStreaming},
@@ -112,6 +114,7 @@ static struct option long_options[] = {
 	{"list-formats-sdr", no_argument, 0, OptListSdrFormats},
 	{"list-formats-sdr-out", no_argument, 0, OptListSdrOutFormats},
 	{"list-formats-out", no_argument, 0, OptListOutFormats},
+	{"list-formats-meta", no_argument, 0, OptListMetaFormats},
 	{"list-fields-out", no_argument, 0, OptListOutFields},
 	{"clear-clips", no_argument, 0, OptClearClips},
 	{"clear-bitmap", no_argument, 0, OptClearBitmap},
@@ -158,6 +161,9 @@ static struct option long_options[] = {
 	{"get-fmt-sdr-out", no_argument, 0, OptGetSdrOutFormat},
 	{"set-fmt-sdr-out", required_argument, 0, OptSetSdrOutFormat},
 	{"try-fmt-sdr-out", required_argument, 0, OptTrySdrOutFormat},
+	{"get-fmt-meta", no_argument, 0, OptGetMetaFormat},
+	{"set-fmt-meta", required_argument, 0, OptSetMetaFormat},
+	{"try-fmt-meta", required_argument, 0, OptTryMetaFormat},
 	{"get-sliced-vbi-cap", no_argument, 0, OptGetSlicedVbiCap},
 	{"get-sliced-vbi-out-cap", no_argument, 0, OptGetSlicedVbiOutCap},
 	{"get-fbuf", no_argument, 0, OptGetFBuf},
@@ -213,13 +219,17 @@ static struct option long_options[] = {
 	{"list-buffers-sliced-vbi-out", no_argument, 0, OptListBuffersSlicedVbiOut},
 	{"list-buffers-sdr", no_argument, 0, OptListBuffersSdr},
 	{"list-buffers-sdr-out", no_argument, 0, OptListBuffersSdrOut},
+	{"list-buffers-meta", no_argument, 0, OptListBuffersMeta},
 	{"stream-count", required_argument, 0, OptStreamCount},
 	{"stream-skip", required_argument, 0, OptStreamSkip},
 	{"stream-loop", no_argument, 0, OptStreamLoop},
 	{"stream-sleep", required_argument, 0, OptStreamSleep},
 	{"stream-poll", no_argument, 0, OptStreamPoll},
+	{"stream-no-query", no_argument, 0, OptStreamNoQuery},
+#ifndef NO_STREAM_TO
 	{"stream-to", required_argument, 0, OptStreamTo},
 	{"stream-to-host", required_argument, 0, OptStreamToHost},
+#endif
 	{"stream-mmap", optional_argument, 0, OptStreamMmap},
 	{"stream-user", optional_argument, 0, OptStreamUser},
 	{"stream-dmabuf", no_argument, 0, OptStreamDmaBuf},
@@ -256,6 +266,7 @@ static void usage_all(void)
        overlay_usage();
        vbi_usage();
        sdr_usage();
+       meta_usage();
        selection_usage();
        misc_usage();
        streaming_usage();
@@ -329,6 +340,8 @@ std::string buftype2s(int type)
 		return "SDR Capture";
 	case V4L2_BUF_TYPE_SDR_OUTPUT:
 		return "SDR Output";
+	case V4L2_BUF_TYPE_META_CAPTURE:
+		return "Metadata Capture";
 	default:
 		return "Unknown (" + num2s(type) + ")";
 	}
@@ -518,6 +531,63 @@ std::string service2s(unsigned service)
 	return flags2s(service, service_def);
 }
 
+/*
+ * Any pixelformat that is not a YUV format is assumed to be
+ * RGB or HSV.
+ */
+static bool is_rgb_or_hsv(__u32 pixelformat)
+{
+	switch (pixelformat) {
+	case V4L2_PIX_FMT_UV8:
+	case V4L2_PIX_FMT_YVU410:
+	case V4L2_PIX_FMT_YVU420:
+	case V4L2_PIX_FMT_YUYV:
+	case V4L2_PIX_FMT_YYUV:
+	case V4L2_PIX_FMT_YVYU:
+	case V4L2_PIX_FMT_UYVY:
+	case V4L2_PIX_FMT_VYUY:
+	case V4L2_PIX_FMT_YUV422P:
+	case V4L2_PIX_FMT_YUV411P:
+	case V4L2_PIX_FMT_Y41P:
+	case V4L2_PIX_FMT_YUV444:
+	case V4L2_PIX_FMT_YUV555:
+	case V4L2_PIX_FMT_YUV565:
+	case V4L2_PIX_FMT_YUV32:
+	case V4L2_PIX_FMT_YUV410:
+	case V4L2_PIX_FMT_YUV420:
+	case V4L2_PIX_FMT_HI240:
+	case V4L2_PIX_FMT_HM12:
+	case V4L2_PIX_FMT_M420:
+	case V4L2_PIX_FMT_NV12:
+	case V4L2_PIX_FMT_NV21:
+	case V4L2_PIX_FMT_NV16:
+	case V4L2_PIX_FMT_NV61:
+	case V4L2_PIX_FMT_NV24:
+	case V4L2_PIX_FMT_NV42:
+	case V4L2_PIX_FMT_NV12M:
+	case V4L2_PIX_FMT_NV21M:
+	case V4L2_PIX_FMT_NV16M:
+	case V4L2_PIX_FMT_NV61M:
+	case V4L2_PIX_FMT_NV12MT:
+	case V4L2_PIX_FMT_NV12MT_16X16:
+	case V4L2_PIX_FMT_YUV420M:
+	case V4L2_PIX_FMT_YVU420M:
+	case V4L2_PIX_FMT_YUV422M:
+	case V4L2_PIX_FMT_YVU422M:
+	case V4L2_PIX_FMT_YUV444M:
+	case V4L2_PIX_FMT_YVU444M:
+	case V4L2_PIX_FMT_SN9C20X_I420:
+	case V4L2_PIX_FMT_SPCA501:
+	case V4L2_PIX_FMT_SPCA505:
+	case V4L2_PIX_FMT_SPCA508:
+	case V4L2_PIX_FMT_CIT_YYVYUY:
+	case V4L2_PIX_FMT_KONICA420:
+		return false;
+	default:
+		return true;
+	}
+}
+
 void printfmt(const struct v4l2_format &vfmt)
 {
 	const flag_def vbi_def[] = {
@@ -525,6 +595,9 @@ void printfmt(const struct v4l2_format &vfmt)
 		{ V4L2_VBI_INTERLACED, "interlaced" },
 		{ 0, NULL }
 	};
+	__u32 colsp = vfmt.fmt.pix.colorspace;
+	__u32 ycbcr_enc = vfmt.fmt.pix.ycbcr_enc;
+
 	printf("Format %s:\n", buftype2s(vfmt.type).c_str());
 
 	switch (vfmt.type) {
@@ -535,10 +608,24 @@ void printfmt(const struct v4l2_format &vfmt)
 		printf("\tField             : %s\n", field2s(vfmt.fmt.pix.field).c_str());
 		printf("\tBytes per Line    : %u\n", vfmt.fmt.pix.bytesperline);
 		printf("\tSize Image        : %u\n", vfmt.fmt.pix.sizeimage);
-		printf("\tColorspace        : %s\n", colorspace2s(vfmt.fmt.pix.colorspace).c_str());
-		printf("\tTransfer Function : %s\n", xfer_func2s(vfmt.fmt.pix.xfer_func).c_str());
-		printf("\tYCbCr/HSV Encoding: %s\n", ycbcr_enc2s(vfmt.fmt.pix.ycbcr_enc).c_str());
-		printf("\tQuantization      : %s\n", quantization2s(vfmt.fmt.pix.quantization).c_str());
+		printf("\tColorspace        : %s\n", colorspace2s(colsp).c_str());
+		printf("\tTransfer Function : %s", xfer_func2s(vfmt.fmt.pix.xfer_func).c_str());
+		if (vfmt.fmt.pix.xfer_func == V4L2_XFER_FUNC_DEFAULT)
+			printf(" (maps to %s)",
+			       xfer_func2s(V4L2_MAP_XFER_FUNC_DEFAULT(colsp)).c_str());
+		printf("\n");
+		printf("\tYCbCr/HSV Encoding: %s", ycbcr_enc2s(ycbcr_enc).c_str());
+		if (ycbcr_enc == V4L2_YCBCR_ENC_DEFAULT) {
+			ycbcr_enc = V4L2_MAP_YCBCR_ENC_DEFAULT(colsp);
+			printf(" (maps to %s)", ycbcr_enc2s(ycbcr_enc).c_str());
+		}
+		printf("\n");
+		printf("\tQuantization      : %s", quantization2s(vfmt.fmt.pix.quantization).c_str());
+		if (vfmt.fmt.pix.quantization == V4L2_QUANTIZATION_DEFAULT)
+			printf(" (maps to %s)",
+			       quantization2s(V4L2_MAP_QUANTIZATION_DEFAULT(is_rgb_or_hsv(vfmt.fmt.pix.pixelformat),
+									    colsp, ycbcr_enc)).c_str());
+		printf("\n");
 		if (vfmt.fmt.pix.priv == V4L2_PIX_FMT_PRIV_MAGIC)
 			printf("\tFlags             : %s\n", pixflags2s(vfmt.fmt.pix.flags).c_str());
 		break;
@@ -621,6 +708,10 @@ void printfmt(const struct v4l2_format &vfmt)
 		printf("\tSample Format   : %s\n", fcc2s(vfmt.fmt.sdr.pixelformat).c_str());
 		printf("\tBuffer Size     : %u\n", vfmt.fmt.sdr.buffersize);
 		break;
+	case V4L2_BUF_TYPE_META_CAPTURE:
+		printf("\tSample Format   : %s\n", fcc2s(vfmt.fmt.meta.dataformat).c_str());
+		printf("\tBuffer Size     : %u\n", vfmt.fmt.meta.buffersize);
+		break;
 	}
 }
 
@@ -690,6 +781,8 @@ static std::string cap2s(unsigned cap)
 		s += "\t\tSDR Capture\n";
 	if (cap & V4L2_CAP_SDR_OUTPUT)
 		s += "\t\tSDR Output\n";
+	if (cap & V4L2_CAP_META_CAPTURE)
+		s += "\t\tMetadata Capture\n";
 	if (cap & V4L2_CAP_TUNER)
 		s += "\t\tTuner\n";
 	if (cap & V4L2_CAP_TOUCH)
@@ -1050,6 +1143,59 @@ __u32 find_pixel_format(int fd, unsigned index, bool output, bool mplane)
 	return fmt.pixelformat;
 }
 
+static bool is_subdevice(int fd)
+{
+	struct stat sb;
+	if (fstat(fd, &sb) == -1) {
+		fprintf(stderr, "failed to stat file\n");
+		exit(1);
+	}
+
+	char uevent_path[100];
+	if (snprintf(uevent_path, sizeof(uevent_path), "/sys/dev/char/%d:%d/uevent",
+		     major(sb.st_rdev), minor(sb.st_rdev)) == -1) {
+		fprintf(stderr, "failed to create uevent file path\n");
+		exit(1);
+	}
+
+	std::ifstream uevent_file(uevent_path);
+	if (uevent_file.fail()) {
+		fprintf(stderr, "failed to open %s\n", uevent_path);
+		exit(1);
+	}
+
+	std::string line;
+
+	while (std::getline(uevent_file, line)) {
+		if (line.compare(0, 8, "DEVNAME="))
+			continue;
+
+		static const char * devnames[] = {
+			"v4l-subdev",
+			"video",
+			"vbi",
+			"radio",
+			"swradio",
+			"v4l-touch",
+			NULL
+		};
+
+		for (size_t i = 0; devnames[i]; i++) {
+			size_t len = strlen(devnames[i]);
+
+			if (!line.compare(8, len, devnames[i]) && isdigit(line[8+len])) {
+				uevent_file.close();
+				return i == 0;
+			}
+		}
+	}
+
+	uevent_file.close();
+
+	fprintf(stderr, "unknown device name\n");
+	exit(1);
+}
+
 int main(int argc, char **argv)
 {
 	int i;
@@ -1125,6 +1271,9 @@ int main(int argc, char **argv)
 		case OptHelpSdr:
 			sdr_usage();
 			return 0;
+		case OptHelpMeta:
+			meta_usage();
+			return 0;
 		case OptHelpSelection:
 			selection_usage();
 			return 0;
@@ -1191,6 +1340,7 @@ int main(int argc, char **argv)
 			overlay_cmd(ch, optarg);
 			vbi_cmd(ch, optarg);
 			sdr_cmd(ch, optarg);
+			meta_cmd(ch, optarg);
 			selection_cmd(ch, optarg);
 			misc_cmd(ch, optarg);
 			streaming_cmd(ch, optarg);
@@ -1214,7 +1364,7 @@ int main(int argc, char **argv)
 	}
 
 	verbose = options[OptVerbose];
-	if (doioctl(fd, VIDIOC_QUERYCAP, &vcap)) {
+	if (!is_subdevice(fd) && doioctl(fd, VIDIOC_QUERYCAP, &vcap)) {
 		fprintf(stderr, "%s: not a v4l2 node\n", device);
 		exit(1);
 	}
@@ -1329,6 +1479,7 @@ int main(int argc, char **argv)
 	overlay_set(fd);
 	vbi_set(fd);
 	sdr_set(fd);
+	meta_set(fd);
 	selection_set(fd);
 	streaming_set(fd, out_fd);
 	misc_set(fd);
@@ -1345,6 +1496,7 @@ int main(int argc, char **argv)
 	overlay_get(fd);
 	vbi_get(fd);
 	sdr_get(fd);
+	meta_get(fd);
 	selection_get(fd);
 	misc_get(fd);
 	edid_get(fd);
@@ -1359,6 +1511,7 @@ int main(int argc, char **argv)
 	overlay_list(fd);
 	vbi_list(fd);
 	sdr_list(fd);
+	meta_list(fd);
 	streaming_list(fd, out_fd);
 
 	if (options[OptWaitForEvent]) {
@@ -1423,5 +1576,9 @@ int main(int argc, char **argv)
 	test_close(fd);
 	if (out_device)
 		test_close(out_fd);
-	exit(app_result);
+
+	// --all sets --silent to avoid ioctl errors to be shown when an ioctl
+	// is not implemented by the driver. Which is fine, but we shouldn't
+	// return an application error in that specific case.
+	exit(options[OptAll] ? 0 : app_result);
 }

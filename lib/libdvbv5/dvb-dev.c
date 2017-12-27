@@ -148,7 +148,7 @@ void dvb_dev_dump_device(char *msg,
 		dvb_log(_("  serial: %s"), dev->serial);
 }
 
-struct dvb_dev_list *dvb_dev_seek_by_sysname(struct dvb_device *d,
+struct dvb_dev_list *dvb_dev_seek_by_adapter(struct dvb_device *d,
 					     unsigned int adapter,
 					     unsigned int num,
 					     enum dvb_dev_type type)
@@ -156,10 +156,23 @@ struct dvb_dev_list *dvb_dev_seek_by_sysname(struct dvb_device *d,
 	struct dvb_device_priv *dvb = (void *)d;
 	struct dvb_dev_ops *ops = &dvb->ops;
 
-	if (!ops->seek_by_sysname)
+	if (!ops->seek_by_adapter)
 		return NULL;
 
-	return ops->seek_by_sysname(dvb, adapter, num, type);
+	return ops->seek_by_adapter(dvb, adapter, num, type);
+}
+
+void dvb_dev_set_logpriv(struct dvb_device *dvb, unsigned verbose,
+		     dvb_logfunc_priv logfunc_priv, void *logpriv)
+{
+	struct dvb_v5_fe_parms_priv *parms = (void *)dvb->fe_parms;
+
+	/* FIXME: how to get remote logs and set verbosity? */
+	parms->p.verbose = verbose;
+	parms->logpriv = logpriv;
+
+	if (logfunc_priv != NULL)
+			parms->logfunc_priv = logfunc_priv;
 }
 
 void dvb_dev_set_log(struct dvb_device *dvb, unsigned verbose,
@@ -174,7 +187,7 @@ void dvb_dev_set_log(struct dvb_device *dvb, unsigned verbose,
 			parms->p.logfunc = logfunc;
 }
 
-int dvb_dev_find(struct dvb_device *d, dvb_dev_change_t handler)
+int dvb_dev_find(struct dvb_device *d, dvb_dev_change_t handler, void *user_priv)
 {
 	struct dvb_device_priv *dvb = (void *)d;
 	struct dvb_dev_ops *ops = &dvb->ops;
@@ -182,7 +195,7 @@ int dvb_dev_find(struct dvb_device *d, dvb_dev_change_t handler)
 	if (!ops->find)
 		return -1;
 
-	return ops->find(dvb, handler);
+	return ops->find(dvb, handler, user_priv);
 }
 
 void dvb_dev_stop_monitor(struct dvb_device *d)
@@ -192,6 +205,18 @@ void dvb_dev_stop_monitor(struct dvb_device *d)
 
 	if (ops->stop_monitor)
 		ops->stop_monitor(dvb);
+}
+
+struct dvb_dev_list *dvb_get_dev_info(struct dvb_device *d,
+				      const char *sysname)
+{
+	struct dvb_device_priv *dvb = (void *)d;
+	struct dvb_dev_ops *ops = &dvb->ops;
+
+	if (!ops->get_dev_info)
+		return NULL;
+
+	return ops->get_dev_info(dvb, sysname);
 }
 
 struct dvb_open_descriptor *dvb_dev_open(struct dvb_device *d,
@@ -204,6 +229,17 @@ struct dvb_open_descriptor *dvb_dev_open(struct dvb_device *d,
 		return NULL;
 
 	return ops->open(dvb, sysname, flags);
+}
+
+int dvb_dev_get_fd(struct dvb_open_descriptor *open_dev)
+{
+	struct dvb_device_priv *dvb = open_dev->dvb;
+	struct dvb_dev_ops *ops = &dvb->ops;
+
+	if (!ops->get_fd)
+		return -1;
+
+	return ops->get_fd(open_dev);
 }
 
 void dvb_dev_close(struct dvb_open_descriptor *open_dev)

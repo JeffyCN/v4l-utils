@@ -40,12 +40,15 @@
 #include <cerrno>
 #include <string>
 #include <linux/cec-funcs.h>
+#include "cec-htng-funcs.h"
 
 #ifdef ANDROID
 #include <android-config.h>
 #else
 #include <config.h>
 #endif
+
+#include <cec-common.h>
 
 #define ARRAY_SIZE(a) \
 	(sizeof(a) / sizeof(*a))

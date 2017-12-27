@@ -106,6 +106,8 @@ static int checkQCtrl(struct node *node, struct test_query_ext_ctrl &qctrl)
 			return fail("non-zero min/max/step/def\n");
 		break;
 	default:
+		if (qctrl.type >= V4L2_CTRL_COMPOUND_TYPES)
+			break;
 		return fail("unknown control type\n");
 	}
 	if (qctrl.type == V4L2_CTRL_TYPE_STRING && qctrl.default_value)
@@ -192,7 +194,7 @@ int testQueryExtControls(struct node *node)
 
 	for (;;) {
 		memset(&qctrl, 0xff, sizeof(qctrl));
-		qctrl.id = id | V4L2_CTRL_FLAG_NEXT_CTRL;
+		qctrl.id = id | V4L2_CTRL_FLAG_NEXT_CTRL | V4L2_CTRL_FLAG_NEXT_COMPOUND;
 		ret = doioctl(node, VIDIOC_QUERY_EXT_CTRL, &qctrl);
 		if (ret == ENOTTY)
 			return ret;
@@ -223,6 +225,7 @@ int testQueryExtControls(struct node *node)
 		}
 
 		if (which == V4L2_CTRL_CLASS_USER &&
+		    (qctrl.type < V4L2_CTRL_COMPOUND_TYPES) &&
 		    qctrl.type != V4L2_CTRL_TYPE_INTEGER64 &&
 		    qctrl.type != V4L2_CTRL_TYPE_STRING &&
 		    qctrl.type != V4L2_CTRL_TYPE_CTRL_CLASS) {
@@ -231,13 +234,20 @@ int testQueryExtControls(struct node *node)
 			else if (id < V4L2_CID_LASTP1)
 				user_controls_check++;
 		}
-		if (V4L2_CTRL_DRIVER_PRIV(id))
+		if (V4L2_CTRL_DRIVER_PRIV(id)) {
 			node->priv_controls++;
-		else
+			if (qctrl.type >= V4L2_CTRL_COMPOUND_TYPES)
+				node->priv_compound_controls++;
+		} else {
 			node->std_controls++;
+			if (qctrl.type >= V4L2_CTRL_COMPOUND_TYPES)
+				node->std_compound_controls++;
+		}
 		node->controls[qctrl.id] = qctrl;
 	}
-	if (which && !found_ctrl_class)
+	if (which && !found_ctrl_class &&
+	    (priv_user_controls_check > node->priv_compound_controls ||
+	     user_controls_check > node->std_compound_controls))
 		result = fail("missing control class for class %08x\n", which);
 	if (which && !class_count)
 		return fail("no controls in class %08x\n", which);
@@ -306,7 +316,8 @@ int testQueryControls(struct node *node)
 		fail_on_test(node->controls.find(qctrl.id) == node->controls.end());
 		controls++;
 	}
-	fail_on_test(node->controls.size() != controls);
+	fail_on_test(node->controls.size() !=
+		     controls + node->std_compound_controls + node->priv_compound_controls);
 
 	for (id = V4L2_CID_BASE; id < V4L2_CID_LASTP1; id++) {
 		memset(&qctrl, 0xff, sizeof(qctrl));
@@ -377,6 +388,8 @@ int testSimpleControls(struct node *node)
 	for (iter = node->controls.begin(); iter != node->controls.end(); ++iter) {
 		test_query_ext_ctrl &qctrl = iter->second;
 
+		if (qctrl.type >= V4L2_CTRL_COMPOUND_TYPES)
+			continue;
 		info("checking control '%s' (0x%08x)\n", qctrl.name, qctrl.id);
 		ctrl.id = qctrl.id;
 		if (qctrl.type == V4L2_CTRL_TYPE_INTEGER64 ||
@@ -572,8 +585,6 @@ int testExtendedControls(struct node *node)
 		return ret;
 	if (ret)
 		return fail("g_ext_ctrls does not support count == 0\n");
-	if (node->controls.empty())
-		return fail("g_ext_ctrls worked even when no controls are present\n");
 	if (ctrls.which)
 		return fail("field which changed\n");
 	if (ctrls.count)
@@ -587,8 +598,6 @@ int testExtendedControls(struct node *node)
 		return ret;
 	if (ret)
 		return fail("try_ext_ctrls does not support count == 0\n");
-	if (node->controls.empty())
-		return fail("try_ext_ctrls worked even when no controls are present\n");
 	if (ctrls.which)
 		return fail("field which changed\n");
 	if (ctrls.count)
@@ -620,13 +629,13 @@ int testExtendedControls(struct node *node)
 			ctrl.id = qctrl.id;
 			ctrl.value = qctrl.default_value;
 		} else {
-			if (ret != ENOSPC && qctrl.type == V4L2_CTRL_TYPE_STRING)
+			if (ret != ENOSPC && (qctrl.flags & V4L2_CTRL_FLAG_HAS_PAYLOAD))
 				return fail("did not check against size\n");
-			if (ret == ENOSPC && qctrl.type == V4L2_CTRL_TYPE_STRING) {
-				if (ctrls.error_idx != 0)
+			if (ret == ENOSPC && (qctrl.flags & V4L2_CTRL_FLAG_HAS_PAYLOAD)) {
+				if (qctrl.type == V4L2_CTRL_TYPE_STRING && ctrls.error_idx != 0)
 					return fail("invalid error index string control\n");
-				ctrl.string = new char[qctrl.maximum + 1];
-				ctrl.size = qctrl.maximum + 1;
+				fail_on_test(ctrl.size != qctrl.elem_size * qctrl.elems);
+				ctrl.string = new char[ctrl.size];
 				ret = doioctl(node, VIDIOC_G_EXT_CTRLS, &ctrls);
 			}
 			if (ret == EIO) {
@@ -674,6 +683,8 @@ int testExtendedControls(struct node *node)
 	}
 
 	ctrls.which = 0;
+	ctrls.count = 1;
+	ctrls.controls = &ctrl;
 	ctrl.id = 0;
 	ctrl.size = 0;
 	ret = doioctl(node, VIDIOC_G_EXT_CTRLS, &ctrls);
@@ -704,8 +715,8 @@ int testExtendedControls(struct node *node)
 			continue;
 		ctrl.id = qctrl.id;
 		ctrl.size = 0;
-		if (qctrl.type == V4L2_CTRL_TYPE_STRING) {
-			ctrl.size = qctrl.maximum + 1;
+		if (qctrl.flags & V4L2_CTRL_FLAG_HAS_PAYLOAD) {
+			ctrl.size = qctrl.elems * qctrl.elem_size;
 			ctrl.string = new char[ctrl.size];
 		}
 		ctrl.reserved2[0] = 0;
@@ -731,6 +742,9 @@ int testExtendedControls(struct node *node)
 	}
 	if (ret)
 		return fail("could not set all controls\n");
+
+	if (!which)
+		return 0;
 
 	ctrls.which = which;
 	ret = doioctl(node, VIDIOC_G_EXT_CTRLS, &ctrls);
