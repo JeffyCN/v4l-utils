@@ -3,7 +3,7 @@
 cec-ctl - An application to control cec devices
 .SH SYNOPSIS
 .B cec-ctl
-[\fI-h\fR] [\fI-d <dev>\fR] [many other options]
+[\fI\-h\fR] [\fI\-d <dev>\fR] [many other options]
 .SH DESCRIPTION
 The cec-ctl tool is used to control cec devices. It is able to control almost
 any aspect of such devices covering the full CEC API.
@@ -33,18 +33,6 @@ Use this vendor ID. The vendor ID is a number from 0x0 to 0xffffff.
 \fB\-C\fR, \fB\-\-clear\fR
 Clear all logical addresses, leaving the CEC device unconfigured.
 .TP
-\fB\-m\fR, \fB\-\-monitor\fR
-Start monitoring CEC traffic. This will monitor broadcast messages,
-messages directed to this CEC adapter and messages transmitted by this
-CEC adapter. Directed messages between other CEC devices are not
-monitored. This option requires root.
-.TP
-\fB\-M\fR, \fB\-\-monitor\-all\fR
-Start monitoring all CEC traffic. This will monitor all CEC messages,
-including directed messages between other CEC devices. This option requires root.
-Not all CEC devices support this monitoring mode. It will fallback to regular
-monitoring mode if it is not supported.
-.TP
 \fB\-n\fR, \fB\-\-no\-reply\fR
 By default when sending a CEC message that expects a reply this utility will
 wait for that reply. With this option it will just send it without waiting
@@ -58,17 +46,48 @@ Send message from the given logical address. It is only necessary to use this
 option if multiple logical addresses are claimed. By default the first assigned
 logical address will be used.
 .TP
+\fB\-r\fR, \fB\-\-show\-raw\fR
+Show the raw CEC message in hex.
+.TP
+\fB\-s\fR, \fB\-\-skip\-info\fR
+Skip the Driver Info output section.
+.TP
 \fB\-S\fR, \fB\-\-show\-topology\fR
 Show the CEC topology, detecting which other CEC devices are on the CEC bus.
+.TP
+\fB\-P\fR, \fB\-\-poll\fR
+Send a poll message.
 .TP
 \fB\-T\fR, \fB\-\-trace\fR
 Trace all called ioctls. Useful for debugging.
 .TP
+\fB\-w\fR, \fB\-\-wall\-clock\fR
+Show timestamps as wall-clock time.
+.TP
 \fB\-\-cec\-version\-1.4\fR
 Use CEC Version 1.4 instead of 2.0 (the default).
 .TP
+\fB\-\-allow\-unreg\-fallback\fR
+Allow fallback to Unregistered if all logical addresses are claimed.
+By default the adapter will remain unconfigured.
+.TP
+\fB\-\-no\-rc\-passthrough\fR
+Disable the RC passthrough. By default remote control CEC messages are
+passed on as input keystrokes (the \fBCEC_LOG_ADDRS_FL_ALLOW_RC_PASSTHRU\fR
+flag is set when calling the \fBCEC_ADAP_S_LOG_ADDRS\fR ioctl), but this
+can be blocked by using this option.
+.TP
+\fB\-\-reply\-to\-followers\fR
+The reply will be sent to followers as well. By default the reply will only
+go to the follower that initiated the CEC message. But if you have other
+followers running as well, then by giving this option they will also receive
+the reply.
+.TP
+\fB\-\-timeout\fR=\fI<ms>\fR
+Set the reply timeout in milliseconds (default is 1000 ms).
+.TP
 \fB\-\-list\-ui\-commands\fR
-List all UI commands that can be used with option --user-control-pressed.
+List all UI commands that can be used with option \fB\-\-control\-pressed\fR.
 .TP
 \fB\-\-tv\fR
 Configure the CEC adapter as a TV.
@@ -91,7 +110,7 @@ Configure the CEC adapter as a processor device.
 \fB\-\-switch\fR
 Configure the CEC adapter as a pure CEC switch.
 .TP
-\fB\-\-cdc-only\fR
+\fB\-\-cdc\-only\fR
 Configure the CEC adapter as a CDC-only device.
 .TP
 \fB\-\-unregistered\fR
@@ -141,6 +160,41 @@ Signal that the RC source has a Media Top Menu.
 \fB\-\-rc\-src\-media\-context\fR
 Signal that the RC source has a Media Context Menu.
 .TP
+\fB\-m\fR, \fB\-\-monitor\fR
+Start monitoring CEC traffic. This will monitor broadcast messages,
+messages directed to this CEC adapter and messages transmitted by this
+CEC adapter. Directed messages between other CEC devices are not
+monitored. This option requires root.
+.TP
+\fB\-M\fR, \fB\-\-monitor\-all\fR
+Start monitoring all CEC traffic. This will monitor all CEC messages,
+including directed messages between other CEC devices. This option requires root.
+Not all CEC devices support this monitoring mode. It will fallback to regular
+monitoring mode if it is not supported.
+.TP
+\fB\-\-monitor\-pin\fR
+Start monitoring and analyzing the low-level CEC pin transitions. This is only
+possible if the device has the CEC_CAP_MONITOR_PIN capability. This option requires root.
+When in pin monitoring mode all 0->1 and 1->0 CEC pin transitions are monitored and
+analysed. This is effectively a cheap CEC bus analyzer.
+.TP
+\fB\-\-monitor\-time\fR=\fI<secs>\fR
+Monitor for the given number of seconds, then exit. The default (0) is to monitor
+forever.
+.TP
+\fB\-\-ignore\fR=\fI<la>\fR,\fI<opcode>\fR
+Ignore messages from logical address <la> and opcode <opcode> when monitoring.
+"all" can be used for <la> or <opcode> to match all logical addresses or opcodes.
+To ignore poll messages use "poll" as <opcode>.
+.TP
+\fB\-\-store\-pin\fR=\fI<to>\fR
+Store the CEC pin events to the given file. This can be read and analyzed later
+via the \fB\-\-analyze\-pin\fR option. Use \- to write to stdout instead of to a file.
+.TP
+\fB\-\-analyze\-pin\fR=\fI<from>\fR
+Read and analyze the CEC pin events from the given file. Use \- to read from stdin
+instead of from a file.
+.TP
 \fB\-\-help\-all\fR
 Prints the help message for all options.
 .TP
@@ -164,6 +218,12 @@ Show help for the Device OSD Transfer feature.
 .TP
 \fB\-\-help\-dynamic\-audio\-lipsync\fR
 Show help for the Dynamic Audio Lipsync feature.
+.TP
+\fB\-\-help\-htng\fR
+Show help for the Hospitality Profile Next Generation feature.
+This is an optional CEC extension for Hotel displays and is not
+generally available for regular displays. See http://www.htng.org
+for more information.
 .TP
 \fB\-\-help\-osd\-display\fR
 Show help for the OSD Display feature.

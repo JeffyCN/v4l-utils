@@ -94,10 +94,14 @@ subdir = utils/keytable
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/ac_define_dir.m4 \
 	$(top_srcdir)/m4/ax_prog_doxygen.m4 \
-	$(top_srcdir)/m4/ax_pthread.m4 $(top_srcdir)/m4/libtool.m4 \
-	$(top_srcdir)/m4/ltoptions.m4 $(top_srcdir)/m4/ltsugar.m4 \
-	$(top_srcdir)/m4/ltversion.m4 $(top_srcdir)/m4/lt~obsolete.m4 \
-	$(top_srcdir)/m4/mode_t.m4 $(top_srcdir)/configure.ac
+	$(top_srcdir)/m4/ax_pthread.m4 $(top_srcdir)/m4/gettext.m4 \
+	$(top_srcdir)/m4/iconv.m4 $(top_srcdir)/m4/lib-ld.m4 \
+	$(top_srcdir)/m4/lib-link.m4 $(top_srcdir)/m4/lib-prefix.m4 \
+	$(top_srcdir)/m4/libtool.m4 $(top_srcdir)/m4/ltoptions.m4 \
+	$(top_srcdir)/m4/ltsugar.m4 $(top_srcdir)/m4/ltversion.m4 \
+	$(top_srcdir)/m4/lt~obsolete.m4 $(top_srcdir)/m4/mode_t.m4 \
+	$(top_srcdir)/m4/nls.m4 $(top_srcdir)/m4/po.m4 \
+	$(top_srcdir)/m4/progtest.m4 $(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 DIST_COMMON = $(srcdir)/Makefile.am $(am__DIST_COMMON)
@@ -109,7 +113,7 @@ am__installdirs = "$(DESTDIR)$(bindir)" "$(DESTDIR)$(man1dir)" \
 	"$(DESTDIR)$(keytablesystemdir)" "$(DESTDIR)$(sysconfdir)" \
 	"$(DESTDIR)$(udevrulesdir)"
 PROGRAMS = $(bin_PROGRAMS)
-am_ir_keytable_OBJECTS = keytable.$(OBJEXT)
+am_ir_keytable_OBJECTS = keytable.$(OBJEXT) ir-encode.$(OBJEXT)
 ir_keytable_OBJECTS = $(am_ir_keytable_OBJECTS)
 ir_keytable_DEPENDENCIES =
 AM_V_lt = $(am__v_lt_@AM_V@)
@@ -354,6 +358,8 @@ QT_CFLAGS = @QT_CFLAGS@
 QT_LIBS = @QT_LIBS@
 RANLIB = @RANLIB@
 RCC = @RCC@
+SDL2_CFLAGS = @SDL2_CFLAGS@
+SDL2_LIBS = @SDL2_LIBS@
 SED = @SED@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
@@ -439,7 +445,7 @@ man_MANS = ir-keytable.1
 sysconf_DATA = rc_maps.cfg
 keytablesystem_DATA = $(srcdir)/rc_keymaps/*
 udevrules_DATA = 70-infrared.rules
-ir_keytable_SOURCES = keytable.c parse.h
+ir_keytable_SOURCES = keytable.c parse.h ir-encode.c ir-encode.h
 ir_keytable_LDADD = @LIBINTL@
 ir_keytable_LDFLAGS = $(ARGP_LIBS)
 EXTRA_DIST = 70-infrared.rules rc_keymaps rc_keymaps_userspace gen_keytables.pl ir-keytable.1 rc_maps.cfg
@@ -538,6 +544,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/ir-encode.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/keytable.Po@am__quote@
 
 .c.o:

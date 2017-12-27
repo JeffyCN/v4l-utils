@@ -87,15 +87,22 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-@WITH_GCONV_TRUE@am__append_1 = gconv gconv
+@HAVE_LINUX_I2C_DEV_TRUE@@LINUX_OS_TRUE@am__append_1 = \
+@HAVE_LINUX_I2C_DEV_TRUE@@LINUX_OS_TRUE@	rds-saa6588
+
+@WITH_GCONV_TRUE@am__append_2 = gconv gconv
 subdir = contrib
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/ac_define_dir.m4 \
 	$(top_srcdir)/m4/ax_prog_doxygen.m4 \
-	$(top_srcdir)/m4/ax_pthread.m4 $(top_srcdir)/m4/libtool.m4 \
-	$(top_srcdir)/m4/ltoptions.m4 $(top_srcdir)/m4/ltsugar.m4 \
-	$(top_srcdir)/m4/ltversion.m4 $(top_srcdir)/m4/lt~obsolete.m4 \
-	$(top_srcdir)/m4/mode_t.m4 $(top_srcdir)/configure.ac
+	$(top_srcdir)/m4/ax_pthread.m4 $(top_srcdir)/m4/gettext.m4 \
+	$(top_srcdir)/m4/iconv.m4 $(top_srcdir)/m4/lib-ld.m4 \
+	$(top_srcdir)/m4/lib-link.m4 $(top_srcdir)/m4/lib-prefix.m4 \
+	$(top_srcdir)/m4/libtool.m4 $(top_srcdir)/m4/ltoptions.m4 \
+	$(top_srcdir)/m4/ltsugar.m4 $(top_srcdir)/m4/ltversion.m4 \
+	$(top_srcdir)/m4/lt~obsolete.m4 $(top_srcdir)/m4/mode_t.m4 \
+	$(top_srcdir)/m4/nls.m4 $(top_srcdir)/m4/po.m4 \
+	$(top_srcdir)/m4/progtest.m4 $(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 DIST_COMMON = $(srcdir)/Makefile.am $(am__DIST_COMMON)
@@ -157,7 +164,8 @@ am__define_uniq_tagged_files = \
   done | $(am__uniquify_input)`
 ETAGS = etags
 CTAGS = ctags
-DIST_SUBDIRS = freebsd gconv test
+DIST_SUBDIRS = freebsd gconv decode_tm6000 test xc3028-firmware \
+	rds-saa6588
 am__DIST_COMMON = $(srcdir)/Makefile.in
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 am__relativize = \
@@ -326,6 +334,8 @@ QT_CFLAGS = @QT_CFLAGS@
 QT_LIBS = @QT_LIBS@
 RANLIB = @RANLIB@
 RCC = @RCC@
+SDL2_CFLAGS = @SDL2_CFLAGS@
+SDL2_LIBS = @SDL2_LIBS@
 SED = @SED@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
@@ -407,29 +417,14 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 udevrulesdir = @udevrulesdir@
-@LINUX_OS_FALSE@SUBDIRS = freebsd $(am__append_1)
-@LINUX_OS_TRUE@SUBDIRS = test $(am__append_1)
+@LINUX_OS_FALSE@SUBDIRS = freebsd $(am__append_2) decode_tm6000
+@LINUX_OS_TRUE@SUBDIRS = test xc3028-firmware $(am__append_1) \
+@LINUX_OS_TRUE@	$(am__append_2) decode_tm6000
 EXTRA_DIST = \
-	parse-sniffusb2.pl \
-	parse_tcpdump_log.pl \
-	parse-usbsnoop.php \
-	usbmon2usbsnoop.pl \
-	v4l_rec.pl \
-	\
-	af9035 \
-	au0828 \
 	cobalt-ctl \
-	az6007 \
-	cx231xx \
-	cx25821 \
-	dib0700 \
-	em28xx \
-	m920x \
+	parsers \
 	pci_traffic \
-	saa7134 \
-	sn9c201 \
-	tm6000 \
-	usb_parse
+	v4l_rec.pl
 
 all: all-recursive
 

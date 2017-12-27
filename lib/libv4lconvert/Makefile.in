@@ -91,17 +91,22 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-@WITH_LIBV4L_TRUE@libv4lconvertpriv_PROGRAMS = ov511-decomp$(EXEEXT) \
-@WITH_LIBV4L_TRUE@	ov518-decomp$(EXEEXT)
+@HAVE_LIBV4LCONVERT_HELPERS_TRUE@@WITH_DYN_LIBV4L_TRUE@libv4lconvertpriv_PROGRAMS = ov511-decomp$(EXEEXT) \
+@HAVE_LIBV4LCONVERT_HELPERS_TRUE@@WITH_DYN_LIBV4L_TRUE@	ov518-decomp$(EXEEXT)
 @HAVE_JPEG_TRUE@am__append_1 = jpeg_memsrcdest.c jpeg_memsrcdest.h
+@HAVE_LIBV4LCONVERT_HELPERS_TRUE@am__append_2 = helper.c
 subdir = lib/libv4lconvert
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/ac_define_dir.m4 \
 	$(top_srcdir)/m4/ax_prog_doxygen.m4 \
-	$(top_srcdir)/m4/ax_pthread.m4 $(top_srcdir)/m4/libtool.m4 \
-	$(top_srcdir)/m4/ltoptions.m4 $(top_srcdir)/m4/ltsugar.m4 \
-	$(top_srcdir)/m4/ltversion.m4 $(top_srcdir)/m4/lt~obsolete.m4 \
-	$(top_srcdir)/m4/mode_t.m4 $(top_srcdir)/configure.ac
+	$(top_srcdir)/m4/ax_pthread.m4 $(top_srcdir)/m4/gettext.m4 \
+	$(top_srcdir)/m4/iconv.m4 $(top_srcdir)/m4/lib-ld.m4 \
+	$(top_srcdir)/m4/lib-link.m4 $(top_srcdir)/m4/lib-prefix.m4 \
+	$(top_srcdir)/m4/libtool.m4 $(top_srcdir)/m4/ltoptions.m4 \
+	$(top_srcdir)/m4/ltsugar.m4 $(top_srcdir)/m4/ltversion.m4 \
+	$(top_srcdir)/m4/lt~obsolete.m4 $(top_srcdir)/m4/mode_t.m4 \
+	$(top_srcdir)/m4/nls.m4 $(top_srcdir)/m4/po.m4 \
+	$(top_srcdir)/m4/progtest.m4 $(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 DIST_COMMON = $(srcdir)/Makefile.am $(am__include_HEADERS_DIST) \
@@ -151,11 +156,14 @@ am__libv4lconvert_la_SOURCES_DIST = libv4lconvert.c tinyjpeg.c \
 	processing/libv4lprocessing.c processing/whitebalance.c \
 	processing/autogain.c processing/gamma.c \
 	processing/libv4lprocessing.h \
-	processing/libv4lprocessing-priv.h helper.c helper-funcs.h \
+	processing/libv4lprocessing-priv.h helper-funcs.h \
 	libv4lconvert-priv.h libv4lsyscall-priv.h tinyjpeg.h \
-	tinyjpeg-internal.h jpeg_memsrcdest.c jpeg_memsrcdest.h
+	tinyjpeg-internal.h jpeg_memsrcdest.c jpeg_memsrcdest.h \
+	helper.c
 am__dirstamp = $(am__leading_dot)dirstamp
 @HAVE_JPEG_TRUE@am__objects_1 = libv4lconvert_la-jpeg_memsrcdest.lo
+@HAVE_LIBV4LCONVERT_HELPERS_TRUE@am__objects_2 =  \
+@HAVE_LIBV4LCONVERT_HELPERS_TRUE@	libv4lconvert_la-helper.lo
 am_libv4lconvert_la_OBJECTS = libv4lconvert_la-libv4lconvert.lo \
 	libv4lconvert_la-tinyjpeg.lo libv4lconvert_la-sn9c10x.lo \
 	libv4lconvert_la-sn9c20x.lo libv4lconvert_la-pac207.lo \
@@ -172,8 +180,8 @@ am_libv4lconvert_la_OBJECTS = libv4lconvert_la-libv4lconvert.lo \
 	processing/libv4lconvert_la-libv4lprocessing.lo \
 	processing/libv4lconvert_la-whitebalance.lo \
 	processing/libv4lconvert_la-autogain.lo \
-	processing/libv4lconvert_la-gamma.lo \
-	libv4lconvert_la-helper.lo $(am__objects_1)
+	processing/libv4lconvert_la-gamma.lo $(am__objects_1) \
+	$(am__objects_2)
 libv4lconvert_la_OBJECTS = $(am_libv4lconvert_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
@@ -183,8 +191,8 @@ libv4lconvert_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CCLD) \
 	$(AM_CFLAGS) $(CFLAGS) $(libv4lconvert_la_LDFLAGS) $(LDFLAGS) \
 	-o $@
-@WITH_LIBV4L_FALSE@am_libv4lconvert_la_rpath =
-@WITH_LIBV4L_TRUE@am_libv4lconvert_la_rpath = -rpath $(libdir)
+@WITH_DYN_LIBV4L_FALSE@am_libv4lconvert_la_rpath =
+@WITH_DYN_LIBV4L_TRUE@am_libv4lconvert_la_rpath = -rpath $(libdir)
 PROGRAMS = $(libv4lconvertpriv_PROGRAMS)
 am_ov511_decomp_OBJECTS = ov511-decomp.$(OBJEXT)
 ov511_decomp_OBJECTS = $(am_ov511_decomp_OBJECTS)
@@ -401,6 +409,8 @@ QT_CFLAGS = @QT_CFLAGS@
 QT_LIBS = @QT_LIBS@
 RANLIB = @RANLIB@
 RCC = @RCC@
+SDL2_CFLAGS = @SDL2_CFLAGS@
+SDL2_LIBS = @SDL2_LIBS@
 SED = @SED@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
@@ -482,11 +492,11 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 udevrulesdir = @udevrulesdir@
-@WITH_LIBV4L_TRUE@lib_LTLIBRARIES = libv4lconvert.la
-@WITH_LIBV4L_TRUE@include_HEADERS = ../include/libv4lconvert.h
-@WITH_LIBV4L_TRUE@pkgconfig_DATA = libv4lconvert.pc
-@WITH_LIBV4L_TRUE@LIBV4LCONVERT_VERSION = -version-info 0
-@WITH_LIBV4L_FALSE@noinst_LTLIBRARIES = libv4lconvert.la
+@WITH_DYN_LIBV4L_TRUE@lib_LTLIBRARIES = libv4lconvert.la
+@WITH_DYN_LIBV4L_TRUE@include_HEADERS = ../include/libv4lconvert.h
+@WITH_DYN_LIBV4L_TRUE@pkgconfig_DATA = libv4lconvert.pc
+@WITH_DYN_LIBV4L_TRUE@LIBV4LCONVERT_VERSION = -version-info 0
+@WITH_DYN_LIBV4L_FALSE@noinst_LTLIBRARIES = libv4lconvert.la
 libv4lconvert_la_SOURCES = libv4lconvert.c tinyjpeg.c sn9c10x.c \
 	sn9c20x.c pac207.c mr97310a.c flip.c crop.c jidctflt.c \
 	spca561-decompress.c rgbyuv.c sn9c2028-decomp.c spca501.c \
@@ -496,9 +506,9 @@ libv4lconvert_la_SOURCES = libv4lconvert.c tinyjpeg.c sn9c10x.c \
 	processing/libv4lprocessing.c processing/whitebalance.c \
 	processing/autogain.c processing/gamma.c \
 	processing/libv4lprocessing.h \
-	processing/libv4lprocessing-priv.h helper.c helper-funcs.h \
+	processing/libv4lprocessing-priv.h helper-funcs.h \
 	libv4lconvert-priv.h libv4lsyscall-priv.h tinyjpeg.h \
-	tinyjpeg-internal.h $(am__append_1)
+	tinyjpeg-internal.h $(am__append_1) $(am__append_2)
 libv4lconvert_la_CPPFLAGS = $(CFLAG_VISIBILITY) $(ENFORCE_LIBV4L_STATIC)
 libv4lconvert_la_LDFLAGS = $(LIBV4LCONVERT_VERSION) -lrt -lm $(JPEG_LIBS) $(ENFORCE_LIBV4L_STATIC)
 ov511_decomp_SOURCES = ov511-decomp.c
@@ -925,19 +935,19 @@ processing/libv4lconvert_la-gamma.lo: processing/gamma.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libv4lconvert_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o processing/libv4lconvert_la-gamma.lo `test -f 'processing/gamma.c' || echo '$(srcdir)/'`processing/gamma.c
 
-libv4lconvert_la-helper.lo: helper.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libv4lconvert_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT libv4lconvert_la-helper.lo -MD -MP -MF $(DEPDIR)/libv4lconvert_la-helper.Tpo -c -o libv4lconvert_la-helper.lo `test -f 'helper.c' || echo '$(srcdir)/'`helper.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libv4lconvert_la-helper.Tpo $(DEPDIR)/libv4lconvert_la-helper.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='helper.c' object='libv4lconvert_la-helper.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libv4lconvert_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o libv4lconvert_la-helper.lo `test -f 'helper.c' || echo '$(srcdir)/'`helper.c
-
 libv4lconvert_la-jpeg_memsrcdest.lo: jpeg_memsrcdest.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libv4lconvert_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT libv4lconvert_la-jpeg_memsrcdest.lo -MD -MP -MF $(DEPDIR)/libv4lconvert_la-jpeg_memsrcdest.Tpo -c -o libv4lconvert_la-jpeg_memsrcdest.lo `test -f 'jpeg_memsrcdest.c' || echo '$(srcdir)/'`jpeg_memsrcdest.c
 @am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libv4lconvert_la-jpeg_memsrcdest.Tpo $(DEPDIR)/libv4lconvert_la-jpeg_memsrcdest.Plo
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='jpeg_memsrcdest.c' object='libv4lconvert_la-jpeg_memsrcdest.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libv4lconvert_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o libv4lconvert_la-jpeg_memsrcdest.lo `test -f 'jpeg_memsrcdest.c' || echo '$(srcdir)/'`jpeg_memsrcdest.c
+
+libv4lconvert_la-helper.lo: helper.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libv4lconvert_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT libv4lconvert_la-helper.lo -MD -MP -MF $(DEPDIR)/libv4lconvert_la-helper.Tpo -c -o libv4lconvert_la-helper.lo `test -f 'helper.c' || echo '$(srcdir)/'`helper.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libv4lconvert_la-helper.Tpo $(DEPDIR)/libv4lconvert_la-helper.Plo
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='helper.c' object='libv4lconvert_la-helper.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libv4lconvert_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o libv4lconvert_la-helper.lo `test -f 'helper.c' || echo '$(srcdir)/'`helper.c
 
 mostlyclean-libtool:
 	-rm -f *.lo

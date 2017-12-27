@@ -94,10 +94,14 @@ subdir = lib/libv4l1
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/ac_define_dir.m4 \
 	$(top_srcdir)/m4/ax_prog_doxygen.m4 \
-	$(top_srcdir)/m4/ax_pthread.m4 $(top_srcdir)/m4/libtool.m4 \
-	$(top_srcdir)/m4/ltoptions.m4 $(top_srcdir)/m4/ltsugar.m4 \
-	$(top_srcdir)/m4/ltversion.m4 $(top_srcdir)/m4/lt~obsolete.m4 \
-	$(top_srcdir)/m4/mode_t.m4 $(top_srcdir)/configure.ac
+	$(top_srcdir)/m4/ax_pthread.m4 $(top_srcdir)/m4/gettext.m4 \
+	$(top_srcdir)/m4/iconv.m4 $(top_srcdir)/m4/lib-ld.m4 \
+	$(top_srcdir)/m4/lib-link.m4 $(top_srcdir)/m4/lib-prefix.m4 \
+	$(top_srcdir)/m4/libtool.m4 $(top_srcdir)/m4/ltoptions.m4 \
+	$(top_srcdir)/m4/ltsugar.m4 $(top_srcdir)/m4/ltversion.m4 \
+	$(top_srcdir)/m4/lt~obsolete.m4 $(top_srcdir)/m4/mode_t.m4 \
+	$(top_srcdir)/m4/nls.m4 $(top_srcdir)/m4/po.m4 \
+	$(top_srcdir)/m4/progtest.m4 $(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 DIST_COMMON = $(srcdir)/Makefile.am $(am__include_HEADERS_DIST) \
@@ -147,8 +151,8 @@ am__v_lt_1 =
 libv4l1_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) \
 	$(libv4l1_la_LDFLAGS) $(LDFLAGS) -o $@
-@WITH_LIBV4L_FALSE@am_libv4l1_la_rpath =
-@WITH_LIBV4L_TRUE@am_libv4l1_la_rpath = -rpath $(libdir)
+@WITH_DYN_LIBV4L_FALSE@am_libv4l1_la_rpath =
+@WITH_DYN_LIBV4L_TRUE@am_libv4l1_la_rpath = -rpath $(libdir)
 v4l1compat_la_DEPENDENCIES = libv4l1.la
 am_v4l1compat_la_OBJECTS = v4l1compat_la-v4l1compat.lo
 v4l1compat_la_OBJECTS = $(am_v4l1compat_la_OBJECTS)
@@ -156,9 +160,9 @@ v4l1compat_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 	$(v4l1compat_la_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link \
 	$(CCLD) $(AM_CFLAGS) $(CFLAGS) $(v4l1compat_la_LDFLAGS) \
 	$(LDFLAGS) -o $@
-@WITH_LIBV4L_TRUE@@WITH_V4L_WRAPPERS_TRUE@am_v4l1compat_la_rpath =  \
-@WITH_LIBV4L_TRUE@@WITH_V4L_WRAPPERS_TRUE@	-rpath \
-@WITH_LIBV4L_TRUE@@WITH_V4L_WRAPPERS_TRUE@	$(libv4l1privdir)
+@WITH_DYN_LIBV4L_TRUE@@WITH_V4L_WRAPPERS_TRUE@am_v4l1compat_la_rpath =  \
+@WITH_DYN_LIBV4L_TRUE@@WITH_V4L_WRAPPERS_TRUE@	-rpath \
+@WITH_DYN_LIBV4L_TRUE@@WITH_V4L_WRAPPERS_TRUE@	$(libv4l1privdir)
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -367,6 +371,8 @@ QT_CFLAGS = @QT_CFLAGS@
 QT_LIBS = @QT_LIBS@
 RANLIB = @RANLIB@
 RCC = @RCC@
+SDL2_CFLAGS = @SDL2_CFLAGS@
+SDL2_LIBS = @SDL2_LIBS@
 SED = @SED@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
@@ -448,12 +454,12 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 udevrulesdir = @udevrulesdir@
-@WITH_LIBV4L_TRUE@lib_LTLIBRARIES = libv4l1.la
-@WITH_LIBV4L_TRUE@include_HEADERS = ../include/libv4l1.h ../include/libv4l1-videodev.h
-@WITH_LIBV4L_TRUE@pkgconfig_DATA = libv4l1.pc
-@WITH_LIBV4L_TRUE@LIBV4L1_VERSION = -version-info 0
-@WITH_LIBV4L_TRUE@@WITH_V4L_WRAPPERS_TRUE@libv4l1priv_LTLIBRARIES = v4l1compat.la
-@WITH_LIBV4L_FALSE@noinst_LTLIBRARIES = libv4l1.la
+@WITH_DYN_LIBV4L_TRUE@lib_LTLIBRARIES = libv4l1.la
+@WITH_DYN_LIBV4L_TRUE@include_HEADERS = ../include/libv4l1.h ../include/libv4l1-videodev.h
+@WITH_DYN_LIBV4L_TRUE@pkgconfig_DATA = libv4l1.pc
+@WITH_DYN_LIBV4L_TRUE@LIBV4L1_VERSION = -version-info 0
+@WITH_DYN_LIBV4L_TRUE@@WITH_V4L_WRAPPERS_TRUE@libv4l1priv_LTLIBRARIES = v4l1compat.la
+@WITH_DYN_LIBV4L_FALSE@noinst_LTLIBRARIES = libv4l1.la
 libv4l1_la_SOURCES = libv4l1.c log.c libv4l1-priv.h
 libv4l1_la_CPPFLAGS = $(CFLAG_VISIBILITY) $(ENFORCE_LIBV4L_STATIC)
 libv4l1_la_LDFLAGS = $(LIBV4L1_VERSION) -lpthread $(ENFORCE_LIBV4L_STATIC)
@@ -808,7 +814,7 @@ distclean-generic:
 maintainer-clean-generic:
 	@echo "This command is intended for maintainers to use"
 	@echo "it deletes files that may require special tools to rebuild."
-@WITH_LIBV4L_FALSE@install-exec-hook:
+@WITH_DYN_LIBV4L_FALSE@install-exec-hook:
 @WITH_V4L_WRAPPERS_FALSE@install-exec-hook:
 clean: clean-am
 
@@ -909,9 +915,9 @@ uninstall-am: uninstall-includeHEADERS uninstall-libLTLIBRARIES \
 .PRECIOUS: Makefile
 
 
-@WITH_LIBV4L_TRUE@@WITH_V4L_WRAPPERS_TRUE@install-exec-hook:
-@WITH_LIBV4L_TRUE@@WITH_V4L_WRAPPERS_TRUE@	$(mkdir_p) $(DESTDIR)/$(libdir)
-@WITH_LIBV4L_TRUE@@WITH_V4L_WRAPPERS_TRUE@	(cd $(DESTDIR)/$(libdir) && rm -f v4l1compat.so && $(LN_S) $(libv4l1subdir)/v4l1compat.so v4l1compat.so)
+@WITH_DYN_LIBV4L_TRUE@@WITH_V4L_WRAPPERS_TRUE@install-exec-hook:
+@WITH_DYN_LIBV4L_TRUE@@WITH_V4L_WRAPPERS_TRUE@	$(mkdir_p) $(DESTDIR)/$(libdir)
+@WITH_DYN_LIBV4L_TRUE@@WITH_V4L_WRAPPERS_TRUE@	(cd $(DESTDIR)/$(libdir) && rm -f v4l1compat.so && $(LN_S) $(libv4l1subdir)/v4l1compat.so v4l1compat.so)
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

@@ -3,24 +3,15 @@ use strict;
 use File::Find;
 
 my @ir_files = (
-	"drivers/media/usb/dvb-usb/a800.c",
 	"drivers/media/usb/dvb-usb/af9005-remote.c",
-	"drivers/media/usb/dvb-usb-v2/af9015.c",
-	"drivers/media/usb/dvb-usb-v2/af9015.h",
-	"drivers/media/usb/dvb-usb-v2/anysee.c",
+	"drivers/media/usb/dvb-usb/az6027.c",
 	"drivers/media/usb/dvb-usb/cinergyT2-core.c",
-	"drivers/media/usb/dvb-usb/cxusb.c",
 	"drivers/media/usb/dvb-usb/dibusb-common.c",
 	"drivers/media/usb/dvb-usb/digitv.c",
-	"drivers/media/usb/dvb-usb/dtt200u.c",
-	"drivers/media/usb/dvb-usb/dvb-usb-remote.c",
-	"drivers/media/usb/dvb-usb/dvb-usb.h",
-	"drivers/media/usb/dvb-usb/dw2102.c",
 	"drivers/media/usb/dvb-usb/m920x.c",
 	"drivers/media/usb/dvb-usb/nova-t-usb2.c",
 	"drivers/media/usb/dvb-usb/opera1.c",
 	"drivers/media/usb/dvb-usb/vp702x.c",
-	"drivers/media/usb/dvb-usb/vp7045.c",
 );
 
 my $debug = 1;
@@ -39,9 +30,10 @@ my %rc_map_names;
 
 my $kernel_dir = shift or die "Need a file name to proceed.";
 
-sub flush($)
+sub flush($$)
 {
 	my $filename = shift;
+	my $legacy = shift;
 	my $defined;
 
 	return if (!$keyname || !$out);
@@ -51,7 +43,7 @@ sub flush($)
 	print OUT $out;
 	close OUT;
 
-	if (!$name) {
+	if (!$name && !$legacy) {
 		$warn++;
 	} else {
 		$defined = 1 if ($rc_map_names{$name});
@@ -71,22 +63,27 @@ sub flush($)
 	$name = "";
 }
 
-sub parse_file($)
+sub parse_file($$)
 {
 	my $filename = shift;
+	my $legacy = shift;
 
+	my $num_tables = 0;
 	$warn = 0;
+
+	next if ($filename =~ m/\.mod.c/);
 
 	printf "processing file $filename\n" if ($debug);
 	open IN, "<$filename" or die "couldn't find $filename";
 	while (<IN>) {
 		if (m/struct\s+rc_map_table\s+(\w[\w\d_]+)/) {
-			flush($filename);
+			flush($filename, $legacy);
 
 			$keyname = $1;
 			$keyname =~ s/^rc_map_//;
 			$keyname =~ s/_table$//;
 			$read = 1;
+			$num_tables++;
 			next;
 		}
 		if (m/struct\s+rc_map_list.*=\s+{/) {
@@ -106,11 +103,17 @@ sub parse_file($)
 				$check_type = 0;
 				next;
 			}
-			if (m/RC_TYPE_([\w\d_]+)/) {
+			if (m/RC_PROTO_([\w\d_]+)/) {
 				$type = $1;
 
 				# Proper name the RC6 protocol
 				$type =~ s/^RC6_MCE$/RC6/;
+
+				# Proper name the RC-5-SZ protocol
+				$type =~ s/^RC5_SZ$/RC-5-SZ/;
+
+				# NECX protocol variant uses nec decoder
+				$type =~ s/^NECX$/NEC/;
 			}
 			next;
 		}
@@ -127,9 +130,10 @@ sub parse_file($)
 	}
 	close IN;
 
-	flush($filename);
+	flush($filename, $legacy);
 
 	printf STDERR "WARNING: keyboard name not found on %d tables at file $filename\n", $warn if ($warn);
+	print STDERR "WARNING: no tables found at $filename\n" if (!$num_tables);
 
 	$warn_all += $warn;
 }
@@ -142,7 +146,7 @@ sub parse_dir()
 
 	return if (! ($file =~ m/\.c$/));
 
-	parse_file $file;
+	parse_file $file, 0;
 }
 
 sub sort_dir()
@@ -209,7 +213,7 @@ EOF
 find({wanted => \&parse_dir, preprocess => \&sort_dir, no_chdir => 1}, "$kernel_dir/drivers/media/rc/keymaps");
 
 foreach my $file (@ir_files) {
-	parse_file "$kernel_dir/$file";
+	parse_file "$kernel_dir/$file", 1;
 }
 
 printf STDERR "WARNING: there are %d tables not defined at rc_maps.h\n", $warn_all if ($warn_all);

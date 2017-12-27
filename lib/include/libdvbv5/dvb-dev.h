@@ -21,7 +21,6 @@
 
 #include "dvb-fe.h"
 #include "dvb-scan.h"
-#include <config.h>
 
 #include <linux/dvb/dmx.h>
 
@@ -118,7 +117,7 @@ enum dvb_dev_change_type {
  * @note: the returned string should be freed with free().
  */
 typedef int (*dvb_dev_change_t)(char *sysname,
-				enum dvb_dev_change_type type);
+				enum dvb_dev_change_type type, void *priv);
 
 /**
  * @struct dvb_open_descriptor
@@ -172,6 +171,7 @@ void dvb_dev_free(struct dvb_device *dvb);
  * @param dvb			pointer to struct dvb_device to be filled
  * @param enable_monitor	if different than zero put the routine into
  *				monitor mode
+ * @param user_priv		pointer to user private data
  *
  * This routine can be called on two modes: normal or monitor mode
  *
@@ -188,7 +188,8 @@ void dvb_dev_free(struct dvb_device *dvb);
  *
  * @return returns 0 on success, a negative value otherwise.
  */
-int dvb_dev_find(struct dvb_device *dvb, dvb_dev_change_t handler);
+int dvb_dev_find(struct dvb_device *dvb, dvb_dev_change_t handler,
+		 void *user_priv);
 
 /**
  * @brief Find a device that matches the search criteria given by this
@@ -203,10 +204,23 @@ int dvb_dev_find(struct dvb_device *dvb, dvb_dev_change_t handler);
  * @return returns a pointer to a struct dvb_dev_list object or NULL if the
  *	desired device was not found.
  */
-struct dvb_dev_list *dvb_dev_seek_by_sysname(struct dvb_device *dvb,
+struct dvb_dev_list *dvb_dev_seek_by_adapter(struct dvb_device *dvb,
 					     unsigned int adapter,
 					     unsigned int num,
 					     enum dvb_dev_type type);
+
+/**
+ * @brief Return data about a device from its sysname
+ *
+ * @param dvb		pointer to struct dvb_device to be used
+ * @param sysname	Kernel's name of the device to be opened, as obtained
+ *			via dvb_dev_seek_by_adapter() or via dvb_dev_find().
+ *
+ * @return returns a pointer to a struct dvb_dev_list object or NULL if the
+ *	desired device was not found.
+ */
+struct dvb_dev_list *dvb_get_dev_info(struct dvb_device *dvb,
+				      const char *sysname);
 
 /**
  * @brief Stop the dvb_dev_find loop
@@ -219,6 +233,27 @@ struct dvb_dev_list *dvb_dev_seek_by_sysname(struct dvb_device *dvb,
  * monitor mode was already stopped.
  */
 void dvb_dev_stop_monitor(struct dvb_device *dvb);
+
+/**
+ * @brief Sets the DVB verbosity and log function with context private data
+ * @ingroup dvb_device
+ *
+ * @param dvb		pointer to struct dvb_device to be used
+ * @param verbose	Verbosity level of the messages that will be printed
+ * @param logfunc	Callback function to be called when a log event
+ *			happens. Can either store the event into a file or
+ *			to print it at the TUI/GUI. Can be null.
+ * @param logpriv   Private data for log function
+ *
+ * @details Sets the function to report log errors and to set the verbosity
+ *	level of debug report messages. If not called, or if logfunc is
+ *	NULL, the libdvbv5 will report error and debug messages via stderr,
+ *	and will use colors for the debug messages.
+ *
+ */
+void dvb_dev_set_logpriv(struct dvb_device *dvb,
+		     unsigned verbose,
+		     dvb_logfunc_priv logfunc, void *logpriv);
 
 /**
  * @brief Sets the DVB verbosity and log function
@@ -246,7 +281,7 @@ void dvb_dev_set_log(struct dvb_device *dvb,
  *
  * @param dvb		pointer to struct dvb_device to be used
  * @param sysname	Kernel's name of the device to be opened, as obtained
- *			via dvb_dev_seek_by_sysname().
+ *			via dvb_dev_seek_by_adapter() or via dvb_dev_find().
  * @param flags		Flags to be passed to open: O_RDONLY, O_RDWR and/or
  *			O_NONBLOCK
  *
@@ -274,6 +309,18 @@ struct dvb_open_descriptor *dvb_dev_open(struct dvb_device *dvb,
  * closed.
  */
 void dvb_dev_close(struct dvb_open_descriptor *open_dev);
+
+/**
+ * @brief returns fd from a local device
+ * This will not work for remote devices.
+ * @ingroup dvb_device
+ *
+ * @param open_dev	Points to the struct dvb_open_descriptor
+ *
+ * @return On success, returns the fd.
+ * Returns -1 on error.
+ */
+int dvb_dev_get_fd(struct dvb_open_descriptor *open_dev);
 
 /**
  * @brief read from a dvb demux or dvr file

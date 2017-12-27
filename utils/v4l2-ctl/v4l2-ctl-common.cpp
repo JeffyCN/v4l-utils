@@ -198,7 +198,7 @@ static void list_devices()
 			links[target] = *iter;
 		else
 			links[target] += ", " + *iter;
-		files.erase(iter);
+		iter = files.erase(iter);
 	}
 
 	std::sort(files.begin(), files.end(), sort_on_device_name);
@@ -296,6 +296,7 @@ static std::string ctrlflags2s(__u32 flags)
 		{ V4L2_CTRL_FLAG_VOLATILE,   "volatile" },
 		{ V4L2_CTRL_FLAG_HAS_PAYLOAD,"has-payload" },
 		{ V4L2_CTRL_FLAG_EXECUTE_ON_WRITE, "execute-on-write" },
+		{ V4L2_CTRL_FLAG_MODIFY_LAYOUT, "modify-layout" },
 		{ 0, NULL }
 	};
 	return flags2s(flags, def);
@@ -312,67 +313,68 @@ static void print_qctrl(int fd, struct v4l2_query_ext_ctrl *queryctrl,
 	qmenu.id = queryctrl->id;
 	switch (queryctrl->type) {
 	case V4L2_CTRL_TYPE_INTEGER:
-		printf("%31s (int)    : min=%lld max=%lld step=%lld default=%lld",
-				s.c_str(),
+		printf("%31s %#8.8x (int)    : min=%lld max=%lld step=%lld default=%lld",
+				s.c_str(), queryctrl->id,
 				queryctrl->minimum, queryctrl->maximum,
 				queryctrl->step, queryctrl->default_value);
 		break;
 	case V4L2_CTRL_TYPE_INTEGER64:
-		printf("%31s (int64)  : min=%lld max=%lld step=%lld default=%lld",
-				s.c_str(),
+		printf("%31s %#8.8x (int64)  : min=%lld max=%lld step=%lld default=%lld",
+				s.c_str(), queryctrl->id,
 				queryctrl->minimum, queryctrl->maximum,
 				queryctrl->step, queryctrl->default_value);
 		break;
 	case V4L2_CTRL_TYPE_STRING:
-		printf("%31s (str)    : min=%lld max=%lld step=%lld",
-				s.c_str(),
+		printf("%31s %#8.8x (str)    : min=%lld max=%lld step=%lld",
+				s.c_str(), queryctrl->id,
 				queryctrl->minimum, queryctrl->maximum,
 				queryctrl->step);
 		break;
 	case V4L2_CTRL_TYPE_BOOLEAN:
-		printf("%31s (bool)   : default=%lld",
-				s.c_str(), queryctrl->default_value);
+		printf("%31s %#8.8x (bool)   : default=%lld",
+				s.c_str(), queryctrl->id, queryctrl->default_value);
 		break;
 	case V4L2_CTRL_TYPE_MENU:
-		printf("%31s (menu)   : min=%lld max=%lld default=%lld",
-				s.c_str(),
+		printf("%31s %#8.8x (menu)   : min=%lld max=%lld default=%lld",
+				s.c_str(), queryctrl->id,
 				queryctrl->minimum, queryctrl->maximum,
 				queryctrl->default_value);
 		break;
 	case V4L2_CTRL_TYPE_INTEGER_MENU:
-		printf("%31s (intmenu): min=%lld max=%lld default=%lld",
-				s.c_str(),
+		printf("%31s %#8.8x (intmenu): min=%lld max=%lld default=%lld",
+				s.c_str(), queryctrl->id,
 				queryctrl->minimum, queryctrl->maximum,
 				queryctrl->default_value);
 		break;
 	case V4L2_CTRL_TYPE_BUTTON:
-		printf("%31s (button) :", s.c_str());
+		printf("%31s %#8.8x (button) :", s.c_str(), queryctrl->id);
 		break;
 	case V4L2_CTRL_TYPE_BITMASK:
-		printf("%31s (bitmask): max=0x%08llx default=0x%08llx",
-				s.c_str(), queryctrl->maximum,
+		printf("%31s %#8.8x (bitmask): max=0x%08llx default=0x%08llx",
+				s.c_str(), queryctrl->id, queryctrl->maximum,
 				queryctrl->default_value);
 		break;
 	case V4L2_CTRL_TYPE_U8:
-		printf("%31s (u8)     : min=%lld max=%lld step=%lld default=%lld",
-				s.c_str(),
+		printf("%31s %#8.8x (u8)     : min=%lld max=%lld step=%lld default=%lld",
+				s.c_str(), queryctrl->id,
 				queryctrl->minimum, queryctrl->maximum,
 				queryctrl->step, queryctrl->default_value);
 		break;
 	case V4L2_CTRL_TYPE_U16:
-		printf("%31s (u16)    : min=%lld max=%lld step=%lld default=%lld",
-				s.c_str(),
+		printf("%31s %#8.8x (u16)    : min=%lld max=%lld step=%lld default=%lld",
+				s.c_str(), queryctrl->id,
 				queryctrl->minimum, queryctrl->maximum,
 				queryctrl->step, queryctrl->default_value);
 		break;
 	case V4L2_CTRL_TYPE_U32:
-		printf("%31s (u32)    : min=%lld max=%lld step=%lld default=%lld",
-				s.c_str(),
+		printf("%31s %#8.8x (u32)    : min=%lld max=%lld step=%lld default=%lld",
+				s.c_str(), queryctrl->id,
 				queryctrl->minimum, queryctrl->maximum,
 				queryctrl->step, queryctrl->default_value);
 		break;
 	default:
-		printf("%31s (unknown): type=%x", s.c_str(), queryctrl->type);
+		printf("%31s %#8.8x (unknown): type=%x",
+				s.c_str(), queryctrl->id, queryctrl->type);
 		break;
 	}
 	if (queryctrl->nr_of_dims == 0) {
@@ -842,11 +844,13 @@ void common_set(int fd)
 				if (fill_subset(qc, subset))
 					return;
 
-				divide[qc.nr_of_dims - 1] = 1;
-				for (d = 0; d < qc.nr_of_dims - 1; d++) {
-					divide[d] = qc.dims[d + 1];
-					for (i = 0; i < d; i++)
-						divide[i] *= divide[d];
+				if (qc.nr_of_dims) {
+					divide[qc.nr_of_dims - 1] = 1;
+					for (d = 0; d < qc.nr_of_dims - 1; d++) {
+						divide[d] = qc.dims[d + 1];
+						for (i = 0; i < d; i++)
+							divide[i] *= divide[d];
+					}
 				}
 
 

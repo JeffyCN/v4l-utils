@@ -89,7 +89,7 @@ static const struct argp_option options[] = {
 	{"lna",		'w', N_("LNA (0, 1, -1)"),	0, N_("enable/disable/auto LNA power"), 0},
 	{"lnbf",	'l', N_("LNBf_type"),		0, N_("type of LNBf to use. 'help' lists the available ones"), 0},
 	{"search",	'L', N_("string"),		0, N_("search/look for a string inside the traffic"), 0},
-	{"monitor",	'm', NULL,			0, N_("monitors de DVB traffic"), 0},
+	{"monitor",	'm', NULL,			0, N_("monitors the DVB traffic"), 0},
 	{"output",	'o', N_("file"),		0, N_("output filename (use -o - for stdout)"), 0},
 	{"pat",		'p', NULL,			0, N_("add pat and pmt to TS recording (implies -r)"), 0},
 	{"all-pids",	'P', NULL,			0, N_("don't filter any pids. Instead, outputs all of them"), 0 },
@@ -226,6 +226,9 @@ static int parse(struct arguments *args,
 		}
 		parms->lnb = dvb_sat_get_lnb(lnb);
 	}
+
+	if (parms->sat_number < 0 && entry->sat_number >= 0)
+		parms->sat_number = entry->sat_number;
 
 	if (entry->video_pid) {
 		if (args->n_vpid < entry->video_pid_len)
@@ -885,10 +888,10 @@ int main(int argc, char **argv)
 	}
 
 	dvb_dev_set_log(dvb, args.verbose, NULL);
-	dvb_dev_find(dvb, NULL);
+	dvb_dev_find(dvb, NULL, NULL);
 	parms = dvb->fe_parms;
 
-	dvb_dev = dvb_dev_seek_by_sysname(dvb, args.adapter, args.demux, DVB_DEVICE_DEMUX);
+	dvb_dev = dvb_dev_seek_by_adapter(dvb, args.adapter, args.demux, DVB_DEVICE_DEMUX);
 	if (!dvb_dev) {
 		fprintf(stderr, _("Couldn't find demux device node\n"));
 		dvb_dev_free(dvb);
@@ -896,7 +899,7 @@ int main(int argc, char **argv)
 	}
 	args.demux_dev = dvb_dev->sysname;
 
-	dvb_dev = dvb_dev_seek_by_sysname(dvb, args.adapter, args.demux, DVB_DEVICE_DVR);
+	dvb_dev = dvb_dev_seek_by_adapter(dvb, args.adapter, args.demux, DVB_DEVICE_DVR);
 	if (!dvb_dev) {
 		fprintf(stderr, _("Couldn't find dvr device node\n"));
 		dvb_dev_free(dvb);
@@ -921,7 +924,7 @@ int main(int argc, char **argv)
 	}
 	fprintf(stderr, _("reading channels from file '%s'\n"), args.confname);
 
-	dvb_dev = dvb_dev_seek_by_sysname(dvb, args.adapter, args.frontend,
+	dvb_dev = dvb_dev_seek_by_adapter(dvb, args.adapter, args.frontend,
 					  DVB_DEVICE_FRONTEND);
 	if (!dvb_dev)
 		return -1;
@@ -930,7 +933,7 @@ int main(int argc, char **argv)
 		goto err;
 	if (lnb >= 0)
 		parms->lnb = dvb_sat_get_lnb(lnb);
-	if (args.sat_number > 0)
+	if (args.sat_number >= 0)
 		parms->sat_number = args.sat_number;
 	parms->diseqc_wait = args.diseqc_wait;
 	parms->freq_bpf = args.freq_bpf;

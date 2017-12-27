@@ -94,10 +94,14 @@ subdir = utils/v4l2-compliance
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/ac_define_dir.m4 \
 	$(top_srcdir)/m4/ax_prog_doxygen.m4 \
-	$(top_srcdir)/m4/ax_pthread.m4 $(top_srcdir)/m4/libtool.m4 \
-	$(top_srcdir)/m4/ltoptions.m4 $(top_srcdir)/m4/ltsugar.m4 \
-	$(top_srcdir)/m4/ltversion.m4 $(top_srcdir)/m4/lt~obsolete.m4 \
-	$(top_srcdir)/m4/mode_t.m4 $(top_srcdir)/configure.ac
+	$(top_srcdir)/m4/ax_pthread.m4 $(top_srcdir)/m4/gettext.m4 \
+	$(top_srcdir)/m4/iconv.m4 $(top_srcdir)/m4/lib-ld.m4 \
+	$(top_srcdir)/m4/lib-link.m4 $(top_srcdir)/m4/lib-prefix.m4 \
+	$(top_srcdir)/m4/libtool.m4 $(top_srcdir)/m4/ltoptions.m4 \
+	$(top_srcdir)/m4/ltsugar.m4 $(top_srcdir)/m4/ltversion.m4 \
+	$(top_srcdir)/m4/lt~obsolete.m4 $(top_srcdir)/m4/mode_t.m4 \
+	$(top_srcdir)/m4/nls.m4 $(top_srcdir)/m4/po.m4 \
+	$(top_srcdir)/m4/progtest.m4 $(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 DIST_COMMON = $(srcdir)/Makefile.am $(am__DIST_COMMON)
@@ -376,6 +380,8 @@ QT_CFLAGS = @QT_CFLAGS@
 QT_LIBS = @QT_LIBS@
 RANLIB = @RANLIB@
 RCC = @RCC@
+SDL2_CFLAGS = @SDL2_CFLAGS@
+SDL2_LIBS = @SDL2_LIBS@
 SED = @SED@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
@@ -462,7 +468,7 @@ v4l2_compliance_SOURCES = v4l2-compliance.cpp v4l2-test-debug.cpp v4l2-test-inpu
 	v4l2-test-controls.cpp v4l2-test-io-config.cpp v4l2-test-formats.cpp v4l2-test-buffers.cpp \
 	v4l2-test-codecs.cpp v4l2-test-colors.cpp v4l2-compliance.h
 
-v4l2_compliance_CPPFLAGS = -I../common
+v4l2_compliance_CPPFLAGS = -I$(top_srcdir)/utils/common
 @WITH_V4L2_COMPLIANCE_LIBV4L_FALSE@v4l2_compliance_LDADD = -lrt -lpthread
 @WITH_V4L2_COMPLIANCE_LIBV4L_TRUE@v4l2_compliance_LDADD = ../../lib/libv4l2/libv4l2.la ../../lib/libv4lconvert/libv4lconvert.la -lrt -lpthread
 EXTRA_DIST = Android.mk fixme.txt v4l2-compliance.1
@@ -986,9 +992,9 @@ uninstall-man: uninstall-man1
 v4l2-compliance.cpp: version.h
 
 version.h:
-	@if git show-ref -s HEAD >/dev/null 2>&1; then \
+	@if git -C $(srcdir) rev-parse HEAD >/dev/null 2>&1; then \
 		echo -n "#define SHA " >$@ ; \
-		git show-ref -s HEAD >>$@ ; \
+		git -C $(srcdir) rev-parse HEAD >>$@ ; \
 	else \
 		touch $@ ; \
 	fi

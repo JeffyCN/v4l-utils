@@ -90,14 +90,19 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
+@WITH_V4L_PLUGINS_TRUE@am__append_1 = v4l2-plugin.c
 subdir = lib/libv4l2
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/ac_define_dir.m4 \
 	$(top_srcdir)/m4/ax_prog_doxygen.m4 \
-	$(top_srcdir)/m4/ax_pthread.m4 $(top_srcdir)/m4/libtool.m4 \
-	$(top_srcdir)/m4/ltoptions.m4 $(top_srcdir)/m4/ltsugar.m4 \
-	$(top_srcdir)/m4/ltversion.m4 $(top_srcdir)/m4/lt~obsolete.m4 \
-	$(top_srcdir)/m4/mode_t.m4 $(top_srcdir)/configure.ac
+	$(top_srcdir)/m4/ax_pthread.m4 $(top_srcdir)/m4/gettext.m4 \
+	$(top_srcdir)/m4/iconv.m4 $(top_srcdir)/m4/lib-ld.m4 \
+	$(top_srcdir)/m4/lib-link.m4 $(top_srcdir)/m4/lib-prefix.m4 \
+	$(top_srcdir)/m4/libtool.m4 $(top_srcdir)/m4/ltoptions.m4 \
+	$(top_srcdir)/m4/ltsugar.m4 $(top_srcdir)/m4/ltversion.m4 \
+	$(top_srcdir)/m4/lt~obsolete.m4 $(top_srcdir)/m4/mode_t.m4 \
+	$(top_srcdir)/m4/nls.m4 $(top_srcdir)/m4/po.m4 \
+	$(top_srcdir)/m4/progtest.m4 $(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 DIST_COMMON = $(srcdir)/Makefile.am $(am__include_HEADERS_DIST) \
@@ -138,8 +143,11 @@ am__installdirs = "$(DESTDIR)$(libdir)" "$(DESTDIR)$(libv4l2privdir)" \
 LTLIBRARIES = $(lib_LTLIBRARIES) $(libv4l2priv_LTLIBRARIES) \
 	$(noinst_LTLIBRARIES)
 libv4l2_la_DEPENDENCIES = ../libv4lconvert/libv4lconvert.la
-am_libv4l2_la_OBJECTS = libv4l2_la-libv4l2.lo \
-	libv4l2_la-v4l2-plugin.lo libv4l2_la-log.lo
+am__libv4l2_la_SOURCES_DIST = libv4l2.c log.c libv4l2-priv.h \
+	v4l2-plugin.c
+@WITH_V4L_PLUGINS_TRUE@am__objects_1 = libv4l2_la-v4l2-plugin.lo
+am_libv4l2_la_OBJECTS = libv4l2_la-libv4l2.lo libv4l2_la-log.lo \
+	$(am__objects_1)
 libv4l2_la_OBJECTS = $(am_libv4l2_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
@@ -148,8 +156,8 @@ am__v_lt_1 =
 libv4l2_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) \
 	$(libv4l2_la_LDFLAGS) $(LDFLAGS) -o $@
-@WITH_LIBV4L_FALSE@am_libv4l2_la_rpath =
-@WITH_LIBV4L_TRUE@am_libv4l2_la_rpath = -rpath $(libdir)
+@WITH_DYN_LIBV4L_FALSE@am_libv4l2_la_rpath =
+@WITH_DYN_LIBV4L_TRUE@am_libv4l2_la_rpath = -rpath $(libdir)
 v4l2convert_la_DEPENDENCIES = libv4l2.la
 am_v4l2convert_la_OBJECTS = v4l2convert_la-v4l2convert.lo
 v4l2convert_la_OBJECTS = $(am_v4l2convert_la_OBJECTS)
@@ -157,9 +165,9 @@ v4l2convert_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 	$(v4l2convert_la_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link \
 	$(CCLD) $(AM_CFLAGS) $(CFLAGS) $(v4l2convert_la_LDFLAGS) \
 	$(LDFLAGS) -o $@
-@WITH_LIBV4L_TRUE@@WITH_V4L_WRAPPERS_TRUE@am_v4l2convert_la_rpath =  \
-@WITH_LIBV4L_TRUE@@WITH_V4L_WRAPPERS_TRUE@	-rpath \
-@WITH_LIBV4L_TRUE@@WITH_V4L_WRAPPERS_TRUE@	$(libv4l2privdir)
+@WITH_DYN_LIBV4L_TRUE@@WITH_V4L_WRAPPERS_TRUE@am_v4l2convert_la_rpath =  \
+@WITH_DYN_LIBV4L_TRUE@@WITH_V4L_WRAPPERS_TRUE@	-rpath \
+@WITH_DYN_LIBV4L_TRUE@@WITH_V4L_WRAPPERS_TRUE@	$(libv4l2privdir)
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
 am__v_P_0 = false
@@ -195,7 +203,8 @@ am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
 SOURCES = $(libv4l2_la_SOURCES) $(v4l2convert_la_SOURCES)
-DIST_SOURCES = $(libv4l2_la_SOURCES) $(v4l2convert_la_SOURCES)
+DIST_SOURCES = $(am__libv4l2_la_SOURCES_DIST) \
+	$(v4l2convert_la_SOURCES)
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -368,6 +377,8 @@ QT_CFLAGS = @QT_CFLAGS@
 QT_LIBS = @QT_LIBS@
 RANLIB = @RANLIB@
 RCC = @RCC@
+SDL2_CFLAGS = @SDL2_CFLAGS@
+SDL2_LIBS = @SDL2_LIBS@
 SED = @SED@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
@@ -449,13 +460,13 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 udevrulesdir = @udevrulesdir@
-@WITH_LIBV4L_TRUE@lib_LTLIBRARIES = libv4l2.la
-@WITH_LIBV4L_TRUE@include_HEADERS = ../include/libv4l2.h ../include/libv4l-plugin.h
-@WITH_LIBV4L_TRUE@pkgconfig_DATA = libv4l2.pc
-@WITH_LIBV4L_TRUE@LIBV4L2_VERSION = -version-info 0
-@WITH_LIBV4L_TRUE@@WITH_V4L_WRAPPERS_TRUE@libv4l2priv_LTLIBRARIES = v4l2convert.la
-@WITH_LIBV4L_FALSE@noinst_LTLIBRARIES = libv4l2.la
-libv4l2_la_SOURCES = libv4l2.c v4l2-plugin.c log.c libv4l2-priv.h
+@WITH_DYN_LIBV4L_TRUE@lib_LTLIBRARIES = libv4l2.la
+@WITH_DYN_LIBV4L_TRUE@include_HEADERS = ../include/libv4l2.h ../include/libv4l-plugin.h
+@WITH_DYN_LIBV4L_TRUE@pkgconfig_DATA = libv4l2.pc
+@WITH_DYN_LIBV4L_TRUE@LIBV4L2_VERSION = -version-info 0
+@WITH_DYN_LIBV4L_TRUE@@WITH_V4L_WRAPPERS_TRUE@libv4l2priv_LTLIBRARIES = v4l2convert.la
+@WITH_DYN_LIBV4L_FALSE@noinst_LTLIBRARIES = libv4l2.la
+libv4l2_la_SOURCES = libv4l2.c log.c libv4l2-priv.h $(am__append_1)
 libv4l2_la_CPPFLAGS = $(CFLAG_VISIBILITY) $(ENFORCE_LIBV4L_STATIC)
 libv4l2_la_LDFLAGS = $(LIBV4L2_VERSION) -lpthread $(DLOPEN_LIBS) $(ENFORCE_LIBV4L_STATIC)
 libv4l2_la_LIBADD = ../libv4lconvert/libv4lconvert.la
@@ -629,19 +640,19 @@ libv4l2_la-libv4l2.lo: libv4l2.c
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libv4l2_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o libv4l2_la-libv4l2.lo `test -f 'libv4l2.c' || echo '$(srcdir)/'`libv4l2.c
 
-libv4l2_la-v4l2-plugin.lo: v4l2-plugin.c
-@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libv4l2_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT libv4l2_la-v4l2-plugin.lo -MD -MP -MF $(DEPDIR)/libv4l2_la-v4l2-plugin.Tpo -c -o libv4l2_la-v4l2-plugin.lo `test -f 'v4l2-plugin.c' || echo '$(srcdir)/'`v4l2-plugin.c
-@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libv4l2_la-v4l2-plugin.Tpo $(DEPDIR)/libv4l2_la-v4l2-plugin.Plo
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='v4l2-plugin.c' object='libv4l2_la-v4l2-plugin.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libv4l2_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o libv4l2_la-v4l2-plugin.lo `test -f 'v4l2-plugin.c' || echo '$(srcdir)/'`v4l2-plugin.c
-
 libv4l2_la-log.lo: log.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libv4l2_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT libv4l2_la-log.lo -MD -MP -MF $(DEPDIR)/libv4l2_la-log.Tpo -c -o libv4l2_la-log.lo `test -f 'log.c' || echo '$(srcdir)/'`log.c
 @am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libv4l2_la-log.Tpo $(DEPDIR)/libv4l2_la-log.Plo
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='log.c' object='libv4l2_la-log.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libv4l2_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o libv4l2_la-log.lo `test -f 'log.c' || echo '$(srcdir)/'`log.c
+
+libv4l2_la-v4l2-plugin.lo: v4l2-plugin.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libv4l2_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT libv4l2_la-v4l2-plugin.lo -MD -MP -MF $(DEPDIR)/libv4l2_la-v4l2-plugin.Tpo -c -o libv4l2_la-v4l2-plugin.lo `test -f 'v4l2-plugin.c' || echo '$(srcdir)/'`v4l2-plugin.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libv4l2_la-v4l2-plugin.Tpo $(DEPDIR)/libv4l2_la-v4l2-plugin.Plo
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='v4l2-plugin.c' object='libv4l2_la-v4l2-plugin.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libv4l2_la_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -c -o libv4l2_la-v4l2-plugin.lo `test -f 'v4l2-plugin.c' || echo '$(srcdir)/'`v4l2-plugin.c
 
 v4l2convert_la-v4l2convert.lo: v4l2convert.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(LIBTOOL) $(AM_V_lt) --tag=CC $(v4l2convert_la_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS) -MT v4l2convert_la-v4l2convert.lo -MD -MP -MF $(DEPDIR)/v4l2convert_la-v4l2convert.Tpo -c -o v4l2convert_la-v4l2convert.lo `test -f 'v4l2convert.c' || echo '$(srcdir)/'`v4l2convert.c
@@ -817,7 +828,7 @@ distclean-generic:
 maintainer-clean-generic:
 	@echo "This command is intended for maintainers to use"
 	@echo "it deletes files that may require special tools to rebuild."
-@WITH_LIBV4L_FALSE@install-exec-hook:
+@WITH_DYN_LIBV4L_FALSE@install-exec-hook:
 @WITH_V4L_WRAPPERS_FALSE@install-exec-hook:
 clean: clean-am
 
@@ -918,9 +929,9 @@ uninstall-am: uninstall-includeHEADERS uninstall-libLTLIBRARIES \
 .PRECIOUS: Makefile
 
 
-@WITH_LIBV4L_TRUE@@WITH_V4L_WRAPPERS_TRUE@install-exec-hook:
-@WITH_LIBV4L_TRUE@@WITH_V4L_WRAPPERS_TRUE@	$(mkdir_p) $(DESTDIR)/$(libdir)
-@WITH_LIBV4L_TRUE@@WITH_V4L_WRAPPERS_TRUE@	(cd $(DESTDIR)/$(libdir) && rm -f v4l2convert.so && $(LN_S) $(libv4l2subdir)/v4l2convert.so v4l2convert.so)
+@WITH_DYN_LIBV4L_TRUE@@WITH_V4L_WRAPPERS_TRUE@install-exec-hook:
+@WITH_DYN_LIBV4L_TRUE@@WITH_V4L_WRAPPERS_TRUE@	$(mkdir_p) $(DESTDIR)/$(libdir)
+@WITH_DYN_LIBV4L_TRUE@@WITH_V4L_WRAPPERS_TRUE@	(cd $(DESTDIR)/$(libdir) && rm -f v4l2convert.so && $(LN_S) $(libv4l2subdir)/v4l2convert.so v4l2convert.so)
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

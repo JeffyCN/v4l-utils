@@ -28,6 +28,9 @@
 /* Usage of DVBv5 remote enabled */
 #undef HAVE_DVBV5_REMOTE
 
+/* Define to 1 if you have the `fork' function. */
+#undef HAVE_FORK
+
 /* Define if the GNU gettext() function is already present or preinstalled. */
 #undef HAVE_GETTEXT
 
@@ -45,6 +48,9 @@
 
 /* Use libudev */
 #undef HAVE_LIBUDEV
+
+/* whether to use libv4lconvert helpers */
+#undef HAVE_LIBV4LCONVERT_HELPERS
 
 /* Define to 1 if you have the <memory.h> header file. */
 #undef HAVE_MEMORY_H
@@ -88,6 +94,9 @@
 /* Define to 1 if you have the <unistd.h> header file. */
 #undef HAVE_UNISTD_H
 
+/* V4L plugin support enabled */
+#undef HAVE_V4L_PLUGINS
+
 /* Define to 1 or 0, depending whether the compiler supports simple visibility
    declarations. */
 #undef HAVE_VISIBILITY
@@ -124,6 +133,14 @@
 
 /* Define to the sub-directory where libtool stores uninstalled libraries. */
 #undef LT_OBJDIR
+
+/* Define to 1 if `major', `minor', and `makedev' are declared in <mkdev.h>.
+   */
+#undef MAJOR_IN_MKDEV
+
+/* Define to 1 if `major', `minor', and `makedev' are declared in
+   <sysmacros.h>. */
+#undef MAJOR_IN_SYSMACROS
 
 /* Name of package */
 #undef PACKAGE

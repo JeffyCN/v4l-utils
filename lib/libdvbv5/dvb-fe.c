@@ -28,6 +28,7 @@
 #include <stddef.h>
 #include <time.h>
 #include <unistd.h>
+#include <stdarg.h>
 
 #include <config.h>
 
@@ -35,11 +36,13 @@
 # include "gettext.h"
 # include <libintl.h>
 # define _(string) dgettext(LIBDVBV5_DOMAIN, string)
+# define P_(singular, plural, n) dngettext(LIBDVBV5_DOMAIN, singular, plural, n)
 
 static int libdvbv5_initialized = 0;
 
 #else
 # define _(string) string
+# define P_(singular, plural, n) ((n) == 1 ? (singular) : (plural))
 #endif
 
 # define N_(string) string
@@ -141,8 +144,8 @@ struct dvb_v5_fe_parms *dvb_fe_open_flags(int adapter, int frontend,
 		logfunc = dvb_default_log;
 
 	dvb = dvb_dev_alloc();
-	dvb_dev_find(dvb, 0);
-	dvb_dev = dvb_dev_seek_by_sysname(dvb, adapter, frontend,
+	dvb_dev_find(dvb, NULL, NULL);
+	dvb_dev = dvb_dev_seek_by_adapter(dvb, adapter, frontend,
 				     DVB_DEVICE_FRONTEND);
 	if (!dvb_dev) {
 		logfunc(LOG_ERR, _("adapter %d, frontend %d not found"),
@@ -151,6 +154,12 @@ struct dvb_v5_fe_parms *dvb_fe_open_flags(int adapter, int frontend,
 		return NULL;
 	}
 	fname = strdup(dvb_dev->path);
+
+	if (!strcmp(dvb_dev->bus_addr, "platform:dvbloopback")) {
+		logfunc(LOG_WARNING, _("Detected dvbloopback"));
+		flags |= O_NONBLOCK;
+	}
+
 	dvb_dev_free(dvb);
 	if (!fname) {
 		logfunc(LOG_ERR, _("fname calloc: %s"), strerror(errno));
@@ -225,7 +234,7 @@ int dvb_fe_open_fname(struct dvb_v5_fe_parms_priv *parms, char *fname,
 	dtv_prop.props = parms->dvb_prop;
 
 	/* Detect a DVBv3 device */
-	if (xioctl(fd, FE_GET_PROPERTY, &dtv_prop) == -1) {
+	if (parms->p.legacy_fe || xioctl(fd, FE_GET_PROPERTY, &dtv_prop) == -1) {
 		parms->dvb_prop[0].u.data = 0x300;
 		parms->dvb_prop[1].u.data = SYS_UNDEFINED;
 	}
@@ -310,8 +319,7 @@ int dvb_fe_open_fname(struct dvb_v5_fe_parms_priv *parms, char *fname,
 	}
 
 	if (parms->p.verbose) {
-		dvb_log(_("Supported delivery system%s: "),
-		       (parms->p.num_systems > 1) ? "s" : "");
+		dvb_log(P_("Supported delivery system: ", "Supported delivery systems: ", parms->p.num_systems));
 		for (i = 0; i < parms->p.num_systems; i++) {
 			if (parms->p.systems[i] == parms->p.current_sys)
 				dvb_log ("    [%s]",
@@ -705,8 +713,11 @@ int __dvb_fe_get_parms(struct dvb_v5_fe_parms *p)
 
 		/* copy back params from temporary fe_prop */
 		for (i = 0; i < n; i++) {
-			if (fe_prop[i].cmd == DTV_FREQUENCY)
+			if (fe_prop[i].cmd == DTV_FREQUENCY) {
 				fe_prop[i].u.data = dvb_sat_real_freq(p, fe_prop[i].u.data);
+				if (!fe_prop[i].u.data)
+					return -EINVAL;
+			}
 			dvb_fe_store_parm(&parms->p, fe_prop[i].cmd, fe_prop[i].u.data);
 		}
 
@@ -1894,4 +1905,11 @@ int dvb_fe_set_default_country(struct dvb_v5_fe_parms *p, const char *cc)
 
 	parms->country = dvb_country_a2_to_id(cc);
 	return (parms->country == COUNTRY_UNKNOWN) ? -EINVAL : 0;
+}
+
+dvb_logfunc_priv dvb_get_log_priv(struct dvb_v5_fe_parms *p, void **priv)
+{
+	struct dvb_v5_fe_parms_priv *parms = (void *)p;
+	*priv = parms->logpriv;
+	return parms->logfunc_priv;
 }

@@ -93,10 +93,14 @@ subdir = utils/cec-compliance
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/ac_define_dir.m4 \
 	$(top_srcdir)/m4/ax_prog_doxygen.m4 \
-	$(top_srcdir)/m4/ax_pthread.m4 $(top_srcdir)/m4/libtool.m4 \
-	$(top_srcdir)/m4/ltoptions.m4 $(top_srcdir)/m4/ltsugar.m4 \
-	$(top_srcdir)/m4/ltversion.m4 $(top_srcdir)/m4/lt~obsolete.m4 \
-	$(top_srcdir)/m4/mode_t.m4 $(top_srcdir)/configure.ac
+	$(top_srcdir)/m4/ax_pthread.m4 $(top_srcdir)/m4/gettext.m4 \
+	$(top_srcdir)/m4/iconv.m4 $(top_srcdir)/m4/lib-ld.m4 \
+	$(top_srcdir)/m4/lib-link.m4 $(top_srcdir)/m4/lib-prefix.m4 \
+	$(top_srcdir)/m4/libtool.m4 $(top_srcdir)/m4/ltoptions.m4 \
+	$(top_srcdir)/m4/ltsugar.m4 $(top_srcdir)/m4/ltversion.m4 \
+	$(top_srcdir)/m4/lt~obsolete.m4 $(top_srcdir)/m4/mode_t.m4 \
+	$(top_srcdir)/m4/nls.m4 $(top_srcdir)/m4/po.m4 \
+	$(top_srcdir)/m4/progtest.m4 $(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 DIST_COMMON = $(srcdir)/Makefile.am $(am__DIST_COMMON)
@@ -106,9 +110,12 @@ CONFIG_CLEAN_FILES = cec-compliance.1
 CONFIG_CLEAN_VPATH_FILES =
 am__installdirs = "$(DESTDIR)$(bindir)" "$(DESTDIR)$(man1dir)"
 PROGRAMS = $(bin_PROGRAMS)
-am_cec_compliance_OBJECTS = cec-compliance.$(OBJEXT) \
-	cec-test.$(OBJEXT) cec-test-adapter.$(OBJEXT) \
-	cec-test-audio.$(OBJEXT) cec-test-power.$(OBJEXT)
+am_cec_compliance_OBJECTS = cec_compliance-cec-compliance.$(OBJEXT) \
+	cec_compliance-cec-test.$(OBJEXT) \
+	cec_compliance-cec-test-adapter.$(OBJEXT) \
+	cec_compliance-cec-test-audio.$(OBJEXT) \
+	cec_compliance-cec-test-power.$(OBJEXT) \
+	cec_compliance-cec-common.$(OBJEXT)
 cec_compliance_OBJECTS = $(am_cec_compliance_OBJECTS)
 cec_compliance_LDADD = $(LDADD)
 AM_V_lt = $(am__v_lt_@AM_V@)
@@ -371,6 +378,8 @@ QT_CFLAGS = @QT_CFLAGS@
 QT_LIBS = @QT_LIBS@
 RANLIB = @RANLIB@
 RCC = @RCC@
+SDL2_CFLAGS = @SDL2_CFLAGS@
+SDL2_LIBS = @SDL2_LIBS@
 SED = @SED@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
@@ -453,7 +462,8 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 udevrulesdir = @udevrulesdir@
 man_MANS = cec-compliance.1
-cec_compliance_SOURCES = cec-compliance.cpp cec-compliance.h cec-test.cpp cec-test-adapter.cpp cec-test-audio.cpp cec-test-power.cpp
+cec_compliance_SOURCES = cec-compliance.cpp cec-compliance.h cec-test.cpp cec-test-adapter.cpp cec-test-audio.cpp cec-test-power.cpp cec-common.cpp
+cec_compliance_CPPFLAGS = -I$(top_srcdir)/utils/common
 cec_compliance_LDFLAGS = -lrt
 EXTRA_DIST = cec-compliance.1
 all: all-am
@@ -551,11 +561,12 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cec-compliance.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cec-test-adapter.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cec-test-audio.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cec-test-power.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cec-test.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cec_compliance-cec-common.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cec_compliance-cec-compliance.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cec_compliance-cec-test-adapter.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cec_compliance-cec-test-audio.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cec_compliance-cec-test-power.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/cec_compliance-cec-test.Po@am__quote@
 
 .cpp.o:
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)depbase=`echo $@ | sed 's|[^/]*$$|$(DEPDIR)/&|;s|\.o$$||'`;\
@@ -580,6 +591,90 @@ distclean-compile:
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='$<' object='$@' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LTCXXCOMPILE) -c -o $@ $<
+
+cec_compliance-cec-compliance.o: cec-compliance.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(cec_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT cec_compliance-cec-compliance.o -MD -MP -MF $(DEPDIR)/cec_compliance-cec-compliance.Tpo -c -o cec_compliance-cec-compliance.o `test -f 'cec-compliance.cpp' || echo '$(srcdir)/'`cec-compliance.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/cec_compliance-cec-compliance.Tpo $(DEPDIR)/cec_compliance-cec-compliance.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='cec-compliance.cpp' object='cec_compliance-cec-compliance.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(cec_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o cec_compliance-cec-compliance.o `test -f 'cec-compliance.cpp' || echo '$(srcdir)/'`cec-compliance.cpp
+
+cec_compliance-cec-compliance.obj: cec-compliance.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(cec_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT cec_compliance-cec-compliance.obj -MD -MP -MF $(DEPDIR)/cec_compliance-cec-compliance.Tpo -c -o cec_compliance-cec-compliance.obj `if test -f 'cec-compliance.cpp'; then $(CYGPATH_W) 'cec-compliance.cpp'; else $(CYGPATH_W) '$(srcdir)/cec-compliance.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/cec_compliance-cec-compliance.Tpo $(DEPDIR)/cec_compliance-cec-compliance.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='cec-compliance.cpp' object='cec_compliance-cec-compliance.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(cec_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o cec_compliance-cec-compliance.obj `if test -f 'cec-compliance.cpp'; then $(CYGPATH_W) 'cec-compliance.cpp'; else $(CYGPATH_W) '$(srcdir)/cec-compliance.cpp'; fi`
+
+cec_compliance-cec-test.o: cec-test.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(cec_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT cec_compliance-cec-test.o -MD -MP -MF $(DEPDIR)/cec_compliance-cec-test.Tpo -c -o cec_compliance-cec-test.o `test -f 'cec-test.cpp' || echo '$(srcdir)/'`cec-test.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/cec_compliance-cec-test.Tpo $(DEPDIR)/cec_compliance-cec-test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='cec-test.cpp' object='cec_compliance-cec-test.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(cec_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o cec_compliance-cec-test.o `test -f 'cec-test.cpp' || echo '$(srcdir)/'`cec-test.cpp
+
+cec_compliance-cec-test.obj: cec-test.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(cec_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT cec_compliance-cec-test.obj -MD -MP -MF $(DEPDIR)/cec_compliance-cec-test.Tpo -c -o cec_compliance-cec-test.obj `if test -f 'cec-test.cpp'; then $(CYGPATH_W) 'cec-test.cpp'; else $(CYGPATH_W) '$(srcdir)/cec-test.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/cec_compliance-cec-test.Tpo $(DEPDIR)/cec_compliance-cec-test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='cec-test.cpp' object='cec_compliance-cec-test.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(cec_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o cec_compliance-cec-test.obj `if test -f 'cec-test.cpp'; then $(CYGPATH_W) 'cec-test.cpp'; else $(CYGPATH_W) '$(srcdir)/cec-test.cpp'; fi`
+
+cec_compliance-cec-test-adapter.o: cec-test-adapter.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(cec_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT cec_compliance-cec-test-adapter.o -MD -MP -MF $(DEPDIR)/cec_compliance-cec-test-adapter.Tpo -c -o cec_compliance-cec-test-adapter.o `test -f 'cec-test-adapter.cpp' || echo '$(srcdir)/'`cec-test-adapter.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/cec_compliance-cec-test-adapter.Tpo $(DEPDIR)/cec_compliance-cec-test-adapter.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='cec-test-adapter.cpp' object='cec_compliance-cec-test-adapter.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(cec_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o cec_compliance-cec-test-adapter.o `test -f 'cec-test-adapter.cpp' || echo '$(srcdir)/'`cec-test-adapter.cpp
+
+cec_compliance-cec-test-adapter.obj: cec-test-adapter.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(cec_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT cec_compliance-cec-test-adapter.obj -MD -MP -MF $(DEPDIR)/cec_compliance-cec-test-adapter.Tpo -c -o cec_compliance-cec-test-adapter.obj `if test -f 'cec-test-adapter.cpp'; then $(CYGPATH_W) 'cec-test-adapter.cpp'; else $(CYGPATH_W) '$(srcdir)/cec-test-adapter.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/cec_compliance-cec-test-adapter.Tpo $(DEPDIR)/cec_compliance-cec-test-adapter.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='cec-test-adapter.cpp' object='cec_compliance-cec-test-adapter.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(cec_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o cec_compliance-cec-test-adapter.obj `if test -f 'cec-test-adapter.cpp'; then $(CYGPATH_W) 'cec-test-adapter.cpp'; else $(CYGPATH_W) '$(srcdir)/cec-test-adapter.cpp'; fi`
+
+cec_compliance-cec-test-audio.o: cec-test-audio.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(cec_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT cec_compliance-cec-test-audio.o -MD -MP -MF $(DEPDIR)/cec_compliance-cec-test-audio.Tpo -c -o cec_compliance-cec-test-audio.o `test -f 'cec-test-audio.cpp' || echo '$(srcdir)/'`cec-test-audio.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/cec_compliance-cec-test-audio.Tpo $(DEPDIR)/cec_compliance-cec-test-audio.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='cec-test-audio.cpp' object='cec_compliance-cec-test-audio.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(cec_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o cec_compliance-cec-test-audio.o `test -f 'cec-test-audio.cpp' || echo '$(srcdir)/'`cec-test-audio.cpp
+
+cec_compliance-cec-test-audio.obj: cec-test-audio.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(cec_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT cec_compliance-cec-test-audio.obj -MD -MP -MF $(DEPDIR)/cec_compliance-cec-test-audio.Tpo -c -o cec_compliance-cec-test-audio.obj `if test -f 'cec-test-audio.cpp'; then $(CYGPATH_W) 'cec-test-audio.cpp'; else $(CYGPATH_W) '$(srcdir)/cec-test-audio.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/cec_compliance-cec-test-audio.Tpo $(DEPDIR)/cec_compliance-cec-test-audio.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='cec-test-audio.cpp' object='cec_compliance-cec-test-audio.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(cec_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o cec_compliance-cec-test-audio.obj `if test -f 'cec-test-audio.cpp'; then $(CYGPATH_W) 'cec-test-audio.cpp'; else $(CYGPATH_W) '$(srcdir)/cec-test-audio.cpp'; fi`
+
+cec_compliance-cec-test-power.o: cec-test-power.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(cec_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT cec_compliance-cec-test-power.o -MD -MP -MF $(DEPDIR)/cec_compliance-cec-test-power.Tpo -c -o cec_compliance-cec-test-power.o `test -f 'cec-test-power.cpp' || echo '$(srcdir)/'`cec-test-power.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/cec_compliance-cec-test-power.Tpo $(DEPDIR)/cec_compliance-cec-test-power.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='cec-test-power.cpp' object='cec_compliance-cec-test-power.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(cec_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o cec_compliance-cec-test-power.o `test -f 'cec-test-power.cpp' || echo '$(srcdir)/'`cec-test-power.cpp
+
+cec_compliance-cec-test-power.obj: cec-test-power.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(cec_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT cec_compliance-cec-test-power.obj -MD -MP -MF $(DEPDIR)/cec_compliance-cec-test-power.Tpo -c -o cec_compliance-cec-test-power.obj `if test -f 'cec-test-power.cpp'; then $(CYGPATH_W) 'cec-test-power.cpp'; else $(CYGPATH_W) '$(srcdir)/cec-test-power.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/cec_compliance-cec-test-power.Tpo $(DEPDIR)/cec_compliance-cec-test-power.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='cec-test-power.cpp' object='cec_compliance-cec-test-power.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(cec_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o cec_compliance-cec-test-power.obj `if test -f 'cec-test-power.cpp'; then $(CYGPATH_W) 'cec-test-power.cpp'; else $(CYGPATH_W) '$(srcdir)/cec-test-power.cpp'; fi`
+
+cec_compliance-cec-common.o: cec-common.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(cec_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT cec_compliance-cec-common.o -MD -MP -MF $(DEPDIR)/cec_compliance-cec-common.Tpo -c -o cec_compliance-cec-common.o `test -f 'cec-common.cpp' || echo '$(srcdir)/'`cec-common.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/cec_compliance-cec-common.Tpo $(DEPDIR)/cec_compliance-cec-common.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='cec-common.cpp' object='cec_compliance-cec-common.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(cec_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o cec_compliance-cec-common.o `test -f 'cec-common.cpp' || echo '$(srcdir)/'`cec-common.cpp
+
+cec_compliance-cec-common.obj: cec-common.cpp
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(cec_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT cec_compliance-cec-common.obj -MD -MP -MF $(DEPDIR)/cec_compliance-cec-common.Tpo -c -o cec_compliance-cec-common.obj `if test -f 'cec-common.cpp'; then $(CYGPATH_W) 'cec-common.cpp'; else $(CYGPATH_W) '$(srcdir)/cec-common.cpp'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/cec_compliance-cec-common.Tpo $(DEPDIR)/cec_compliance-cec-common.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='cec-common.cpp' object='cec_compliance-cec-common.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(cec_compliance_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o cec_compliance-cec-common.obj `if test -f 'cec-common.cpp'; then $(CYGPATH_W) 'cec-common.cpp'; else $(CYGPATH_W) '$(srcdir)/cec-common.cpp'; fi`
 
 mostlyclean-libtool:
 	-rm -f *.lo
@@ -845,15 +940,19 @@ uninstall-man: uninstall-man1
 
 cec-compliance.cpp: cec-table.h
 
-cec-table.h: ../cec-ctl/msg2ctl.pl ../../include/linux/cec.h ../../include/linux/cec-funcs.h
-	../cec-ctl/msg2ctl.pl 2 ../../include/linux/cec.h ../../include/linux/cec-funcs.h >$@
+cec-table.h: $(top_srcdir)/utils/cec-ctl/msg2ctl.pl $(top_srcdir)/include/linux/cec.h \
+		$(top_srcdir)/utils/common/cec-htng.h $(top_srcdir)/include/linux/cec-funcs.h \
+		$(top_srcdir)/utils/common/cec-htng-funcs.h
+	$(top_srcdir)/utils/cec-ctl/msg2ctl.pl 2 $(top_srcdir)/include/linux/cec.h \
+		$(top_srcdir)/utils/common/cec-htng.h $(top_srcdir)/include/linux/cec-funcs.h \
+		$(top_srcdir)/utils/common/cec-htng-funcs.h >$@
 
 cec-compliance.cpp: version.h
 
 version.h:
-	@if git show-ref -s HEAD >/dev/null 2>&1; then \
+	@if git -C $(srcdir) rev-parse HEAD >/dev/null 2>&1; then \
 		echo -n "#define SHA " >$@ ; \
-		git show-ref -s HEAD >>$@ ; \
+		git -C $(srcdir) rev-parse HEAD >>$@ ; \
 	else \
 		touch $@ ; \
 	fi

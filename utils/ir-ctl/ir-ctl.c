@@ -1,5 +1,5 @@
 /*
- *  ir-ctl.c - Program to send and record IR using lirc interface
+ *  ir-ctl.c - Program to send and receive IR using lirc interface
  *
  *  Copyright (C) 2016 Sean Young <sean@mess.org>
  *
@@ -27,9 +27,9 @@
 
 #include <config.h>
 
-#include "ir-encode.h"
-
 #include <linux/lirc.h>
+
+#include "ir-encode.h"
 
 #ifdef ENABLE_NLS
 # define _(string) gettext(string)
@@ -44,6 +44,14 @@
 
 # define N_(string) string
 
+/* taken from glibc unistd.h */
+#ifndef TEMP_FAILURE_RETRY
+#define TEMP_FAILURE_RETRY(expression) \
+    ({ long int __result;                                                     \
+       do __result = (long int) (expression);                                 \
+       while (__result == -1L && errno == EINTR);                             \
+       __result; })
+#endif
 
 /* See drivers/media/rc/ir-lirc-codec.c line 23 */
 #define LIRCBUF_SIZE	512
@@ -58,15 +66,24 @@ const char *argp_program_bug_address = "Sean Young <sean@mess.org>";
 struct file {
 	struct file *next;
 	const char *fname;
-	unsigned carrier;
-	unsigned len;
-	unsigned buf[LIRCBUF_SIZE];
+	bool is_scancode;
+	union {
+		struct {
+			unsigned carrier;
+			unsigned len;
+			unsigned buf[LIRCBUF_SIZE];
+		};
+		struct {
+			unsigned scancode;
+			unsigned protocol;
+		};
+	};
 };
 
 struct arguments {
 	char *device;
 	bool features;
-	bool record;
+	bool receive;
 	bool verbose;
 	struct file *send;
 	bool oneshot;
@@ -74,8 +91,8 @@ struct arguments {
 	int wideband;
 	unsigned carrier_low, carrier_high;
 	unsigned timeout;
+	unsigned gap;
 	int carrier_reports;
-	int timeout_reports;
 	unsigned carrier;
 	unsigned duty;
 	unsigned emitters;
@@ -85,36 +102,35 @@ struct arguments {
 static const struct argp_option options[] = {
 	{ "device",	'd',	N_("DEV"),	0,	N_("lirc device to use") },
 	{ "features",	'f',	0,		0,	N_("list lirc device features") },
-	{ "record",	'r',	N_("FILE"),	OPTION_ARG_OPTIONAL,	N_("record IR to stdout or file") },
+	{ "receive",	'r',	N_("FILE"),	OPTION_ARG_OPTIONAL,	N_("receive IR to stdout or file") },
 	{ "send",	's',	N_("FILE"),	0,	N_("send IR pulse and space file") },
 	{ "scancode", 'S',	N_("SCANCODE"),	0,	N_("send IR scancode in protocol specified") },
 	{ "verbose",	'v',	0,		0,	N_("verbose output") },
-		{ .doc = N_("Recording options:") },
-	{ "one-shot",	'1',	0,		0,	N_("end recording after first message") },
+		{ .doc = N_("Receiving options:") },
+	{ "one-shot",	'1',	0,		0,	N_("end receiving after first message") },
 	{ "wideband",	'w',	0,		0,	N_("use wideband receiver aka learning mode") },
 	{ "no-wideband",'n',	0,		0,	N_("use normal narrowband receiver, disable learning mode") },
 	{ "carrier-range", 'R', N_("RANGE"),	0,	N_("set receiver carrier range") },
 	{ "measure-carrier", 'm', 0,		0,	N_("report carrier frequency") },
 	{ "no-measure-carrier", 'M', 0,		0,	N_("disable reporting carrier frequency") },
-	{ "timeout-reports", 'p', 0,		0,	N_("report when a timeout occurs") },
-	{ "no-timeout-reports", 'P', 0,		0,	N_("disable reporting when a timeout occurs") },
-	{ "timeout",	't',	N_("TIMEOUT"),	0,	N_("set recording timeout") },
+	{ "timeout",	't',	N_("TIMEOUT"),	0,	N_("set receiving timeout") },
 		{ .doc = N_("Sending options:") },
 	{ "carrier",	'c',	N_("CARRIER"),	0,	N_("set send carrier") },
 	{ "duty-cycle",	'D',	N_("DUTY"),	0,	N_("set duty cycle") },
 	{ "emitters",	'e',	N_("EMITTERS"),	0,	N_("set send emitters") },
+	{ "gap",	'g',	N_("GAP"),	0,	N_("set gap between files or scancodes") },
 	{ }
 };
 
 static const char args_doc[] = N_(
 	"--features\n"
-	"--record [save to file]\n"
+	"--receive [save to file]\n"
 	"--send [file to send]\n"
 	"--scancode [scancode to send]\n"
 	"[to set lirc option]");
 
 static const char doc[] = N_(
-	"\nRecord IR, send IR and list features of lirc device\n"
+	"\nReceive IR, send IR and list features of lirc device\n"
 	"You will need permission on /dev/lirc for the program to work\n"
 	"\nOn the options below, the arguments are:\n"
 	"  DEV	    - the /dev/lirc* device to use\n"
@@ -122,8 +138,9 @@ static const char doc[] = N_(
 	"  CARRIER  - the carrier frequency to use for sending\n"
 	"  DUTY     - the duty cycle to use for sending\n"
 	"  EMITTERS - comma separated list of emitters to use for sending, e.g. 1,2\n"
+	"  GAP      - gap between pulse and files or scancodes in microseconds\n"
 	"  RANGE    - set range of accepted carrier frequencies, e.g. 20000-40000\n"
-	"  TIMEOUT  - set length of space before recording stops in microseconds\n"
+	"  TIMEOUT  - set length of space before receiving stops in microseconds\n"
 	"  SCANCODE - protocol:scancode, e.g. nec:0xa814\n\n"
 	"Note that most lirc setting have global state, i.e. the device will remain\n"
 	"in this state until set otherwise.");
@@ -144,7 +161,7 @@ static int strtoint(const char *p, const char *unit)
 static bool strtoscancode(const char *p, unsigned *ret)
 {
 	char *end;
-	long arg = strtol(p, &end, 0);
+	long long arg = strtoll(p, &end, 0);
 	if (end == NULL || end[0] != 0)
 		return false;
 
@@ -177,7 +194,7 @@ static unsigned parse_emitters(char *p)
 	return emit;
 }
 
-static struct file *read_file(const char *fname)
+static struct file *read_file(struct arguments *args, const char *fname)
 {
 	bool expect_pulse = true;
 	int lineno = 0, lastspace = 0;
@@ -198,6 +215,7 @@ static struct file *read_file(const char *fname)
 		fprintf(stderr, _("Failed to allocate memory\n"));
 		return NULL;
 	}
+	f->is_scancode = false;
 	f->carrier = 0;
 	f->fname = fname;
 
@@ -222,8 +240,8 @@ static struct file *read_file(const char *fname)
 			char *scancodestr;
 
 			if (!expect_pulse) {
-				fprintf(stderr, _("error: %s:%d: space must precede scancode\n"), fname, lineno);
-				return NULL;
+				f->buf[len++] = args->gap;
+				expect_pulse = true;
 			}
 
 			scancodestr = strchr(p, ':');
@@ -244,6 +262,11 @@ static struct file *read_file(const char *fname)
 				return NULL;
 			}
 
+			if (!protocol_encoder_available(proto)) {
+				fprintf(stderr, _("error: %s:%d: no encoder available for `%s'\n"), fname, lineno, protocol_name(proto));
+				return NULL;
+			}
+
 			if (!protocol_scancode_valid(proto, scancode)) {
 				fprintf(stderr, _("error: %s:%d: invalid scancode '%s' for protocol '%s'\n"), fname, lineno, scancodestr, protocol_name(proto));
 				return NULL;
@@ -260,7 +283,8 @@ static struct file *read_file(const char *fname)
 			else
 				f->carrier = carrier;
 
-			len += protocol_encode(proto, scancode, f->buf);
+			len += protocol_encode(proto, scancode, f->buf + len);
+			expect_pulse = false;
 			continue;
 		}
 
@@ -340,16 +364,18 @@ static struct file *read_scancode(const char *name)
 	char *p = strchr(name, ':');
 
 	if (!p) {
-		fprintf(stderr, _("error: scancode '%s' most be in protocol:scancode format\n"), name);
+		fprintf(stderr, _("error: scancode '%s' must be in protocol:scancode format\n"), name);
 		return NULL;
 	}
 
-	pstr = strndupa(name, p - name);
+	pstr = strndup(name, p - name);
 
 	if (!protocol_match(pstr, &proto)) {
 		fprintf(stderr, _("error: protocol '%s' not found\n"), pstr);
+		free(pstr);
 		return NULL;
 	}
+	free(pstr);
 
 	if (!strtoscancode(p + 1, &scancode)) {
 		fprintf(stderr, _("error: invalid scancode '%s'\n"), p + 1);
@@ -367,9 +393,9 @@ static struct file *read_scancode(const char *name)
 		return NULL;
 	}
 
-	f->carrier = protocol_carrier(proto);
-	f->fname = name;
-	f->len = protocol_encode(proto, scancode, f->buf);
+	f->is_scancode = true;
+	f->scancode = scancode;
+	f->protocol = proto;
 
 	return f;
 }
@@ -381,19 +407,19 @@ static error_t parse_opt(int k, char *arg, struct argp_state *state)
 
 	switch (k) {
 	case 'f':
-		if (arguments->record || arguments->send)
-			argp_error(state, _("features can not be combined with record or send option"));
+		if (arguments->receive || arguments->send)
+			argp_error(state, _("features can not be combined with receive or send option"));
 		arguments->features = true;
 		break;
-	// recording
+	// receiving
 	case 'r':
 		if (arguments->features || arguments->send)
-			argp_error(state, _("record can not be combined with features or send option"));
+			argp_error(state, _("receive can not be combined with features or send option"));
 
-		arguments->record = true;
+		arguments->receive = true;
 		if (arg) {
 			if (arguments->savetofile)
-				argp_error(state, _("record filename already set"));
+				argp_error(state, _("receive filename already set"));
 
 			arguments->savetofile = arg;
 		}
@@ -415,18 +441,6 @@ static error_t parse_opt(int k, char *arg, struct argp_state *state)
 			argp_error(state, _("cannot enable and disable carrier reports"));
 
 		arguments->carrier_reports = 2;
-		break;
-	case 'p':
-		if (arguments->timeout_reports == 2)
-			argp_error(state, _("cannot enable and disable timeout reports"));
-
-		arguments->timeout_reports = 1;
-		break;
-	case 'P':
-		if (arguments->timeout_reports == 1)
-			argp_error(state, _("cannot enable and disable timeout reports"));
-
-		arguments->timeout_reports = 2;
 		break;
 	case 'n':
 		if (arguments->wideband)
@@ -475,15 +489,20 @@ static error_t parse_opt(int k, char *arg, struct argp_state *state)
 		if (arguments->emitters == 0)
 			argp_error(state, _("cannot parse emitters `%s'"), arg);
 		break;
+	case 'g':
+		arguments->gap = strtoint(arg, "");
+		if (arguments->gap == 0)
+			argp_error(state, _("cannot parse gap `%s'"), arg);
+		break;
 	case 'D':
 		arguments->duty = strtoint(arg, "%");
 		if (arguments->duty == 0 || arguments->duty >= 100)
 			argp_error(state, _("invalid duty cycle `%s'"), arg);
 		break;
 	case 's':
-		if (arguments->record || arguments->features)
-			argp_error(state, _("send can not be combined with record or features option"));
-		s = read_file(arg);
+		if (arguments->receive || arguments->features)
+			argp_error(state, _("send can not be combined with receive or features option"));
+		s = read_file(arguments, arg);
 		if (s == NULL)
 			exit(EX_DATAERR);
 
@@ -497,8 +516,8 @@ static error_t parse_opt(int k, char *arg, struct argp_state *state)
 		}
 		break;
 	case 'S':
-		if (arguments->record || arguments->features)
-			argp_error(state, _("send can not be combined with record or features option"));
+		if (arguments->receive || arguments->features)
+			argp_error(state, _("send can not be combined with receive or features option"));
 		s = read_scancode(arg);
 		if (s == NULL)
 			exit(EX_DATAERR);
@@ -590,7 +609,7 @@ static int lirc_options(struct arguments *args, int fd, unsigned features)
 		if (features & LIRC_CAN_SET_REC_TIMEOUT) {
 			rc = ioctl(fd, LIRC_SET_REC_TIMEOUT, &args->timeout);
 			if (rc)
-				fprintf(stderr, _("%s: failed to set recording timeout\n"), dev);
+				fprintf(stderr, _("%s: failed to set receiving timeout\n"), dev);
 		} else
 			fprintf(stderr, _("%s: device does not support setting timeout\n"), dev);
 	}
@@ -615,11 +634,11 @@ static int lirc_options(struct arguments *args, int fd, unsigned features)
 			fprintf(stderr, _("%s: device cannot measure carrier\n"), dev);
 	}
 
-	if (args->timeout_reports) {
-		unsigned on = args->timeout_reports == 1;
+	if (features & LIRC_CAN_REC_MODE2) {
+		unsigned on = 1;
 		rc = ioctl(fd, LIRC_SET_REC_TIMEOUT_REPORTS, &on);
 		if (rc)
-			fprintf(stderr, _("%s: failed to set timeout reports %s: %m\n"), dev, on ? _("on") : _("off"));
+			fprintf(stderr, _("%s: failed to enable timeout reports: %m\n"), dev);
 	}
 
 	if (args->carrier_low) {
@@ -675,11 +694,16 @@ static void lirc_features(struct arguments *args, int fd, unsigned features)
 			fprintf(stderr, _("warning: %s: unexpected error while retrieving resolution: %m\n"), dev);
 	}
 
+	bool can_receive = false;
 	printf(_("Receive features %s:\n"), dev);
+	if (features & LIRC_CAN_REC_SCANCODE) {
+		printf(_(" - Device can receive scancodes\n"));
+		can_receive = true;
+	}
 	if (features & LIRC_CAN_REC_MODE2) {
 		printf(_(" - Device can receive raw IR\n"));
 		if (resolution)
-			printf(_(" - Resolution %u nanoseconds\n"), resolution);
+			printf(_(" - Resolution %u microseconds\n"), resolution);
 		if (features & LIRC_CAN_SET_REC_CARRIER)
 			printf(_(" - Set receive carrier\n"));
 		if (features & LIRC_CAN_USE_WIDEBAND_RECEIVER)
@@ -690,26 +714,37 @@ static void lirc_features(struct arguments *args, int fd, unsigned features)
 			unsigned min_timeout, max_timeout;
 			int rc = ioctl(fd, LIRC_GET_MIN_TIMEOUT, &min_timeout);
 			if (rc) {
-				fprintf(stderr, _("warning: %s: device supports setting recording timeout but LIRC_GET_MIN_TIMEOUT returns: %m\n"), dev);
+				fprintf(stderr, _("warning: %s: device supports setting receiving timeout but LIRC_GET_MIN_TIMEOUT returns: %m\n"), dev);
 				min_timeout = 0;
 			} else if (min_timeout == 0)
-				fprintf(stderr, _("warning: %s: device supports setting recording timeout but min timeout is 0\n"), dev);
+				fprintf(stderr, _("warning: %s: device supports setting receiving timeout but min timeout is 0\n"), dev);
 			rc = ioctl(fd, LIRC_GET_MAX_TIMEOUT, &max_timeout);
 			if (rc) {
-				fprintf(stderr, _("warning: %s: device supports setting recording timeout but LIRC_GET_MAX_TIMEOUT returns: %m\n"), dev);
+				fprintf(stderr, _("warning: %s: device supports setting receiving timeout but LIRC_GET_MAX_TIMEOUT returns: %m\n"), dev);
 				max_timeout = 0;
 			} else if (max_timeout == 0) {
-				fprintf(stderr, _("warning: %s: device supports setting recording timeout but max timeout is 0\n"), dev);
+				fprintf(stderr, _("warning: %s: device supports setting receiving timeout but max timeout is 0\n"), dev);
 			}
 
 			if (min_timeout || max_timeout)
-				printf(_(" - Can set recording timeout min:%u microseconds max:%u microseconds\n"), min_timeout, max_timeout);
+				printf(_(" - Can set receiving timeout min:%u microseconds max:%u microseconds\n"), min_timeout, max_timeout);
 		}
-	} else {
-		printf(_(" - Device cannot receive\n"));
+		can_receive = true;
+	}
+	if (features & LIRC_CAN_REC_LIRCCODE) {
+		printf(_(" - Device can receive using device dependent LIRCCODE mode (not supported)\n"));
+		can_receive = true;
 	}
 
+	if (!can_receive)
+		printf(_(" - Device cannot receive\n"));
+
+	bool can_send = false;
 	printf(_("Send features %s:\n"), dev);
+	if (features & LIRC_CAN_SEND_SCANCODE) {
+		printf(_(" - Device can send scancodes\n"));
+		can_send = true;
+	}
 	if (features & LIRC_CAN_SEND_PULSE) {
 		printf(_(" - Device can send raw IR\n"));
 		if (features & LIRC_CAN_SET_SEND_CARRIER)
@@ -726,24 +761,60 @@ static void lirc_features(struct arguments *args, int fd, unsigned features)
 			else
 				printf(_(" - Set transmitter (%d available)\n"), rc);
 		}
-	} else {
-		printf(_(" - Device cannot send\n"));
+		can_send = true;
 	}
+	if (features & LIRC_CAN_SEND_LIRCCODE) {
+		printf(_(" - Device can send using device dependent LIRCCODE mode (not supported)\n"));
+		can_send = true;
+	}
+
+	if (!can_send)
+		printf(_(" - Device cannot send\n"));
 }
 
 static int lirc_send(struct arguments *args, int fd, unsigned features, struct file *f)
 {
 	const char *dev = args->device;
-	int mode = LIRC_MODE_PULSE;
+	int rc, mode;
+	ssize_t ret;
+
+	if (f->is_scancode && (features & LIRC_CAN_SEND_SCANCODE)) {
+		mode = LIRC_MODE_SCANCODE;
+		rc = ioctl(fd, LIRC_SET_SEND_MODE, &mode);
+		if (rc == 0) {
+			struct lirc_scancode sc = {
+				.scancode = f->scancode,
+				.rc_proto = f->protocol,
+				.flags = 0
+			};
+			ret = TEMP_FAILURE_RETRY(write(fd, &sc, sizeof sc));
+			if (ret > 0)
+				return 0;
+		}
+	}
 
 	if (!(features & LIRC_CAN_SEND_PULSE)) {
 		fprintf(stderr, _("%s: device cannot send raw ir\n"), dev);
 		return EX_UNAVAILABLE;
 	}
 
-	if (ioctl(fd, LIRC_SET_SEND_MODE, &mode)) {
-		fprintf(stderr, _("%s: failed to set send mode: %m\n"), dev);
-		return EX_IOERR;
+	mode = LIRC_MODE_PULSE;
+	rc = ioctl(fd, LIRC_SET_SEND_MODE, &mode);
+	if (rc) {
+		fprintf(stderr, _("%s: cannot set send mode\n"), dev);
+		return EX_UNAVAILABLE;
+	}
+
+	if (f->is_scancode) {
+		// encode scancode
+		enum rc_proto proto = f->protocol;
+		if (!protocol_encoder_available(proto)) {
+			fprintf(stderr, _("%s: no encoder available for `%s'\n"),
+				dev, protocol_name(proto));
+			return EX_UNAVAILABLE;
+		}
+		f->len = protocol_encode(f->protocol, f->scancode, f->buf);
+		f->carrier = protocol_carrier(proto);
 	}
 
 	if (args->carrier && f->carrier)
@@ -758,7 +829,7 @@ static int lirc_send(struct arguments *args, int fd, unsigned features, struct f
 		for (i=0; i<f->len; i++)
 			printf("%s %u\n", i & 1 ? "space" : "pulse", f->buf[i]);
 	}
-	ssize_t ret = TEMP_FAILURE_RETRY(write(fd, f->buf, size));
+	ret = TEMP_FAILURE_RETRY(write(fd, f->buf, size));
 	if (ret < 0) {
 		fprintf(stderr, _("%s: failed to send: %m\n"), dev);
 		return EX_IOERR;
@@ -777,7 +848,7 @@ static int lirc_send(struct arguments *args, int fd, unsigned features, struct f
 	return 0;
 }
 
-int lirc_record(struct arguments *args, int fd, unsigned features)
+int lirc_receive(struct arguments *args, int fd, unsigned features)
 {
 	char *dev = args->device;
 	FILE *out = stdout;
@@ -785,13 +856,13 @@ int lirc_record(struct arguments *args, int fd, unsigned features)
 	int mode = LIRC_MODE_MODE2;
 
 	if (!(features & LIRC_CAN_REC_MODE2)) {
-		fprintf(stderr, _("%s: device cannot record raw ir\n"), dev);
+		fprintf(stderr, _("%s: device cannot receive raw ir\n"), dev);
 		return EX_UNAVAILABLE;
 	}
 
 	// kernel v4.8 and v4.9 return ENOTTY
 	if (ioctl(fd, LIRC_SET_REC_MODE, &mode) && errno != ENOTTY) {
-		fprintf(stderr, _("%s: failed to set record mode: %m\n"), dev);
+		fprintf(stderr, _("%s: failed to set receive mode: %m\n"), dev);
 		return EX_IOERR;
 	}
 
@@ -869,7 +940,7 @@ err:
 
 int main(int argc, char *argv[])
 {
-	struct arguments args = {};
+	struct arguments args = { .gap = IR_DEFAULT_TIMEOUT };
 
 #ifdef ENABLE_NLS
         setlocale (LC_ALL, "");
@@ -897,7 +968,7 @@ int main(int argc, char *argv[])
 	while (s) {
 		struct file *next = s->next;
 		if (s != args.send)
-			usleep(IR_DEFAULT_TIMEOUT);
+			usleep(args.gap);
 
 		rc = lirc_send(&args, fd, features, s);
 		if (rc) {
@@ -909,8 +980,8 @@ int main(int argc, char *argv[])
 		s = next;
 	}
 
-	if (args.record) {
-		rc = lirc_record(&args, fd, features);
+	if (args.receive) {
+		rc = lirc_receive(&args, fd, features);
 		if (rc) {
 			close(fd);
 			exit(rc);

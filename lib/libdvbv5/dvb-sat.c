@@ -50,7 +50,7 @@ struct dvb_sat_lnb_priv {
 	struct dvbsat_freqrange_priv freqrange[4];
 };
 
-static const struct dvb_sat_lnb_priv lnb[] = {
+static const struct dvb_sat_lnb_priv lnb_array[] = {
 	{
 		.desc = {
 			.name = N_("Universal, Europe"),
@@ -123,6 +123,19 @@ static const struct dvb_sat_lnb_priv lnb[] = {
 		},
 		.freqrange = {
 		       { 11750, 12750, 10700, 0 }
+		},
+	}, {
+		.desc = {
+			.name = N_("L10750"),
+			.alias = "L10750",
+			// Legacy fields - kept just to avoid API/ABI breakages
+			.lowfreq = 10750,
+			.freqrange = {
+				{ 11700, 12200 }
+			},
+		},
+		.freqrange = {
+		       { 11700, 12200, 10750, 0 }
 		},
 	}, {
 		.desc = {
@@ -302,8 +315,8 @@ int dvb_sat_search_lnb(const char *name)
 {
 	int i = 0;
 
-	for (i = 0; i < ARRAY_SIZE(lnb); i++) {
-		if (!strcasecmp(name, lnb[i].desc.alias))
+	for (i = 0; i < ARRAY_SIZE(lnb_array); i++) {
+		if (!strcasecmp(name, lnb_array[i].desc.alias))
 			return i;
 	}
 	return -1;
@@ -321,18 +334,18 @@ int dvb_print_lnb(int i)
 {
 	int j;
 
-	if (i < 0 || i >= ARRAY_SIZE(lnb))
+	if (i < 0 || i >= ARRAY_SIZE(lnb_array))
 		return -1;
 
-	printf("%s\n\t%s%s\n", lnb[i].desc.alias, dvb_sat_get_lnb_name(i),
-	       lnb[i].freqrange[0].pol ? _(" (bandstacking)") : "");
+	printf("%s\n\t%s%s\n", lnb_array[i].desc.alias, dvb_sat_get_lnb_name(i),
+	       lnb_array[i].freqrange[0].pol ? _(" (bandstacking)") : "");
 
-	for (j = 0; j < ARRAY_SIZE(lnb[i].freqrange) && lnb[i].freqrange[j].low; j++) {
+	for (j = 0; j < ARRAY_SIZE(lnb_array[i].freqrange) && lnb_array[i].freqrange[j].low; j++) {
 		printf(_("\t%s%d to %d MHz, LO: %d MHz\n"),
-			_(pol_name[lnb[i].freqrange[j].pol]),
-			lnb[i].freqrange[j].low,
-			lnb[i].freqrange[j].high,
-			lnb[i].freqrange[j].int_freq);
+			_(pol_name[lnb_array[i].freqrange[j].pol]),
+			lnb_array[i].freqrange[j].low,
+			lnb_array[i].freqrange[j].high,
+			lnb_array[i].freqrange[j].int_freq);
 	}
 
 	return 0;
@@ -342,7 +355,7 @@ void dvb_print_all_lnb(void)
 {
 	int i;
 
-	for (i = 0; i < ARRAY_SIZE(lnb); i++) {
+	for (i = 0; i < ARRAY_SIZE(lnb_array); i++) {
 		dvb_print_lnb(i);
 		printf("\n");
 	}
@@ -350,18 +363,18 @@ void dvb_print_all_lnb(void)
 
 const struct dvb_sat_lnb *dvb_sat_get_lnb(int i)
 {
-	if (i < 0 || i >= ARRAY_SIZE(lnb))
+	if (i < 0 || i >= ARRAY_SIZE(lnb_array))
 		return NULL;
 
-	return (void *)&lnb[i];
+	return (void *)&lnb_array[i];
 }
 
 const char *dvb_sat_get_lnb_name(int i)
 {
-	if (i < 0 || i >= ARRAY_SIZE(lnb))
+	if (i < 0 || i >= ARRAY_SIZE(lnb_array))
 		return NULL;
 
-	return _(lnb[i].desc.name);
+	return _(lnb_array[i].desc.name);
 }
 
 
@@ -502,18 +515,21 @@ static int dvbsat_diseqc_set_input(struct dvb_v5_fe_parms_priv *parms,
 {
 	int rc;
 	enum dvb_sat_polarization pol;
-	dvb_fe_retrieve_parm(&parms->p, DTV_POLARIZATION, &pol);
-	int pol_v = (pol == POLARIZATION_V) || (pol == POLARIZATION_R);
+	int pol_v;
 	int high_band = parms->high_band;
 	int sat_number = parms->p.sat_number;
 	int vol_high = 0;
 	int tone_on = 0;
-	int mini_b = 0;
 	struct diseqc_cmd cmd;
+	const struct dvb_sat_lnb_priv *lnb = (void *)parms->p.lnb;
 
-	/* Negative numbers means to not use a DiSEqC switch */
-	if (parms->p.sat_number < 0)
+	if (sat_number < 0 && t) {
+		dvb_logwarn(_("DiSEqC disabled. Can't tune using SCR/Unicable."));
 		return 0;
+	}
+
+	dvb_fe_retrieve_parm(&parms->p, DTV_POLARIZATION, &pol);
+	pol_v = (pol == POLARIZATION_V) || (pol == POLARIZATION_R);
 
 	if (!lnb->freqrange[0].rangeswitch) {
 		/*
@@ -527,10 +543,9 @@ static int dvbsat_diseqc_set_input(struct dvb_v5_fe_parms_priv *parms,
 			vol_high = 1;
 	} else {
 		/* Adjust voltage/tone accordingly */
-		if (parms->p.sat_number < 2) {
+		if (sat_number < 2) {
 			vol_high = pol_v ? 0 : 1;
 			tone_on = high_band;
-			mini_b = parms->p.sat_number & 1;
 		}
 	}
 
@@ -542,25 +557,31 @@ static int dvbsat_diseqc_set_input(struct dvb_v5_fe_parms_priv *parms,
 	if (rc)
 		return rc;
 
-	usleep(15 * 1000);
+	if (sat_number >= 0) {
+		/* DiSEqC is enabled. Send DiSEqC commands */
+		usleep(15 * 1000);
 
-	if (!t)
-		rc = dvbsat_diseqc_write_to_port_group(parms, &cmd, high_band,
-							pol_v, sat_number);
-	else
-		rc = dvbsat_scr_odu_channel_change(parms, &cmd, high_band,
-							pol_v, sat_number, t);
+		if (!t)
+			rc = dvbsat_diseqc_write_to_port_group(parms, &cmd, high_band,
+								pol_v, sat_number);
+		else
+			rc = dvbsat_scr_odu_channel_change(parms, &cmd, high_band,
+								pol_v, sat_number, t);
 
-	if (rc) {
-		dvb_logerr(_("sending diseq failed"));
-		return rc;
+		if (rc) {
+			dvb_logerr(_("sending diseq failed"));
+			return rc;
+		}
+		usleep((15 + parms->p.diseqc_wait) * 1000);
+
+		/* miniDiSEqC/Toneburst commands are defined only for up to 2 sattelites */
+		if (parms->p.sat_number < 2) {
+			rc = dvb_fe_diseqc_burst(&parms->p, parms->p.sat_number);
+			if (rc)
+				return rc;
+		}
+		usleep(15 * 1000);
 	}
-	usleep((15 + parms->p.diseqc_wait) * 1000);
-
-	rc = dvb_fe_diseqc_burst(&parms->p, mini_b);
-	if (rc)
-		return rc;
-	usleep(15 * 1000);
 
 	rc = dvb_fe_sec_tone(&parms->p, tone_on ? SEC_TONE_ON : SEC_TONE_OFF);
 
@@ -570,20 +591,24 @@ static int dvbsat_diseqc_set_input(struct dvb_v5_fe_parms_priv *parms,
 int dvb_sat_real_freq(struct dvb_v5_fe_parms *p, int freq)
 {
 	struct dvb_v5_fe_parms_priv *parms = (void *)p;
+	const struct dvb_sat_lnb_priv *lnb = (void *)p->lnb;
 	int new_freq, i;
 
-	if (!dvb_fe_is_satellite(p->current_sys))
+	if (!lnb || !dvb_fe_is_satellite(p->current_sys))
 		return freq;
 
 	new_freq = freq + parms->freq_offset;
-	for (i = 0; i < ARRAY_SIZE(lnb->freqrange) && lnb->freqrange[i].low; i++) {
-		if (freq < lnb->freqrange[i].low * 1000 || freq > lnb->freqrange[i].high * 1000)
-			continue;
 
+	for (i = 0; i < ARRAY_SIZE(lnb->freqrange) && lnb->freqrange[i].low; i++) {
+		if (new_freq / 1000 < lnb->freqrange[i].low  || new_freq / 1000 > lnb->freqrange[i].high)
+			continue;
 		return new_freq;
 	}
 
-	return parms->freq_offset - freq;
+	/* Weird: frequency is out of LNBf range */
+	dvb_logerr(_("frequency %.2fMHz (tune freq %.2fMHz) is out of LNBf %s range"),
+		   new_freq/ 1000., freq / 1000., lnb->desc.name);
+	return 0;
 }
 
 

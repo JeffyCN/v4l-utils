@@ -32,11 +32,14 @@ struct dvb_open_descriptor {
 };
 
 struct dvb_dev_ops {
-	int (*find)(struct dvb_device_priv *dvb, dvb_dev_change_t handler);
-	struct dvb_dev_list * (*seek_by_sysname)(struct dvb_device_priv *dvb,
+	int (*find)(struct dvb_device_priv *dvb, dvb_dev_change_t handler,
+		    void *user_priv);
+	struct dvb_dev_list * (*seek_by_adapter)(struct dvb_device_priv *dvb,
 						 unsigned int adapter,
 						 unsigned int num,
 						 enum dvb_dev_type type);
+	struct dvb_dev_list * (*get_dev_info)(struct dvb_device_priv *dvb,
+					      const char *sysname);
 	int (*stop_monitor)(struct dvb_device_priv *dvb);
 	struct dvb_open_descriptor *(*open)(struct dvb_device_priv *dvb,
 					    const char *sysname, int flags);
@@ -69,6 +72,7 @@ struct dvb_dev_ops {
 	int (*fe_get_stats)(struct dvb_v5_fe_parms *p);
 
 	void (*free)(struct dvb_device_priv *dvb);
+	int (*get_fd)(struct dvb_open_descriptor *dvb);
 };
 
 struct dvb_device_priv {

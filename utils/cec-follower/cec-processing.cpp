@@ -176,6 +176,8 @@ static void log_event(struct cec_event &ev)
 {
 	__u16 pa;
 
+	if (ev.flags & CEC_EVENT_FL_DROPPED_EVENTS)
+		printf("(Note: events were lost)\n");
 	if (ev.flags & CEC_EVENT_FL_INITIAL_STATE)
 		printf("Initial ");
 	switch (ev.event) {
@@ -188,6 +190,18 @@ static void log_event(struct cec_event &ev)
 		break;
 	case CEC_EVENT_LOST_MSGS:
 		printf("Event: Lost Messages\n");
+		break;
+	case CEC_EVENT_PIN_HPD_LOW:
+	case CEC_EVENT_PIN_HPD_HIGH:
+		printf("Event: HPD Pin %s\n",
+		       ev.event == CEC_EVENT_PIN_HPD_HIGH ? "High" : "Low");
+		warn("Unexpected HPD pin event!\n");
+		break;
+	case CEC_EVENT_PIN_CEC_LOW:
+	case CEC_EVENT_PIN_CEC_HIGH:
+		printf("Event: CEC Pin %s\n",
+		       ev.event == CEC_EVENT_PIN_CEC_HIGH ? "High" : "Low");
+		warn("Unexpected CEC pin event!\n");
 		break;
 	default:
 		printf("Event: Unknown (0x%x)\n", ev.event);
@@ -204,7 +218,7 @@ static void reply_feature_abort(struct node *node, struct cec_msg *msg, __u8 rea
 	__u8 opcode = cec_msg_opcode(msg);
 	__u64 ts_now = get_ts();
 
-	if (cec_msg_is_broadcast(msg))
+	if (cec_msg_is_broadcast(msg) || cec_msg_initiator(msg) == CEC_LOG_ADDR_UNREGISTERED)
 		return;
 	if (reason == CEC_OP_ABORT_UNRECOGNIZED_OP) {
 		la_info[la].feature_aborted[opcode].count++;
@@ -719,7 +733,7 @@ static void processMsg(struct node *node, struct cec_msg &msg, unsigned me)
 
 		cec_ops_request_current_latency(&msg, &phys_addr);
 		if (phys_addr == node->phys_addr) {
-			cec_msg_set_reply_to(&msg, &msg);
+			cec_msg_init(&msg, me, from);
 			cec_msg_report_current_latency(&msg, phys_addr,
 						       node->state.video_latency,
 						       node->state.low_latency_mode,
@@ -960,7 +974,7 @@ static void processMsg(struct node *node, struct cec_msg &msg, unsigned me)
 		case CEC_MSG_CDC_HEC_DISCOVER:
 			__u16 phys_addr;
 
-			cec_msg_set_reply_to(&msg, &msg);
+			cec_msg_init(&msg, me, CEC_LOG_ADDR_BROADCAST);
 			cec_ops_cdc_hec_discover(&msg, &phys_addr);
 			cec_msg_cdc_hec_report_state(&msg, phys_addr,
 						     CEC_OP_HEC_FUNC_STATE_NOT_SUPPORTED,
@@ -1000,7 +1014,7 @@ static void poll_remote_devs(struct node *node, unsigned me)
 	for (unsigned i = 0; i < 15; i++) {
 		struct cec_msg msg;
 
-		cec_msg_init(&msg, 0xf, i);
+		cec_msg_init(&msg, me, i);
 
 		doioctl(node, CEC_TRANSMIT, &msg);
 		if (msg.tx_status & CEC_TX_STATUS_OK) {
@@ -1021,7 +1035,7 @@ void testProcessing(struct node *node)
 	fd_set ex_fds;
 	int fd = node->fd;
 	__u32 mode = CEC_MODE_INITIATOR | CEC_MODE_FOLLOWER;
-	int me;
+	unsigned me;
 	unsigned last_poll_la = 15;
 
 	doioctl(node, CEC_S_MODE, &mode);
@@ -1034,6 +1048,7 @@ void testProcessing(struct node *node)
 		int res;
 		struct timeval timeval = {};
 
+		fflush(stdout);
 		timeval.tv_sec = 1;
 		FD_ZERO(&rd_fds);
 		FD_ZERO(&ex_fds);
@@ -1056,10 +1071,14 @@ void testProcessing(struct node *node)
 			if (ev.event == CEC_EVENT_STATE_CHANGE) {
 				dev_info("CEC adapter state change.\n");
 				node->phys_addr = ev.state_change.phys_addr;
-				doioctl(node, CEC_ADAP_G_LOG_ADDRS, &laddrs);
-				node->adap_la_mask = laddrs.log_addr_mask;
-				node->state.active_source_pa = CEC_PHYS_ADDR_INVALID;
-				me = laddrs.log_addr[0];
+				node->adap_la_mask = ev.state_change.log_addr_mask;
+				if (node->adap_la_mask) {
+					doioctl(node, CEC_ADAP_G_LOG_ADDRS, &laddrs);
+					me = laddrs.log_addr[0];
+				} else {
+					node->state.active_source_pa = CEC_PHYS_ADDR_INVALID;
+					me = CEC_LOG_ADDR_INVALID;
+				}
 				memset(la_info, 0, sizeof(la_info));
 			}
 		}
@@ -1103,11 +1122,12 @@ void testProcessing(struct node *node)
 		__u64 ts_now = get_ts();
 		unsigned poll_la = ts_to_s(ts_now) % 16;
 
-		if (poll_la != last_poll_la && poll_la < 15 && la_info[poll_la].ts &&
+		if (poll_la != me && 
+		    poll_la != last_poll_la && poll_la < 15 && la_info[poll_la].ts &&
 		    ts_to_ms(ts_now - la_info[poll_la].ts) > POLL_PERIOD) {
 			struct cec_msg msg = {};
 
-			cec_msg_init(&msg, 0xf, poll_la);
+			cec_msg_init(&msg, me, poll_la);
 			transmit(node, &msg);
 			if (msg.tx_status & CEC_TX_STATUS_NACK) {
 				dev_info("Logical address %d stopped responding to polling message.\n", poll_la);

@@ -61,13 +61,14 @@ typedef std::map<__u32, unsigned> frmsizes_count_map;
 
 struct base_node;
 
-#define V4L2_BUF_TYPE_LAST V4L2_BUF_TYPE_SDR_OUTPUT
+#define V4L2_BUF_TYPE_LAST V4L2_BUF_TYPE_META_CAPTURE
 
 struct base_node {
 	bool is_video;
 	bool is_radio;
 	bool is_vbi;
 	bool is_sdr;
+	bool is_meta;
 	bool is_touch;
 	bool is_m2m;
 	bool is_planar;
@@ -86,7 +87,9 @@ struct base_node {
 	unsigned audio_outputs;
 	unsigned cur_io_caps;
 	unsigned std_controls;
+	unsigned std_compound_controls;
 	unsigned priv_controls;
+	unsigned priv_compound_controls;
 	__u32 fbuf_caps;
 	pixfmt_map buftype_pixfmts[V4L2_BUF_TYPE_LAST + 1];
 	frmsizes_set frmsizes;

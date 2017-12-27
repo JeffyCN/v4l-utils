@@ -74,8 +74,15 @@ const struct libv4l_dev_ops *v4lconvert_get_default_dev_ops()
 static void v4lconvert_get_framesizes(struct v4lconvert_data *data,
 		unsigned int pixelformat, int index);
 
-/* Note for proper functioning of v4lconvert_enum_fmt the first entries in
-   supported_src_pixfmts must match with the entries in supported_dst_pixfmts */
+/*
+ * Notes:
+ * 1) for proper functioning of v4lconvert_enum_fmt the first entries in
+ *    supported_src_pixfmts must match with the entries in
+ *    supported_dst_pixfmts.
+ * 2) The field needs_conversion should be zero, *except* for device-specific
+ *    formats, where it doesn't make sense for applications to have their
+ *    own decoders.
+ */
 #define SUPPORTED_DST_PIXFMTS \
 	/* fourcc			bpp	rgb	yuv	needs      */ \
 	/*					rank	rank	conversion */ \
@@ -115,14 +122,17 @@ static const struct v4lconvert_pixfmt supported_src_pixfmts[] = {
 	{ V4L2_PIX_FMT_JPEG,		 0,	 7,	 7,	0 },
 	{ V4L2_PIX_FMT_PJPG,		 0,	 7,	 7,	1 },
 	{ V4L2_PIX_FMT_JPGL,		 0,	 7,	 7,	1 },
+#ifdef HAVE_LIBV4LCONVERT_HELPERS
 	{ V4L2_PIX_FMT_OV511,		 0,	 7,	 7,	1 },
 	{ V4L2_PIX_FMT_OV518,		 0,	 7,	 7,	1 },
+#endif
 	/* uncompressed bayer */
-	{ V4L2_PIX_FMT_SBGGR8,		 8,	 8,	 8,	1 },
-	{ V4L2_PIX_FMT_SGBRG8,		 8,	 8,	 8,	1 },
-	{ V4L2_PIX_FMT_SGRBG8,		 8,	 8,	 8,	1 },
-	{ V4L2_PIX_FMT_SRGGB8,		 8,	 8,	 8,	1 },
+	{ V4L2_PIX_FMT_SBGGR8,		 8,	 8,	 8,	0 },
+	{ V4L2_PIX_FMT_SGBRG8,		 8,	 8,	 8,	0 },
+	{ V4L2_PIX_FMT_SGRBG8,		 8,	 8,	 8,	0 },
+	{ V4L2_PIX_FMT_SRGGB8,		 8,	 8,	 8,	0 },
 	{ V4L2_PIX_FMT_STV0680,		 8,	 8,	 8,	1 },
+	{ V4L2_PIX_FMT_SGRBG10,		16,	 8,	 8,	1 },
 	/* compressed bayer */
 	{ V4L2_PIX_FMT_SPCA561,		 0,	 9,	 9,	1 },
 	{ V4L2_PIX_FMT_SN9C10X,		 0,	 9,	 9,	1 },
@@ -175,9 +185,13 @@ struct v4lconvert_data *v4lconvert_create_with_dev_ops(int fd, void *dev_ops_pri
 	int i, j;
 	struct v4lconvert_data *data = calloc(1, sizeof(struct v4lconvert_data));
 	struct v4l2_capability cap;
-	/* This keeps tracks of devices which have only formats for which apps
-	   most likely will need conversion and we can thus safely add software
-	   processing controls without a performance impact. */
+	/*
+	 * This keeps tracks of device-specific formats for which apps most
+	 * likely don't know. If all a driver can offer are proprietary
+	 * formats, a conversion is needed anyway. We can thus safely
+	 * add software processing controls without much concern about a
+	 * performance impact.
+	 */
 	int always_needs_conversion = 1;
 
 	if (!data) {
@@ -266,7 +280,9 @@ void v4lconvert_destroy(struct v4lconvert_data *data)
 	if (data->cinfo_initialized)
 		jpeg_destroy_decompress(&data->cinfo);
 #endif // HAVE_JPEG
+#ifdef HAVE_LIBV4LCONVERT_HELPERS
 	v4lconvert_helper_cleanup(data);
+#endif
 	free(data->convert1_buf);
 	free(data->convert2_buf);
 	free(data->rotate90_buf);
@@ -698,6 +714,16 @@ unsigned char *v4lconvert_alloc_buffer(int needed,
 	return *buf;
 }
 
+static void v4lconvert_10to8(void *_src, unsigned char *dst, int width, int height)
+{
+	int i;
+	uint16_t *src = _src;
+	
+	for (i = 0; i < width * height; i++) {
+		dst[i] = src[i] >> 2;
+	}
+}
+
 int v4lconvert_oom_error(struct v4lconvert_data *data)
 {
 	V4LCONVERT_ERR("could not allocate memory\n");
@@ -812,6 +838,7 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 				return -1;
 			}
 			break;
+#ifdef HAVE_LIBV4LCONVERT_HELPERS
 		case V4L2_PIX_FMT_OV511:
 			if (v4lconvert_helper_decompress(data, LIBV4LCONVERT_PRIV_DIR "/ov511-decomp",
 						src, src_size, d, d_size, width, height, yvu)) {
@@ -828,6 +855,7 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 				return -1;
 			}
 			break;
+#endif
 		}
 
 		switch (dest_pix_fmt) {
@@ -871,7 +899,8 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 #endif
 	case V4L2_PIX_FMT_SN9C2028:
 	case V4L2_PIX_FMT_SQ905C:
-	case V4L2_PIX_FMT_STV0680: { /* Not compressed but needs some shuffling */
+	case V4L2_PIX_FMT_STV0680:
+	case V4L2_PIX_FMT_SGRBG10: { /* Not compressed but needs some shuffling */
 		unsigned char *tmpbuf;
 		struct v4l2_format tmpfmt = *fmt;
 
@@ -881,6 +910,11 @@ static int v4lconvert_convert_pixfmt(struct v4lconvert_data *data,
 			return v4lconvert_oom_error(data);
 
 		switch (src_pix_fmt) {
+		case V4L2_PIX_FMT_SGRBG10:
+			v4lconvert_10to8(src, tmpbuf, width, height);
+			tmpfmt.fmt.pix.pixelformat = V4L2_PIX_FMT_SGRBG8;
+			bytesperline = width;
+			break;
 		case V4L2_PIX_FMT_SPCA561:
 			v4lconvert_decode_spca561(src, tmpbuf, width, height);
 			tmpfmt.fmt.pix.pixelformat = V4L2_PIX_FMT_SGBRG8;
