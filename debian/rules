@@ -2,6 +2,7 @@
 
 #export DH_VERBOSE=1
 export QT_SELECT=qt5
+export DEB_BUILD_MAINT_OPTIONS = hardening=+bindnow
 
 ifeq ($(DEB_HOST_ARCH_OS), linux)
 CONFIGURE_FLAGS = --with-libudev
