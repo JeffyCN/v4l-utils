@@ -156,6 +156,7 @@ Section: doc
 Architecture: all
 Depends: ${misc:Depends}
 Suggests: devhelp
+Multi-Arch: foreign
 Description: Doxygen generated documentation for libdvbv5
  This library provides functions to work with DVB devices that
  implement the DVB v5 API.
