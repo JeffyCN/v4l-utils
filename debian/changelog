@@ -1,3 +1,10 @@
+v4l-utils (1.14.2-1) unstable; urgency=medium
+
+  * Imported Upstream version 1.14.2
+  * Mark libdvbv5-doc as Multi-Arch: foreign
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Sat, 10 Feb 2018 13:46:51 +0100
+
 v4l-utils (1.14.1-1) unstable; urgency=medium
 
   * Imported Upstream version 1.14.1
