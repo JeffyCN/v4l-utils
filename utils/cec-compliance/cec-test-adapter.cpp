@@ -1,18 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright 2016 Cisco Systems, Inc. and/or its affiliates. All rights reserved.
- *
- * This program is free software; you may redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; version 2 of the License.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
  */
 
 #include <unistd.h>
@@ -115,9 +103,11 @@ int testAdapLogAddrs(struct node *node)
 		CEC_OP_PRIM_DEVTYPE_TUNER,
 		CEC_OP_PRIM_DEVTYPE_AUDIOSYSTEM
 	};
-	static const __u8 all_dev_types =
+	static const __u8 all_dev_types[2] = {
 		CEC_OP_ALL_DEVTYPE_TV | CEC_OP_ALL_DEVTYPE_RECORD |
-		CEC_OP_ALL_DEVTYPE_AUDIOSYSTEM;
+		CEC_OP_ALL_DEVTYPE_AUDIOSYSTEM,
+		CEC_OP_ALL_DEVTYPE_RECORD | CEC_OP_ALL_DEVTYPE_AUDIOSYSTEM,
+	};
 	static const __u8 features[12] = {
 		0x90, 0x00, 0x8e, 0x00,
 		0xff, 0xff, 0xff, 0xff,
@@ -158,21 +148,26 @@ int testAdapLogAddrs(struct node *node)
 
 	fail_on_test(doioctl(node, CEC_ADAP_G_PHYS_ADDR, &pa));
 	fail_on_test(pa != node->phys_addr);
+	unsigned skip_tv = pa ? 1 : 0;
+	unsigned available_log_addrs = node->available_log_addrs;
 
+	if (skip_tv && available_log_addrs == CEC_MAX_LOG_ADDRS)
+		available_log_addrs--;
 	memset(&laddrs, 0, sizeof(laddrs));
 	strcpy(laddrs.osd_name, "Compliance");
-	laddrs.num_log_addrs = node->available_log_addrs;
+	laddrs.num_log_addrs = available_log_addrs;
 	laddrs.cec_version = laddrs.num_log_addrs > 2 ?
 		CEC_OP_CEC_VERSION_1_4: CEC_OP_CEC_VERSION_2_0;
-	for (unsigned i = 0; i < CEC_MAX_LOG_ADDRS; i++) {
-		laddrs.log_addr_type[i] = la_types[i];
-		laddrs.primary_device_type[i] = prim_dev_types[i];
-		laddrs.all_device_types[i] = all_dev_types;
+
+	for (unsigned i = 0; i < CEC_MAX_LOG_ADDRS - skip_tv; i++) {
+		laddrs.log_addr_type[i] = la_types[i + skip_tv];
+		laddrs.primary_device_type[i] = prim_dev_types[i + skip_tv];
+		laddrs.all_device_types[i] = all_dev_types[skip_tv];
 		memcpy(laddrs.features[i], features, sizeof(features));
 	}
 
 	fail_on_test(doioctl(node, CEC_ADAP_S_LOG_ADDRS, &laddrs));
-	fail_on_test(laddrs.num_log_addrs != node->available_log_addrs);
+	fail_on_test(laddrs.num_log_addrs != available_log_addrs);
 	fail_on_test(laddrs.log_addr_mask == 0);
 	for (unsigned i = 0; i < laddrs.num_log_addrs; i++) {
 		fail_on_test(laddrs.log_addr[i] == CEC_LOG_ADDR_INVALID);
@@ -180,9 +175,9 @@ int testAdapLogAddrs(struct node *node)
 		fail_on_test(check_0(laddrs.features[i] + 4, 8));
 	}
 	for (unsigned i = laddrs.num_log_addrs; i < CEC_MAX_LOG_ADDRS; i++) {
-		fail_on_test(laddrs.log_addr_type[i] ||
-			     laddrs.primary_device_type[i] ||
-			     laddrs.all_device_types[i]);
+		fail_on_test(laddrs.log_addr_type[i]);
+		fail_on_test(laddrs.primary_device_type[i]);
+		fail_on_test(laddrs.all_device_types[i]);
 		fail_on_test(check_0(laddrs.features[i], sizeof(laddrs.features[i])));
 	}
 	fail_on_test(doioctl(node, CEC_ADAP_S_LOG_ADDRS, &laddrs) != EBUSY);
@@ -234,6 +229,7 @@ int testTransmit(struct node *node)
 {
 	struct cec_msg msg = { };
 	unsigned i, la = node->log_addr[0];
+	unsigned valid_la = 15, invalid_la = 15;
 	bool tested_self = false;
 	bool tested_valid_la = false;
 	bool tested_invalid_la = false;
@@ -279,11 +275,17 @@ int testTransmit(struct node *node)
 
 		fail_on_test(msg.len != 1);
 		fail_on_test(check_0(msg.msg + msg.len, sizeof(msg.msg) - msg.len));
-		fail_on_test(msg.timeout || msg.reply);
-		fail_on_test(msg.flags || msg.rx_status || msg.rx_ts);
-		fail_on_test(msg.tx_status == 0 || msg.tx_ts == 0 || msg.tx_ts == ~0ULL);
+		fail_on_test(msg.timeout);
+		fail_on_test(msg.reply);
+		fail_on_test(msg.flags);
+		fail_on_test(msg.rx_status);
+		fail_on_test(msg.rx_ts);
+		fail_on_test(msg.tx_status == 0);
+		fail_on_test(msg.tx_ts == 0);
+		fail_on_test(msg.tx_ts == ~0ULL);
 		fail_on_test(msg.msg[0] != (0xf0 | i));
-		fail_on_test(msg.sequence == 0 || msg.sequence == ~0U);
+		fail_on_test(msg.sequence == 0);
+		fail_on_test(msg.sequence == ~0U);
 		fail_on_test(msg.tx_status & ~0x3f);
 		fail_on_test((msg.tx_status & tx_ok_retry_mask) == tx_ok_retry_mask);
 		fail_on_test(!(msg.tx_status & tx_ok_retry_mask));
@@ -304,6 +306,7 @@ int testTransmit(struct node *node)
 			if (tested_valid_la)
 				continue;
 			tested_valid_la = true;
+			valid_la = i;
 			// Send message to a remote LA
 			memset(&msg, 0xff, sizeof(msg));
 			msg.msg[0] = (la << 4) | i;
@@ -311,17 +314,22 @@ int testTransmit(struct node *node)
 			msg.flags &= ~CEC_MSG_FL_REPLY_TO_FOLLOWERS;
 			cec_msg_give_physical_addr(&msg, true);
 			fail_on_test(doioctl(node, CEC_TRANSMIT, &msg));
+			fail_on_test(!(msg.tx_status & CEC_TX_STATUS_OK));
+			fail_on_test(msg.rx_status & CEC_RX_STATUS_TIMEOUT);
+			fail_on_test(!(msg.rx_status & CEC_RX_STATUS_OK));
 			fail_on_test(msg.len != 5);
 			fail_on_test(check_0(msg.msg + msg.len, sizeof(msg.msg) - msg.len));
 			fail_on_test(msg.timeout != 1001);
 			fail_on_test(msg.sequence == 0 || msg.sequence == ~0U);
 			fail_on_test(msg.reply != CEC_MSG_REPORT_PHYSICAL_ADDR);
-			fail_on_test(msg.rx_ts == 0 || msg.rx_ts == ~0ULL);
-			fail_on_test(msg.rx_status == 0 || msg.flags);
+			fail_on_test(msg.rx_ts == 0);
+			fail_on_test(msg.rx_ts == ~0ULL);
+			fail_on_test(msg.flags);
+			fail_on_test(msg.rx_status == 0);
 			fail_on_test(msg.rx_status & ~0x07);
-			fail_on_test(msg.tx_ts == 0 || msg.tx_ts == ~0ULL);
+			fail_on_test(msg.tx_ts == 0);
+			fail_on_test(msg.tx_ts == ~0ULL);
 			fail_on_test(msg.rx_ts <= msg.tx_ts);
-			fail_on_test(!(msg.tx_status & CEC_TX_STATUS_OK));
 			fail_on_test((msg.tx_status & tx_ok_retry_mask) == tx_ok_retry_mask);
 			fail_on_test(msg.tx_nack_cnt == 0xff);
 			fail_on_test(msg.tx_arb_lost_cnt == 0xff);
@@ -338,8 +346,11 @@ int testTransmit(struct node *node)
 			fail_on_test(msg.sequence == 0 || msg.sequence == ~0U);
 			fail_on_test(msg.reply);
 			fail_on_test(check_0(msg.msg + msg.len, sizeof(msg.msg) - msg.len));
-			fail_on_test(msg.rx_status || msg.rx_ts || msg.flags);
-			fail_on_test(msg.tx_ts == 0 || msg.tx_ts == ~0ULL);
+			fail_on_test(msg.rx_status);
+			fail_on_test(msg.rx_ts);
+			fail_on_test(msg.flags);
+			fail_on_test(msg.tx_ts == 0);
+			fail_on_test(msg.tx_ts == ~0ULL);
 			fail_on_test(!(msg.tx_status & CEC_TX_STATUS_OK));
 			fail_on_test((msg.tx_status & tx_ok_retry_mask) == tx_ok_retry_mask);
 			fail_on_test(msg.tx_nack_cnt == 0xff);
@@ -350,6 +361,7 @@ int testTransmit(struct node *node)
 			if (tested_invalid_la)
 				continue;
 			tested_invalid_la = true;
+			invalid_la = i;
 			// Send message to a remote non-existent LA
 			memset(&msg, 0xff, sizeof(msg));
 			msg.msg[0] = (la << 4) | i;
@@ -358,15 +370,18 @@ int testTransmit(struct node *node)
 			cec_msg_give_physical_addr(&msg, true);
 			fail_on_test(doioctl(node, CEC_TRANSMIT, &msg));
 			fail_on_test(msg.timeout != 1002);
-			fail_on_test(msg.sequence == 0 || msg.sequence == ~0U);
+			fail_on_test(msg.sequence == 0);
+			fail_on_test(msg.sequence == ~0U);
 			fail_on_test(msg.len != 2);
 			fail_on_test(check_0(msg.msg + msg.len, sizeof(msg.msg) - msg.len));
 			fail_on_test(msg.flags);
 			fail_on_test(msg.reply != CEC_MSG_REPORT_PHYSICAL_ADDR);
 			fail_on_test(!(msg.tx_status & CEC_TX_STATUS_MAX_RETRIES));
 			fail_on_test((msg.tx_status & tx_ok_retry_mask) == tx_ok_retry_mask);
-			fail_on_test(msg.rx_ts || msg.rx_status);
-			fail_on_test(msg.tx_ts == 0 || msg.tx_ts == ~0ULL);
+			fail_on_test(msg.rx_status);
+			fail_on_test(msg.rx_ts);
+			fail_on_test(msg.tx_ts == 0);
+			fail_on_test(msg.tx_ts == ~0ULL);
 			fail_on_test(msg.tx_nack_cnt == 0xff);
 			fail_on_test(msg.tx_arb_lost_cnt == 0xff);
 			fail_on_test(msg.tx_low_drive_cnt == 0xff);
@@ -379,12 +394,16 @@ int testTransmit(struct node *node)
 			cec_msg_give_physical_addr(&msg, false);
 			fail_on_test(doioctl(node, CEC_TRANSMIT, &msg));
 			fail_on_test(msg.timeout);
-			fail_on_test(msg.sequence == 0 || msg.sequence == ~0U);
+			fail_on_test(msg.sequence == 0);
+			fail_on_test(msg.sequence == ~0U);
 			fail_on_test(msg.reply);
 			fail_on_test(msg.len != 2);
 			fail_on_test(check_0(msg.msg + msg.len, sizeof(msg.msg) - msg.len));
-			fail_on_test(msg.rx_status || msg.rx_ts || msg.flags);
-			fail_on_test(msg.tx_ts == 0 || msg.tx_ts == ~0ULL);
+			fail_on_test(msg.rx_status);
+			fail_on_test(msg.rx_ts);
+			fail_on_test(msg.flags);
+			fail_on_test(msg.tx_ts == 0);
+			fail_on_test(msg.tx_ts == ~0ULL);
 			fail_on_test(!(msg.tx_status & CEC_TX_STATUS_MAX_RETRIES));
 			fail_on_test((msg.tx_status & tx_ok_retry_mask) == tx_ok_retry_mask);
 			fail_on_test(msg.tx_nack_cnt == 0xff);
@@ -392,6 +411,54 @@ int testTransmit(struct node *node)
 			fail_on_test(msg.tx_low_drive_cnt == 0xff);
 			fail_on_test(msg.tx_error_cnt == 0xff);
 		}
+	}
+
+	if (tested_valid_la) {
+		time_t cur_t = time(NULL), t;
+		time_t last_t = cur_t + 7;
+		unsigned max_cnt = 0;
+		unsigned cnt = 0;
+	
+		do {
+			t = time(NULL);
+			if (t != cur_t) {
+				if (cnt > max_cnt)
+					max_cnt = cnt;
+				cnt = 0;
+				cur_t = t;
+			}
+			cec_msg_init(&msg, la, valid_la);
+			fail_on_test(doioctl(node, CEC_TRANSMIT, &msg));
+			cnt++;
+		} while (t < last_t);
+		// A ping can take 10 * 2.4 + 4.5 + 7 * 2.4 = 45.3 ms (SFT)
+		if (max_cnt < 21)
+			warn("Could only do %u pings per second to a valid LA, expected at least 21\n",
+			     max_cnt);
+	}
+
+	if (tested_invalid_la) {
+		time_t cur_t = time(NULL), t;
+		time_t last_t = cur_t + 7;
+		unsigned max_cnt = 0;
+		unsigned cnt = 0;
+	
+		do {
+			t = time(NULL);
+			if (t != cur_t) {
+				if (cnt > max_cnt)
+					max_cnt = cnt;
+				cnt = 0;
+				cur_t = t;
+			}
+			cec_msg_init(&msg, la, invalid_la);
+			fail_on_test(doioctl(node, CEC_TRANSMIT, &msg));
+			cnt++;
+		} while (t < last_t);
+		// A ping to an invalid LA can take 2 * (10 * 2.4 + 4.5) + (3 + 7) * 2.4 = 81 ms (SFT)
+		if (max_cnt < 12)
+			warn("Could only do %u pings per second to an invalid LA, expected at least 12\n",
+			     max_cnt);
 	}
 
 	return 0;
@@ -438,15 +505,21 @@ int testReceive(struct node *node)
 	msg.timeout = 1500;
 	fail_on_test(doioctl(node, CEC_RECEIVE, &msg));
 
-	fail_on_test(msg.tx_ts || msg.tx_status || msg.tx_arb_lost_cnt ||
-		     msg.tx_nack_cnt || msg.tx_low_drive_cnt || msg.tx_error_cnt);
+	fail_on_test(msg.tx_ts);
+	fail_on_test(msg.tx_status);
+	fail_on_test(msg.tx_arb_lost_cnt);
+	fail_on_test(msg.tx_nack_cnt);
+	fail_on_test(msg.tx_low_drive_cnt);
+	fail_on_test(msg.tx_error_cnt);
 	fail_on_test(msg.timeout != 1500);
-	fail_on_test(msg.len != 5 || msg.msg[1] != CEC_MSG_REPORT_PHYSICAL_ADDR);
+	fail_on_test(msg.len != 5);
+	fail_on_test(msg.msg[1] != CEC_MSG_REPORT_PHYSICAL_ADDR);
 	fail_on_test(check_0(msg.msg + msg.len, sizeof(msg.msg) - msg.len));
 	fail_on_test(msg.msg[0] != ((remote_la << 4) | 0xf));
 	fail_on_test(msg.sequence);
 	fail_on_test(msg.rx_ts == 0);
-	fail_on_test(msg.flags || msg.reply);
+	fail_on_test(msg.flags);
+	fail_on_test(msg.reply);
 	fail_on_test(msg.rx_status != CEC_RX_STATUS_OK);
 
 	return 0;
@@ -491,13 +564,19 @@ int testNonBlocking(struct node *node)
 		fail_on_test(check_0(msg.msg + msg.len, sizeof(msg.msg) - msg.len));
 		fail_on_test(msg.msg[0] != ((la << 4) | invalid_remote));
 		fail_on_test(msg.msg[1] != CEC_MSG_GIVE_PHYSICAL_ADDR);
-		fail_on_test(msg.timeout || msg.flags);
-		fail_on_test(msg.sequence == 0 || msg.sequence == ~0U);
+		fail_on_test(msg.timeout);
+		fail_on_test(msg.flags);
+		fail_on_test(msg.sequence == 0);
+		fail_on_test(msg.sequence == ~0U);
 		fail_on_test(msg.reply);
 		fail_on_test(msg.tx_status);
-		fail_on_test(msg.rx_ts || msg.rx_status);
-		fail_on_test(msg.tx_ts || msg.tx_nack_cnt || msg.tx_arb_lost_cnt ||
-			     msg.tx_low_drive_cnt || msg.tx_error_cnt);
+		fail_on_test(msg.rx_ts);
+		fail_on_test(msg.rx_status);
+		fail_on_test(msg.tx_ts);
+		fail_on_test(msg.tx_nack_cnt);
+		fail_on_test(msg.tx_arb_lost_cnt);
+		fail_on_test(msg.tx_low_drive_cnt);
+		fail_on_test(msg.tx_error_cnt);
 		seq = msg.sequence;
 
 		sleep(1);
@@ -512,7 +591,8 @@ int testNonBlocking(struct node *node)
 			fail_on_test(check_0(msg.msg + msg.len, sizeof(msg.msg) - msg.len));
 			fail_on_test(msg.msg[0] != ((la << 4) | invalid_remote));
 			fail_on_test(msg.msg[1] != CEC_MSG_GIVE_PHYSICAL_ADDR);
-			fail_on_test(msg.timeout != 1500 || msg.flags);
+			fail_on_test(msg.timeout != 1500);
+			fail_on_test(msg.flags);
 			fail_on_test(msg.reply);
 			fail_on_test(!(msg.tx_status & CEC_TX_STATUS_MAX_RETRIES));
 			fail_on_test((msg.tx_status & tx_ok_retry_mask) == tx_ok_retry_mask);
@@ -520,7 +600,8 @@ int testNonBlocking(struct node *node)
 			fail_on_test(msg.tx_arb_lost_cnt == 0xff);
 			fail_on_test(msg.tx_low_drive_cnt == 0xff);
 			fail_on_test(msg.tx_error_cnt == 0xff);
-			fail_on_test(msg.rx_ts || msg.rx_status);
+			fail_on_test(msg.rx_ts);
+			fail_on_test(msg.rx_status);
 			break;
 		}
 
@@ -535,13 +616,19 @@ int testNonBlocking(struct node *node)
 		fail_on_test(check_0(msg.msg + msg.len, sizeof(msg.msg) - msg.len));
 		fail_on_test(msg.msg[0] != ((la << 4) | invalid_remote));
 		fail_on_test(msg.msg[1] != CEC_MSG_GIVE_PHYSICAL_ADDR);
-		fail_on_test(msg.timeout != 1000 || msg.flags);
-		fail_on_test(msg.sequence == 0 || msg.sequence == ~0U);
+		fail_on_test(msg.timeout != 1000);
+		fail_on_test(msg.flags);
+		fail_on_test(msg.sequence == 0);
+		fail_on_test(msg.sequence == ~0U);
 		fail_on_test(msg.reply != CEC_MSG_REPORT_PHYSICAL_ADDR);
 		fail_on_test(msg.tx_status);
-		fail_on_test(msg.rx_ts || msg.rx_status);
-		fail_on_test(msg.tx_ts || msg.tx_nack_cnt || msg.tx_arb_lost_cnt ||
-			     msg.tx_low_drive_cnt || msg.tx_error_cnt);
+		fail_on_test(msg.rx_ts);
+		fail_on_test(msg.rx_status);
+		fail_on_test(msg.tx_ts);
+		fail_on_test(msg.tx_nack_cnt);
+		fail_on_test(msg.tx_arb_lost_cnt);
+		fail_on_test(msg.tx_low_drive_cnt);
+		fail_on_test(msg.tx_error_cnt);
 		seq = msg.sequence;
 
 		sleep(1);
@@ -556,7 +643,8 @@ int testNonBlocking(struct node *node)
 			fail_on_test(check_0(msg.msg + msg.len, sizeof(msg.msg) - msg.len));
 			fail_on_test(msg.msg[0] != ((la << 4) | invalid_remote));
 			fail_on_test(msg.msg[1] != CEC_MSG_GIVE_PHYSICAL_ADDR);
-			fail_on_test(msg.timeout != 1500 || msg.flags);
+			fail_on_test(msg.timeout != 1500);
+			fail_on_test(msg.flags);
 			fail_on_test(msg.reply != CEC_MSG_REPORT_PHYSICAL_ADDR);
 			fail_on_test(!(msg.tx_status & CEC_TX_STATUS_MAX_RETRIES));
 			fail_on_test((msg.tx_status & tx_ok_retry_mask) == tx_ok_retry_mask);
@@ -564,7 +652,8 @@ int testNonBlocking(struct node *node)
 			fail_on_test(msg.tx_arb_lost_cnt == 0xff);
 			fail_on_test(msg.tx_low_drive_cnt == 0xff);
 			fail_on_test(msg.tx_error_cnt == 0xff);
-			fail_on_test(msg.rx_ts || msg.rx_status);
+			fail_on_test(msg.rx_ts);
+			fail_on_test(msg.rx_status);
 			break;
 		}
 
@@ -585,13 +674,19 @@ int testNonBlocking(struct node *node)
 		fail_on_test(check_0(msg.msg + msg.len, sizeof(msg.msg) - msg.len));
 		fail_on_test(msg.msg[0] != ((la << 4) | remote_la));
 		fail_on_test(msg.msg[1] != CEC_MSG_GIVE_PHYSICAL_ADDR);
-		fail_on_test(msg.timeout || msg.flags);
-		fail_on_test(msg.sequence == 0 || msg.sequence == ~0U);
+		fail_on_test(msg.timeout);
+		fail_on_test(msg.flags);
+		fail_on_test(msg.sequence == 0);
+		fail_on_test(msg.sequence == ~0U);
 		fail_on_test(msg.reply);
 		fail_on_test(msg.tx_status);
-		fail_on_test(msg.rx_ts || msg.rx_status);
-		fail_on_test(msg.tx_ts || msg.tx_nack_cnt || msg.tx_arb_lost_cnt ||
-			     msg.tx_low_drive_cnt || msg.tx_error_cnt);
+		fail_on_test(msg.rx_ts);
+		fail_on_test(msg.rx_status);
+		fail_on_test(msg.tx_ts);
+		fail_on_test(msg.tx_nack_cnt);
+		fail_on_test(msg.tx_arb_lost_cnt);
+		fail_on_test(msg.tx_low_drive_cnt);
+		fail_on_test(msg.tx_error_cnt);
 		seq = msg.sequence;
 
 		sleep(1);
@@ -606,7 +701,8 @@ int testNonBlocking(struct node *node)
 			fail_on_test(check_0(msg.msg + msg.len, sizeof(msg.msg) - msg.len));
 			fail_on_test(msg.msg[0] != ((la << 4) | remote_la));
 			fail_on_test(msg.msg[1] != CEC_MSG_GIVE_PHYSICAL_ADDR);
-			fail_on_test(msg.timeout != 1500 || msg.flags);
+			fail_on_test(msg.timeout != 1500);
+			fail_on_test(msg.flags);
 			fail_on_test(msg.reply);
 			fail_on_test(!(msg.tx_status & CEC_TX_STATUS_OK));
 			fail_on_test((msg.tx_status & tx_ok_retry_mask) == tx_ok_retry_mask);
@@ -629,13 +725,19 @@ int testNonBlocking(struct node *node)
 		fail_on_test(check_0(msg.msg + msg.len, sizeof(msg.msg) - msg.len));
 		fail_on_test(msg.msg[0] != ((la << 4) | remote_la));
 		fail_on_test(msg.msg[1] != CEC_MSG_GIVE_PHYSICAL_ADDR);
-		fail_on_test(msg.timeout != 1000 || msg.flags);
-		fail_on_test(msg.sequence == 0 || msg.sequence == ~0U);
+		fail_on_test(msg.timeout != 1000);
+		fail_on_test(msg.flags);
+		fail_on_test(msg.sequence == 0);
+		fail_on_test(msg.sequence == ~0U);
 		fail_on_test(msg.reply != CEC_MSG_REPORT_PHYSICAL_ADDR);
 		fail_on_test(msg.tx_status);
-		fail_on_test(msg.rx_ts || msg.rx_status);
-		fail_on_test(msg.tx_ts || msg.tx_nack_cnt || msg.tx_arb_lost_cnt ||
-			     msg.tx_low_drive_cnt || msg.tx_error_cnt);
+		fail_on_test(msg.rx_ts);
+		fail_on_test(msg.rx_status);
+		fail_on_test(msg.tx_ts);
+		fail_on_test(msg.tx_nack_cnt);
+		fail_on_test(msg.tx_arb_lost_cnt);
+		fail_on_test(msg.tx_low_drive_cnt);
+		fail_on_test(msg.tx_error_cnt);
 		seq = msg.sequence;
 
 		sleep(1);
@@ -650,7 +752,8 @@ int testNonBlocking(struct node *node)
 			fail_on_test(check_0(msg.msg + msg.len, sizeof(msg.msg) - msg.len));
 			fail_on_test(msg.msg[0] != ((remote_la << 4) | 0xf));
 			fail_on_test(msg.msg[1] != CEC_MSG_REPORT_PHYSICAL_ADDR);
-			fail_on_test(msg.timeout != 1500 || msg.flags);
+			fail_on_test(msg.timeout != 1500);
+			fail_on_test(msg.flags);
 			fail_on_test(msg.reply != CEC_MSG_REPORT_PHYSICAL_ADDR);
 			fail_on_test(!(msg.tx_status & CEC_TX_STATUS_OK));
 			fail_on_test((msg.tx_status & tx_ok_retry_mask) == tx_ok_retry_mask);
@@ -658,7 +761,9 @@ int testNonBlocking(struct node *node)
 			fail_on_test(msg.tx_arb_lost_cnt == 0xff);
 			fail_on_test(msg.tx_low_drive_cnt == 0xff);
 			fail_on_test(msg.tx_error_cnt == 0xff);
-			fail_on_test(msg.rx_ts == 0 || msg.rx_ts == ~0ULL || msg.rx_status != CEC_RX_STATUS_OK);
+			fail_on_test(msg.rx_ts == 0);
+			fail_on_test(msg.rx_ts == ~0ULL);
+			fail_on_test(msg.rx_status != CEC_RX_STATUS_OK);
 			fail_on_test(msg.rx_ts < msg.tx_ts);
 			break;
 		}
@@ -885,6 +990,7 @@ int testLostMsgs(struct node *node)
 
 	bool got_busy = false;
 	unsigned xfer_cnt = 0;
+	unsigned tx_queue_depth = 0;
 
 	do {
 		int res;
@@ -893,13 +999,16 @@ int testLostMsgs(struct node *node)
 			res = doioctl(node, CEC_TRANSMIT, &msg);
 
 			fail_on_test(res && res != EBUSY);
+			if (!res)
+				xfer_cnt++;
+
 			if (res == EBUSY) {
 				struct timeval tv = { 0, 10000 }; // 10 ms
 
 				select(0, NULL, NULL, NULL, &tv);
 				got_busy = true;
 			} else if (!got_busy) {
-				xfer_cnt++;
+				tx_queue_depth++;
 			}
 		} while (res == EBUSY);
 		// Alternate between wait for reply and just transmit
@@ -911,21 +1020,26 @@ int testLostMsgs(struct node *node)
 
 	/*
 	 * No more than max 18 transmits can be queued, but one message
-	 * might be finished transmitting before the queue fills up, so
+	 * might finish transmitting before the queue fills up, so
 	 * check for 19 instead.
 	 */
-	fail_on_test(xfer_cnt == 0 || xfer_cnt > 19);
+	fail_on_test(tx_queue_depth == 0 || tx_queue_depth > 19);
 
 	unsigned pending_msgs = 0;
 
 	fcntl(node->fd, F_SETFL, fcntl(node->fd, F_GETFL) & ~O_NONBLOCK);
-	msg.timeout = 1000;
+	msg.timeout = 3000;
 
 	while (!doioctl(node, CEC_RECEIVE, &msg))
 		pending_msgs++;
 
-	/* Should be at least the size of the internal message queue */
-	fail_on_test(pending_msgs < 18 * 3);
+	/*
+	 * Should be at least the size of the internal message queue and
+	 * close to the number of transmitted messages.
+	 */
+	if (pending_msgs < 18 * 3 || pending_msgs > xfer_cnt || pending_msgs < xfer_cnt - 2)
+		return fail("There were %d pending messages for %d transmitted messages\n",
+			    pending_msgs, xfer_cnt);
 
 	mode = CEC_MODE_INITIATOR;
 	fail_on_test(doioctl(node, CEC_S_MODE, &mode));
@@ -951,6 +1065,7 @@ void testAdapter(struct node &node, struct cec_log_addrs &laddrs,
 	}
 	printf("\tCEC_ADAP_G/S_LOG_ADDRS: %s\n", ok(testAdapLogAddrs(&node)));
 	fcntl(node.fd, F_SETFL, fcntl(node.fd, F_GETFL) & ~O_NONBLOCK);
+	sleep(1);
 	if (node.caps & CEC_CAP_LOG_ADDRS) {
 		struct cec_log_addrs clear = { };
 
@@ -984,6 +1099,7 @@ void testAdapter(struct node &node, struct cec_log_addrs &laddrs,
 	printf("\tCEC_G/S_MODE: %s\n", ok(testModes(&node, &node2)));
 	close(node2.fd);
 	doioctl(&node, CEC_S_MODE, &mode);
+
 	printf("\tCEC_EVENT_LOST_MSGS: %s\n", ok(testLostMsgs(&node)));
 	fcntl(node.fd, F_SETFL, fcntl(node.fd, F_GETFL) & ~O_NONBLOCK);
 }

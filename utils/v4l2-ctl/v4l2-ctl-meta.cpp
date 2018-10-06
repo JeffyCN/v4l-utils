@@ -23,23 +23,12 @@ void meta_usage(void)
 	printf("\nMetadata Formats options:\n"
 	       "  --list-formats-meta display supported metadata capture formats [VIDIOC_ENUM_FMT]\n"
 	       "  --get-fmt-meta      query the metadata capture format [VIDIOC_G_FMT]\n"
-	       "  --set-fmt-meta=<f>  set the metadata capture format [VIDIOC_S_FMT]\n"
+	       "  --set-fmt-meta <f>  set the metadata capture format [VIDIOC_S_FMT]\n"
 	       "                     parameter is either the format index as reported by\n"
 	       "                     --list-formats-meta-cap, or the fourcc value as a string\n"
-	       "  --try-fmt-meta=<f>  try the metadata capture format [VIDIOC_TRY_FMT]\n"
+	       "  --try-fmt-meta <f>  try the metadata capture format [VIDIOC_TRY_FMT]\n"
 	       "                     parameter is either the format index as reported by\n"
 	       "                     --list-formats-meta-cap, or the fourcc value as a string\n"
-	       "  --list-formats-meta-out\n"
-	       "                     display supported metadata output formats [VIDIOC_ENUM_FMT]\n"
-	       "  --get-fmt-meta-out  query the metadata output format [VIDIOC_G_FMT]\n"
-	       "  --set-fmt-meta-out=<f>\n"
-	       "                     set the metadata output format [VIDIOC_S_FMT]\n"
-	       "                     parameter is either the format index as reported by\n"
-	       "                     --list-formats-meta-out, or the fourcc value as a string\n"
-	       "  --try-fmt-meta-out=<f>\n"
-	       "                     try the metadata output format [VIDIOC_TRY_FMT]\n"
-	       "                     parameter is either the format index as reported by\n"
-	       "                     --list-formats-meta-out, or the fourcc value as a string\n"
 	       );
 }
 
@@ -61,8 +50,9 @@ void meta_cmd(int ch, char *optarg)
 	}
 }
 
-void meta_set(int fd)
+void meta_set(cv4l_fd &_fd)
 {
+	int fd = _fd.g_fd();
 	int ret;
 
 	if (options[OptSetMetaFormat] || options[OptTryMetaFormat]) {
@@ -88,20 +78,20 @@ void meta_set(int fd)
 		else
 			ret = doioctl(fd, VIDIOC_TRY_FMT, &in_vfmt);
 		if (ret == 0 && (verbose || options[OptTryMetaFormat]))
-			printfmt(in_vfmt);
+			printfmt(fd, in_vfmt);
 	}
 }
 
-void meta_get(int fd)
+void meta_get(cv4l_fd &fd)
 {
 	if (options[OptGetMetaFormat]) {
 		vfmt.type = V4L2_BUF_TYPE_META_CAPTURE;
-		if (doioctl(fd, VIDIOC_G_FMT, &vfmt) == 0)
-			printfmt(vfmt);
+		if (doioctl(fd.g_fd(), VIDIOC_G_FMT, &vfmt) == 0)
+			printfmt(fd.g_fd(), vfmt);
 	}
 }
 
-void meta_list(int fd)
+void meta_list(cv4l_fd &fd)
 {
 	if (options[OptListMetaFormats]) {
 		printf("ioctl: VIDIOC_ENUM_FMT\n");

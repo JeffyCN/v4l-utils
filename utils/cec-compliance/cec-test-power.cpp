@@ -1,18 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright 2016 Cisco Systems, Inc. and/or its affiliates. All rights reserved.
- *
- * This program is free software; you may redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; version 2 of the License.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
  */
 
 #include <unistd.h>
@@ -43,7 +31,7 @@ static bool get_power_status(struct node *node, unsigned me, unsigned la, __u8 &
 		power_status = CEC_OP_POWER_STATUS_STANDBY;
 		return true;
 	}
-	if (res || timed_out_or_abort(&msg))
+	if (res || !(msg.tx_status & CEC_TX_STATUS_OK) || timed_out_or_abort(&msg))
 		return false;
 	cec_ops_report_power_status(&msg, &power_status);
 	return true;
@@ -133,7 +121,15 @@ static int one_touch_play_view_on(struct node *node, unsigned me, unsigned la, b
 		cec_msg_image_view_on(&msg);
 	else if (opcode == CEC_MSG_TEXT_VIEW_ON)
 		cec_msg_text_view_on(&msg);
-	fail_on_test(!transmit_timeout(node, &msg));
+
+	int res = doioctl(node, CEC_TRANSMIT, &msg);
+
+	if (res == ENONET && la == CEC_LOG_ADDR_TV) {
+		msg.msg[0] = (CEC_LOG_ADDR_UNREGISTERED << 4) | la;
+		res = doioctl(node, CEC_TRANSMIT, &msg);
+	}
+	fail_on_test(res || !(msg.tx_status & CEC_TX_STATUS_OK));
+
 	fail_on_test(is_tv(la, node->remote[la].prim_type) && unrecognized_op(&msg));
 	if (refused(&msg))
 		return REFUSED;
@@ -267,7 +263,7 @@ static bool wait_changing_power_status(struct node *node, unsigned me, unsigned 
 	__u8 old_status;
 	time_t t = time(NULL);
 
-	announce("Checking for power status change. This may take up to %u s.", long_timeout);
+	announce("Checking for power status change. This may take up to %llu s.", (long long)long_timeout);
 	if (!get_power_status(node, me, la, old_status))
 		return false;
 	while (time(NULL) - t < long_timeout) {
@@ -297,7 +293,7 @@ static bool poll_stable_power_status(struct node *node, unsigned me, unsigned la
 
 	/* Some devices can use several seconds to transition from one power
 	   state to another, so the power state must be repeatedly polled */
-	announce("Waiting for new stable power status. This may take up to %u s.", long_timeout);
+	announce("Waiting for new stable power status. This may take up to %llu s.", (long long)long_timeout);
 	while (time(NULL) - t < long_timeout) {
 		__u8 power_status;
 
@@ -306,6 +302,8 @@ static bool poll_stable_power_status(struct node *node, unsigned me, unsigned la
 			   between power modes. Register that this happens, but continue
 			   the test. */
 			unresponsive_time = time(NULL) - t;
+			sleep(SLEEP_POLL_POWER_STATUS);
+			continue;
 		}
 		if (!transient && (power_status == CEC_OP_POWER_STATUS_TO_ON ||
 				   power_status == CEC_OP_POWER_STATUS_TO_STANDBY)) {
@@ -388,15 +386,18 @@ static int standby_resume_active_source_nowake(struct node *node, unsigned me, u
 
 	node->remote[la].in_standby = false;
 
-	/* In CEC 2.0 it is specified that a device shall not go out of standby
-	   if an Active Source message is received. */
+	/*
+	 * In CEC 2.0 it is specified that a device shall not go out of standby
+	 * if an Active Source message is received. The CEC 1.4 implies this as
+	 * well, even though it is not as clear about this as the 2.0 spec.
+	 */
 	announce("Sending Active Source message.");
 	cec_msg_init(&msg, me, la);
 	cec_msg_active_source(&msg, node->phys_addr);
 	int res = doioctl(node, CEC_TRANSMIT, &msg);
 	fail_on_test(res && res != ENONET);
 	fail_on_test(wait_changing_power_status(node, me, la, new_status, unresponsive_time));
-	fail_on_test_v2_warn(node->remote[la].cec_version, new_status != CEC_OP_POWER_STATUS_STANDBY);
+	fail_on_test(new_status != CEC_OP_POWER_STATUS_STANDBY);
 	node->remote[la].in_standby = true;
 	if (unresponsive_time > 0)
 		warn("The device stayed correctly in standby, but became unresponsive for %d s.\n",
@@ -485,11 +486,68 @@ static int standby_resume_wakeup(struct node *node, unsigned me, unsigned la, bo
 	return 0;
 }
 
+static int standby_resume_wakeup_view_on(struct node *node, unsigned me, unsigned la, bool interactive, __u8 opcode)
+{
+	if (!is_tv(la, node->remote[la].prim_type))
+		return NOTAPPLICABLE;
+
+	unsigned unresponsive_time = 0;
+
+	fail_on_test(!poll_stable_power_status(node, me, la, CEC_OP_POWER_STATUS_ON, unresponsive_time));
+
+	int ret = standby_resume_standby(node, me, la, interactive);
+
+	if (ret && opcode == CEC_MSG_TEXT_VIEW_ON) {
+		ret = standby_resume_standby(node, me, la, interactive);
+		if (!ret)
+			warn("A STANDBY was sent right after the display reports it was powered on, but it was ignored.\n");
+	}
+
+	if (ret)
+		return ret;
+
+	sleep(6);
+
+	ret = one_touch_play_view_on(node, me, la, interactive, opcode);
+
+	if (ret)
+		return ret;
+
+	announce("Device is woken up");
+	unresponsive_time = 0;
+	fail_on_test(!poll_stable_power_status(node, me, la, CEC_OP_POWER_STATUS_ON, unresponsive_time));
+	fail_on_test(interactive && !question("Is the device in On state?"));
+
+	struct cec_msg msg = {};
+
+	cec_msg_init(&msg, me, la);
+	cec_msg_active_source(&msg, node->phys_addr);
+	fail_on_test(!transmit_timeout(node, &msg));
+
+	if (unresponsive_time > 0)
+		warn("The device went correctly out of standby, but became unresponsive for %d s during the transition.\n",
+		     unresponsive_time);
+
+	return 0;
+}
+
+static int standby_resume_wakeup_image_view_on(struct node *node, unsigned me, unsigned la, bool interactive)
+{
+	return standby_resume_wakeup_view_on(node, me, la, interactive, CEC_MSG_IMAGE_VIEW_ON);
+}
+
+static int standby_resume_wakeup_text_view_on(struct node *node, unsigned me, unsigned la, bool interactive)
+{
+	return standby_resume_wakeup_view_on(node, me, la, interactive, CEC_MSG_TEXT_VIEW_ON);
+}
+
 struct remote_subtest standby_resume_subtests[] = {
 	{ "Standby", CEC_LOG_ADDR_MASK_ALL, standby_resume_standby },
 	{ "Repeated Standby message does not wake up", CEC_LOG_ADDR_MASK_ALL, standby_resume_standby_toggle },
 	{ "No wakeup on Active Source", CEC_LOG_ADDR_MASK_ALL, standby_resume_active_source_nowake },
-	{ "Wake up", CEC_LOG_ADDR_MASK_ALL, standby_resume_wakeup },
+	{ "Wake up", CEC_LOG_ADDR_MASK_ALL, standby_resume_wakeup},
+	{ "Wake up TV on Image View On", CEC_LOG_ADDR_MASK_TV, standby_resume_wakeup_image_view_on },
+	{ "Wake up TV on Text View On", CEC_LOG_ADDR_MASK_TV, standby_resume_wakeup_text_view_on },
 };
 
 const unsigned standby_resume_subtests_size = ARRAY_SIZE(standby_resume_subtests);

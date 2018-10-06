@@ -26,6 +26,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+#include <sys/wait.h>
 #include <fcntl.h>
 #include <ctype.h>
 #include <errno.h>
@@ -66,55 +67,6 @@ enum QueryBufMode {
 
 typedef std::map<struct timeval, struct v4l2_buffer> buf_info_map;
 static buf_info_map buffer_info;
-
-std::string pixfmt2s(unsigned id)
-{
-	std::string pixfmt;
-
-	pixfmt += (char)(id & 0x7f);
-	pixfmt += (char)((id >> 8) & 0x7f);
-	pixfmt += (char)((id >> 16) & 0x7f);
-	pixfmt += (char)((id >> 24) & 0x7f);
-	if (id & (1 << 31))
-		pixfmt += "-BE";
-	return pixfmt;
-}
-
-static std::string num2s(unsigned num)
-{
-	char buf[10];
-
-	sprintf(buf, "%08x", num);
-	return buf;
-}
-
-static std::string field2s(unsigned val)
-{
-	switch (val) {
-	case V4L2_FIELD_ANY:
-		return "Any";
-	case V4L2_FIELD_NONE:
-		return "None";
-	case V4L2_FIELD_TOP:
-		return "Top";
-	case V4L2_FIELD_BOTTOM:
-		return "Bottom";
-	case V4L2_FIELD_INTERLACED:
-		return "Interlaced";
-	case V4L2_FIELD_SEQ_TB:
-		return "Sequential Top-Bottom";
-	case V4L2_FIELD_SEQ_BT:
-		return "Sequential Bottom-Top";
-	case V4L2_FIELD_ALTERNATE:
-		return "Alternating";
-	case V4L2_FIELD_INTERLACED_TB:
-		return "Interlaced Top-Bottom";
-	case V4L2_FIELD_INTERLACED_BT:
-		return "Interlaced Bottom-Top";
-	default:
-		return "Unknown (" + num2s(val) + ")";
-	}
-}
 
 class buffer : public cv4l_buffer {
 public:
@@ -554,6 +506,26 @@ int testReqBufs(struct node *node)
 			fail_on_test(doioctl(node, VIDIOC_CREATE_BUFS, &crbufs));
 			fail_on_test(check_0(crbufs.reserved, sizeof(crbufs.reserved)));
 			fail_on_test(crbufs.index != q.g_buffers());
+
+			if (node->is_video) {
+				cv4l_fmt fmt;
+
+				node->g_fmt(fmt, q.g_type());
+				if (V4L2_TYPE_IS_MULTIPLANAR(q.g_type())) {
+					fmt.s_num_planes(fmt.g_num_planes() + 1);
+					fail_on_test(q.create_bufs(node, 1, &fmt) != EINVAL);
+					node->g_fmt(fmt, q.g_type());
+				}
+				fmt.s_height(fmt.g_height() / 2);
+				for (unsigned p = 0; p < fmt.g_num_planes(); p++)
+					fmt.s_sizeimage(fmt.g_sizeimage(p) / 2, p);
+				fail_on_test(q.create_bufs(node, 1, &fmt) != EINVAL);
+				fail_on_test(testQueryBuf(node, fmt.type, q.g_buffers()));
+				node->g_fmt(fmt, q.g_type());
+				for (unsigned p = 0; p < fmt.g_num_planes(); p++)
+					fmt.s_sizeimage(fmt.g_sizeimage(p) * 2, p);
+				fail_on_test(q.create_bufs(node, 1, &fmt));
+			}
 		}
 		fail_on_test(q.reqbufs(node));
 	}
@@ -589,10 +561,10 @@ int testExpBuf(struct node *node)
 
 		fail_on_test(q.reqbufs(node, 2));
 		if (q.has_expbuf(node)) {
-			fail_on_test(q.export_bufs(node));
+			fail_on_test(q.export_bufs(node, q.g_type()));
 			have_expbuf = true;
 		} else {
-			fail_on_test(!q.export_bufs(node));
+			fail_on_test(!q.export_bufs(node, q.g_type()));
 		}
 		q.close_exported_fds();
 		fail_on_test(q.reqbufs(node));
@@ -682,19 +654,22 @@ static int captureBufs(struct node *node, const cv4l_queue &q,
 
 		if (use_poll) {
 			struct timeval tv = { 2, 0 };
-			fd_set fds;
+			fd_set rfds, wfds;
 
-			FD_ZERO(&fds);
-			FD_SET(node->g_fd(), &fds);
+			FD_ZERO(&rfds);
+			FD_SET(node->g_fd(), &rfds);
+			FD_ZERO(&wfds);
+			FD_SET(node->g_fd(), &wfds);
 			if (node->is_m2m)
-				ret = select(node->g_fd() + 1, &fds, &fds, NULL, &tv);
+				ret = select(node->g_fd() + 1, &rfds, &wfds, NULL, &tv);
 			else if (v4l_type_is_output(q.g_type()))
-				ret = select(node->g_fd() + 1, NULL, &fds, NULL, &tv);
+				ret = select(node->g_fd() + 1, NULL, &wfds, NULL, &tv);
 			else
-				ret = select(node->g_fd() + 1, &fds, NULL, NULL, &tv);
+				ret = select(node->g_fd() + 1, &rfds, NULL, NULL, &tv);
 			fail_on_test(ret == 0);
 			fail_on_test(ret < 0);
-			fail_on_test(!FD_ISSET(node->g_fd(), &fds));
+			fail_on_test(!FD_ISSET(node->g_fd(), &rfds) &&
+				     !FD_ISSET(node->g_fd(), &wfds));
 		}
 
 		ret = buf.dqbuf(node);
@@ -1112,7 +1087,7 @@ static int setupDmaBuf(struct node *expbuf_node, struct node *node,
 {
 	fail_on_test(exp_q.reqbufs(expbuf_node, q.g_buffers()));
 	fail_on_test(exp_q.g_buffers() < q.g_buffers());
-	fail_on_test(exp_q.export_bufs(expbuf_node));
+	fail_on_test(exp_q.export_bufs(expbuf_node, exp_q.g_type()));
 
 	for (unsigned i = 0; i < q.g_buffers(); i++) {
 		buffer buf(q);
@@ -1212,6 +1187,97 @@ int testDmaBuf(struct node *expbuf_node, struct node *node, unsigned frame_count
 		fail_on_test(captureBufs(node, q, m2m_q, frame_count, true));
 		fail_on_test(node->streamoff(q.g_type()));
 		fail_on_test(node->streamoff(q.g_type()));
+	}
+	return 0;
+}
+
+static int testBlockingDQBuf(struct node *node, cv4l_queue &q)
+{
+	int pid_dqbuf;
+	int pid_streamoff;
+	int pid;
+
+	fail_on_test(q.reqbufs(node, 2));
+	fail_on_test(node->streamon(q.g_type()));
+
+	/*
+	 * This test checks if a blocking wait in VIDIOC_DQBUF doesn't block
+	 * other ioctls.
+	 */
+	pid_dqbuf = fork();
+	fail_on_test(pid_dqbuf == -1);
+
+	if (pid_dqbuf == 0) { // Child
+		/*
+		 * In the child process we call VIDIOC_DQBUF and wait
+		 * indefinitely since no buffers are queued.
+		 */
+		cv4l_buffer buf(q.g_type(), V4L2_MEMORY_MMAP);
+
+		node->dqbuf(buf);
+		exit(0);
+	}
+
+	/* Wait for the child process to start and block */
+	usleep(100000);
+	pid = waitpid(pid_dqbuf, NULL, WNOHANG);
+	/* Check that it is really blocking */
+	fail_on_test(pid);
+
+	pid_streamoff = fork();
+	fail_on_test(pid_streamoff == -1);
+
+	if (pid_streamoff == 0) { // Child
+		/*
+		 * In the second child call STREAMOFF: this shouldn't
+		 * be blocked by the DQBUF!
+		 */
+		node->streamoff(q.g_type());
+		exit(0);
+	}
+
+	int wstatus_streamoff = 0;
+
+	/* Wait for the second child to start and exit */
+	usleep(250000);
+	pid = waitpid(pid_streamoff, &wstatus_streamoff, WNOHANG);
+	kill(pid_dqbuf, SIGKILL);
+	fail_on_test(pid != pid_streamoff);
+	/* Test that the second child exited properly */
+	if (!pid || !WIFEXITED(wstatus_streamoff)) {
+		kill(pid_streamoff, SIGKILL);
+		fail_on_test(!pid || !WIFEXITED(wstatus_streamoff));
+	}
+
+	fail_on_test(node->streamoff(q.g_type()));
+	fail_on_test(q.reqbufs(node, 0));
+	return 0;
+}
+
+int testBlockingWait(struct node *node)
+{
+	bool can_stream = node->g_caps() & V4L2_CAP_STREAMING;
+	int type;
+
+	if (!can_stream || !node->valid_buftypes)
+		return ENOTTY;
+
+	buffer_info.clear();
+	for (type = 0; type <= V4L2_BUF_TYPE_LAST; type++) {
+		if (!(node->valid_buftypes & (1 << type)))
+			continue;
+		if (v4l_type_is_overlay(type))
+			continue;
+
+		cv4l_queue q(type, V4L2_MEMORY_MMAP);
+		cv4l_queue m2m_q(v4l_type_invert(type), V4L2_MEMORY_MMAP);
+	
+		if (testSetupVbi(node, type))
+			continue;
+
+		fail_on_test(testBlockingDQBuf(node, q));
+		if (node->is_m2m)
+			fail_on_test(testBlockingDQBuf(node, m2m_q));
 	}
 	return 0;
 }
@@ -1488,7 +1554,7 @@ static void streamFmt(struct node *node, __u32 pixelformat, __u32 w, __u32 h, v4
 	}
 
 	printf("\ttest %s for Format %s, Frame Size %ux%u%s:\n", op,
-				pixfmt2s(pixelformat).c_str(),
+				fcc2s(pixelformat).c_str(),
 				fmt.g_width(), fmt.g_frame_height(), hz);
 
 	if (has_crop)

@@ -34,10 +34,10 @@ void overlay_usage(void)
 	       "  --list-formats-overlay\n"
 	       "                     display supported overlay formats [VIDIOC_ENUM_FMT]\n"
 	       "  --find-fb          find the fb device corresponding with the overlay\n"
-	       "  --overlay=<on>     turn overlay on (1) or off (0) (VIDIOC_OVERLAY)\n"
+	       "  --overlay <on>     turn overlay on (1) or off (0) (VIDIOC_OVERLAY)\n"
 	       "  --get-fmt-overlay  query the video or video output overlay format [VIDIOC_G_FMT]\n"
 	       "  --set-fmt-overlay\n"
-	       "  --try-fmt-overlay=chromakey=<key>,global_alpha=<alpha>,\n"
+	       "  --try-fmt-overlay chromakey=<key>,global_alpha=<alpha>,\n"
 	       "                           top=<t>,left=<l>,width=<w>,height=<h>,field=<f>\n"
 	       "     		     set/try the video or video output overlay format [VIDIOC_TRY/S_FMT]\n"
 	       "                     <f> can be one of:\n"
@@ -47,66 +47,20 @@ void overlay_usage(void)
 	       "                     be invalidated.\n"
 	       "  --clear-clips      clear any old clips, to be used in combination with --try/set-fmt-overlay\n"
 	       "  --clear-bitmap     clear any old bitmap, to be used in combination with --try/set-fmt-overlay\n"
-	       "  --add-clip=top=<t>,left=<l>,width=<w>,height=<h>\n"
+	       "  --add-clip top=<t>,left=<l>,width=<w>,height=<h>\n"
 	       "                     Add an entry to the clip list. May be used multiple times.\n"
 	       "                     This clip list will be passed to --try/set-fmt-overlay\n"
-	       "  --add-bitmap=top=<t>,left=<l>,width=<w>,height=<h>\n"
+	       "  --add-bitmap top=<t>,left=<l>,width=<w>,height=<h>\n"
 	       "                     Set the bits in the given rectangle in the bitmap to 1. May be\n"
 	       "                     used multiple times.\n"
 	       "                     The bitmap will be passed to --try/set-fmt-overlay\n"
 	       "  --get-fbuf         query the overlay framebuffer data [VIDIOC_G_FBUF]\n"
-	       "  --set-fbuf=chromakey=<b>,src_chromakey=<b>,global_alpha=<b>,local_alpha=<b>,local_inv_alpha=<b>,fb=<fb>\n"
+	       "  --set-fbuf chromakey=<b>,src_chromakey=<b>,global_alpha=<b>,local_alpha=<b>,local_inv_alpha=<b>,fb=<fb>\n"
 	       "		     set the overlay framebuffer [VIDIOC_S_FBUF]\n"
 	       "                     <b> is 0 or 1\n"
 	       "                     <fb> is the framebuffer device (/dev/fbX)\n"
 	       "                     if <fb> starts with a digit, then /dev/fb<fb> is used\n"
 	       );
-}
-
-static std::string fbufcap2s(unsigned cap)
-{
-	std::string s;
-
-	if (cap & V4L2_FBUF_CAP_EXTERNOVERLAY)
-		s += "\t\t\tExtern Overlay\n";
-	if (cap & V4L2_FBUF_CAP_CHROMAKEY)
-		s += "\t\t\tChromakey\n";
-	if (cap & V4L2_FBUF_CAP_SRC_CHROMAKEY)
-		s += "\t\t\tSource Chromakey\n";
-	if (cap & V4L2_FBUF_CAP_GLOBAL_ALPHA)
-		s += "\t\t\tGlobal Alpha\n";
-	if (cap & V4L2_FBUF_CAP_LOCAL_ALPHA)
-		s += "\t\t\tLocal Alpha\n";
-	if (cap & V4L2_FBUF_CAP_LOCAL_INV_ALPHA)
-		s += "\t\t\tLocal Inverted Alpha\n";
-	if (cap & V4L2_FBUF_CAP_LIST_CLIPPING)
-		s += "\t\t\tClipping List\n";
-	if (cap & V4L2_FBUF_CAP_BITMAP_CLIPPING)
-		s += "\t\t\tClipping Bitmap\n";
-	if (s.empty()) s += "\t\t\t\n";
-	return s;
-}
-
-static std::string fbufflags2s(unsigned fl)
-{
-	std::string s;
-
-	if (fl & V4L2_FBUF_FLAG_PRIMARY)
-		s += "\t\t\tPrimary Graphics Surface\n";
-	if (fl & V4L2_FBUF_FLAG_OVERLAY)
-		s += "\t\t\tOverlay Matches Capture/Output Size\n";
-	if (fl & V4L2_FBUF_FLAG_CHROMAKEY)
-		s += "\t\t\tChromakey\n";
-	if (fl & V4L2_FBUF_FLAG_SRC_CHROMAKEY)
-		s += "\t\t\tSource Chromakey\n";
-	if (fl & V4L2_FBUF_FLAG_GLOBAL_ALPHA)
-		s += "\t\t\tGlobal Alpha\n";
-	if (fl & V4L2_FBUF_FLAG_LOCAL_ALPHA)
-		s += "\t\t\tLocal Alpha\n";
-	if (fl & V4L2_FBUF_FLAG_LOCAL_INV_ALPHA)
-		s += "\t\t\tLocal Inverted Alpha\n";
-	if (s.empty()) s += "\t\t\t\n";
-	return s;
 }
 
 static void printfbuf(const struct v4l2_framebuffer &fb)
@@ -502,7 +456,7 @@ static void do_try_set_overlay(struct v4l2_format &fmt, int fd)
 	else
 		ret = doioctl(fd, VIDIOC_TRY_FMT, &fmt);
 	if (ret == 0 && (verbose || options[OptTryOverlayFormat]))
-		printfmt(fmt);
+		printfmt(fd, fmt);
 
 free:
 	if (bitmap)
@@ -511,8 +465,10 @@ free:
 		free(cliplist);
 }
 
-void overlay_set(int fd)
+void overlay_set(cv4l_fd &_fd)
 {
+	int fd = _fd.g_fd();
+
 	if ((options[OptSetOverlayFormat] || options[OptTryOverlayFormat]) &&
 			(set_overlay_fmt || options[OptClearClips] || options[OptClearBitmap] ||
 			 bitmap_rects.size() || clips.size())) {
@@ -544,8 +500,10 @@ void overlay_set(int fd)
 	}
 }
 
-void overlay_get(int fd)
+void overlay_get(cv4l_fd &_fd)
 {
+	int fd = _fd.g_fd();
+
 	if (options[OptGetOverlayFormat]) {
 		struct v4l2_format fmt;
 		unsigned char *bitmap = NULL;
@@ -564,7 +522,7 @@ void overlay_get(int fd)
 			bitmap = (unsigned char *)calloc(1, stride * fmt.fmt.win.w.height);
 			fmt.fmt.win.bitmap = bitmap;
 			doioctl(fd, VIDIOC_G_FMT, &fmt);
-			printfmt(fmt);
+			printfmt(fd, fmt);
 			if (fmt.fmt.win.clips)
 				free(fmt.fmt.win.clips);
 			if (bitmap)
@@ -579,12 +537,12 @@ void overlay_get(int fd)
 	}
 }
 
-void overlay_list(int fd)
+void overlay_list(cv4l_fd &fd)
 {
 	if (options[OptListOverlayFormats]) {
 		printf("ioctl: VIDIOC_ENUM_FMT\n");
 		print_video_formats(fd, V4L2_BUF_TYPE_VIDEO_OVERLAY);
 	}
 	if (options[OptFindFb])
-		find_fb(fd);
+		find_fb(fd.g_fd());
 }

@@ -23,20 +23,20 @@ void sdr_usage(void)
 	printf("\nSDR Formats options:\n"
 	       "  --list-formats-sdr display supported SDR capture formats [VIDIOC_ENUM_FMT]\n"
 	       "  --get-fmt-sdr      query the SDR capture format [VIDIOC_G_FMT]\n"
-	       "  --set-fmt-sdr=<f>  set the SDR capture format [VIDIOC_S_FMT]\n"
+	       "  --set-fmt-sdr <f>  set the SDR capture format [VIDIOC_S_FMT]\n"
 	       "                     parameter is either the format index as reported by\n"
 	       "                     --list-formats-sdr-cap, or the fourcc value as a string\n"
-	       "  --try-fmt-sdr=<f>  try the SDR capture format [VIDIOC_TRY_FMT]\n"
+	       "  --try-fmt-sdr <f>  try the SDR capture format [VIDIOC_TRY_FMT]\n"
 	       "                     parameter is either the format index as reported by\n"
 	       "                     --list-formats-sdr-cap, or the fourcc value as a string\n"
 	       "  --list-formats-sdr-out\n"
 	       "                     display supported SDR output formats [VIDIOC_ENUM_FMT]\n"
 	       "  --get-fmt-sdr-out  query the SDR output format [VIDIOC_G_FMT]\n"
-	       "  --set-fmt-sdr-out=<f>\n"
+	       "  --set-fmt-sdr-out <f>\n"
 	       "                     set the SDR output format [VIDIOC_S_FMT]\n"
 	       "                     parameter is either the format index as reported by\n"
 	       "                     --list-formats-sdr-out, or the fourcc value as a string\n"
-	       "  --try-fmt-sdr-out=<f>\n"
+	       "  --try-fmt-sdr-out <f>\n"
 	       "                     try the SDR output format [VIDIOC_TRY_FMT]\n"
 	       "                     parameter is either the format index as reported by\n"
 	       "                     --list-formats-sdr-out, or the fourcc value as a string\n"
@@ -63,8 +63,9 @@ void sdr_cmd(int ch, char *optarg)
 	}
 }
 
-void sdr_set(int fd)
+void sdr_set(cv4l_fd &_fd)
 {
+	int fd = _fd.g_fd();
 	int ret;
 
 	if (options[OptSetSdrFormat] || options[OptTrySdrFormat]) {
@@ -90,7 +91,7 @@ void sdr_set(int fd)
 		else
 			ret = doioctl(fd, VIDIOC_TRY_FMT, &in_vfmt);
 		if (ret == 0 && (verbose || options[OptTrySdrFormat]))
-			printfmt(in_vfmt);
+			printfmt(fd, in_vfmt);
 	}
 	if (options[OptSetSdrOutFormat] || options[OptTrySdrOutFormat]) {
 		struct v4l2_format in_vfmt;
@@ -115,25 +116,25 @@ void sdr_set(int fd)
 		else
 			ret = doioctl(fd, VIDIOC_TRY_FMT, &in_vfmt);
 		if (ret == 0 && (verbose || options[OptTrySdrOutFormat]))
-			printfmt(in_vfmt);
+			printfmt(fd, in_vfmt);
 	}
 }
 
-void sdr_get(int fd)
+void sdr_get(cv4l_fd &fd)
 {
 	if (options[OptGetSdrFormat]) {
 		vfmt.type = V4L2_BUF_TYPE_SDR_CAPTURE;
-		if (doioctl(fd, VIDIOC_G_FMT, &vfmt) == 0)
-			printfmt(vfmt);
+		if (doioctl(fd.g_fd(), VIDIOC_G_FMT, &vfmt) == 0)
+			printfmt(fd.g_fd(), vfmt);
 	}
 	if (options[OptGetSdrOutFormat]) {
 		vfmt.type = V4L2_BUF_TYPE_SDR_OUTPUT;
-		if (doioctl(fd, VIDIOC_G_FMT, &vfmt) == 0)
-			printfmt(vfmt);
+		if (doioctl(fd.g_fd(), VIDIOC_G_FMT, &vfmt) == 0)
+			printfmt(fd.g_fd(), vfmt);
 	}
 }
 
-void sdr_list(int fd)
+void sdr_list(cv4l_fd &fd)
 {
 	if (options[OptListSdrFormats]) {
 		printf("ioctl: VIDIOC_ENUM_FMT\n");

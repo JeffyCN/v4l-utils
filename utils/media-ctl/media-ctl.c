@@ -195,6 +195,7 @@ static const struct flag_name bt_flags[] = {
 	{ V4L2_DV_FL_HAS_PICTURE_ASPECT, "has-picture-aspect" },
 	{ V4L2_DV_FL_HAS_CEA861_VIC, "has-cea861-vic" },
 	{ V4L2_DV_FL_HAS_HDMI_VIC, "has-hdmi-vic" },
+	{ V4L2_DV_FL_CAN_DETECT_REDUCED_FPS, "can-detect-reduced-fps" },
 };
 
 static void v4l2_subdev_print_dv_timings(const struct v4l2_dv_timings *timings,
@@ -602,6 +603,18 @@ int main(int argc, char **argv)
 
 		v4l2_subdev_print_format(pad->entity, pad->index,
 					 V4L2_SUBDEV_FORMAT_ACTIVE);
+	}
+
+	if (media_opts.get_dv_pad) {
+		struct media_pad *pad;
+
+		pad = media_parse_pad(media, media_opts.get_dv_pad, NULL);
+		if (pad == NULL) {
+			printf("Pad '%s' not found\n", media_opts.get_dv_pad);
+			goto out;
+		}
+
+		v4l2_subdev_print_subdev_dv(pad->entity);
 	}
 
 	if (media_opts.dv_pad) {

@@ -1,20 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * qv4l2 - Test Pattern Generator Tab
  *
  * Copyright 2014 Cisco Systems, Inc. and/or its affiliates. All rights reserved.
- *
- * This program is free software; you may redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; version 2 of the License.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
  */
 
 #include "qv4l2.h"
@@ -155,7 +143,7 @@ void ApplicationWindow::addTpgTab(int m_winWidth)
 	m_tpgColorspace->addItem("SMPTE 170M", QVariant(V4L2_COLORSPACE_SMPTE170M));
 	m_tpgColorspace->addItem("Rec. 709", QVariant(V4L2_COLORSPACE_REC709));
 	m_tpgColorspace->addItem("sRGB", QVariant(V4L2_COLORSPACE_SRGB));
-	m_tpgColorspace->addItem("Adobe RGB", QVariant(V4L2_COLORSPACE_ADOBERGB));
+	m_tpgColorspace->addItem("opRGB", QVariant(V4L2_COLORSPACE_OPRGB));
 	m_tpgColorspace->addItem("BT.2020", QVariant(V4L2_COLORSPACE_BT2020));
 	m_tpgColorspace->addItem("DCI-P3", QVariant(V4L2_COLORSPACE_DCI_P3));
 	m_tpgColorspace->addItem("SMPTE 240M", QVariant(V4L2_COLORSPACE_SMPTE240M));
@@ -169,7 +157,7 @@ void ApplicationWindow::addTpgTab(int m_winWidth)
 	m_tpgXferFunc->addItem("Use Format", QVariant(V4L2_XFER_FUNC_DEFAULT));
 	m_tpgXferFunc->addItem("Rec. 709", QVariant(V4L2_XFER_FUNC_709));
 	m_tpgXferFunc->addItem("sRGB", QVariant(V4L2_XFER_FUNC_SRGB));
-	m_tpgXferFunc->addItem("Adobe RGB", QVariant(V4L2_XFER_FUNC_ADOBERGB));
+	m_tpgXferFunc->addItem("opRGB", QVariant(V4L2_XFER_FUNC_OPRGB));
 	m_tpgXferFunc->addItem("DCI-P3", QVariant(V4L2_XFER_FUNC_DCI_P3));
 	m_tpgXferFunc->addItem("SMPTE 2084", QVariant(V4L2_XFER_FUNC_SMPTE2084));
 	m_tpgXferFunc->addItem("SMPTE 240M", QVariant(V4L2_XFER_FUNC_SMPTE240M));

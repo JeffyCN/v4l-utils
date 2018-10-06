@@ -10,6 +10,9 @@
 #include <string>
 
 #include <linux/videodev2.h>
+#include <linux/v4l2-subdev.h>
+
+#include <v4l2-info.h>
 
 #ifndef NO_LIBV4L2
 #include <libv4l2.h>
@@ -20,6 +23,24 @@
 #define v4l2_mmap(start, length, prot, flags, fd, offset) (MAP_FAILED)
 #define v4l2_munmap(_start, length) (-1)
 #endif
+
+#include "cv4l-helpers.h"
+
+class cv4l_disable_trace {
+public:
+	cv4l_disable_trace(cv4l_fd &fd) : _fd(fd)
+	{
+		old_trace = _fd.g_trace();
+		_fd.s_trace(0);
+	}
+	~cv4l_disable_trace()
+	{
+		_fd.s_trace(old_trace);
+	}
+private:
+	cv4l_fd &_fd;
+	unsigned int old_trace;
+};
 
 /* Available options.
 
@@ -58,6 +79,8 @@ enum Option {
 	OptGetVideoFormat = 'V',
 	OptSetVideoFormat = 'v',
 	OptUseWrapper = 'w',
+	OptGetVideoOutFormat = 'X',
+	OptSetVideoOutFormat = 'x',
 
 	OptGetSlicedVbiOutFormat = 128,
 	OptGetOverlayFormat,
@@ -65,16 +88,16 @@ enum Option {
 	OptGetVbiOutFormat,
 	OptGetSdrFormat,
 	OptGetSdrOutFormat,
-	OptGetVideoOutFormat,
 	OptGetMetaFormat,
+	OptGetSubDevFormat,
 	OptSetSlicedVbiOutFormat,
 	OptSetOverlayFormat,
 	OptSetVbiFormat,
 	OptSetVbiOutFormat,
 	OptSetSdrFormat,
 	OptSetSdrOutFormat,
-	OptSetVideoOutFormat,
 	OptSetMetaFormat,
+	OptSetSubDevFormat,
 	OptTryVideoOutFormat,
 	OptTrySlicedVbiOutFormat,
 	OptTrySlicedVbiFormat,
@@ -85,6 +108,7 @@ enum Option {
 	OptTrySdrFormat,
 	OptTrySdrOutFormat,
 	OptTryMetaFormat,
+	OptTrySubDevFormat,
 	OptAll,
 	OptListStandards,
 	OptListFormats,
@@ -96,7 +120,11 @@ enum Option {
 	OptListSdrFormats,
 	OptListSdrOutFormats,
 	OptListOutFormats,
+	OptListOutFormatsExt,
 	OptListMetaFormats,
+	OptListSubDevMBusCodes,
+	OptListSubDevFrameSizes,
+	OptListSubDevFrameIntervals,
 	OptListOutFields,
 	OptClearClips,
 	OptClearBitmap,
@@ -122,6 +150,11 @@ enum Option {
 	OptSetSelection,
 	OptGetOutputSelection,
 	OptSetOutputSelection,
+	OptGetSubDevSelection,
+	OptSetSubDevSelection,
+	OptTrySubDevSelection,
+	OptGetSubDevFPS,
+	OptSetSubDevFPS,
 	OptGetAudioInput,
 	OptSetAudioInput,
 	OptGetAudioOutput,
@@ -179,11 +212,14 @@ enum Option {
 	OptStreamPoll,
 	OptStreamNoQuery,
 	OptStreamTo,
+	OptStreamToHdr,
 	OptStreamToHost,
+	OptStreamLossless,
 	OptStreamMmap,
 	OptStreamUser,
 	OptStreamDmaBuf,
 	OptStreamFrom,
+	OptStreamFromHdr,
 	OptStreamFromHost,
 	OptStreamOutPattern,
 	OptStreamOutSquare,
@@ -211,6 +247,7 @@ enum Option {
 	OptHelpVbi,
 	OptHelpSdr,
 	OptHelpMeta,
+	OptHelpSubDev,
 	OptHelpSelection,
 	OptHelpMisc,
 	OptHelpStreaming,
@@ -253,123 +290,132 @@ typedef struct {
 // v4l2-ctl.cpp
 int doioctl_name(int fd, unsigned long int request, void *parm, const char *name);
 int test_ioctl(int fd, int cmd, void *arg);
-std::string flags2s(unsigned val, const flag_def *def);
 int parse_subopt(char **subs, const char * const *subopts, char **value);
-std::string std2s(v4l2_std_id std);
-std::string buftype2s(int type);
-std::string fcc2s(unsigned int val);
-std::string fmtdesc2s(unsigned flags);
-std::string colorspace2s(int val);
-std::string service2s(unsigned service);
-std::string field2s(int val);
-void print_v4lstd(v4l2_std_id std);
 __u32 parse_field(const char *s);
+__u32 parse_colorspace(const char *s);
+__u32 parse_xfer_func(const char *s);
+__u32 parse_ycbcr(const char *s);
+__u32 parse_hsv(const char *s);
+__u32 parse_quantization(const char *s);
 int parse_fmt(char *optarg, __u32 &width, __u32 &height, __u32 &pixelformat,
 	      __u32 &field, __u32 &colorspace, __u32 &xfer, __u32 &ycbcr,
 	      __u32 &quantization, __u32 &flags, __u32 *bytesperline);
+int parse_selection_target(const char *s, unsigned int &target);
+int parse_selection_flags(const char *s);
+void print_selection(const struct v4l2_selection &sel);
 __u32 find_pixel_format(int fd, unsigned index, bool output, bool mplane);
-void printfmt(const struct v4l2_format &vfmt);
-void print_video_formats(int fd, __u32 type);
+void print_frmsize(const struct v4l2_frmsizeenum &frmsize, const char *prefix);
+void print_frmival(const struct v4l2_frmivalenum &frmival, const char *prefix);
+void printfmt(int fd, const struct v4l2_format &vfmt);
+void print_video_formats(cv4l_fd &fd, __u32 type);
+void print_video_formats_ext(cv4l_fd &fd, __u32 type);
 
 #define doioctl(n, r, p) doioctl_name(n, r, p, #r)
 
 // v4l2-ctl-common.cpp
 void common_usage(void);
 void common_cmd(int ch, char *optarg);
-void common_set(int fd);
-void common_get(int fd);
-void common_list(int fd);
-void common_process_controls(int fd);
+void common_set(cv4l_fd &fd);
+void common_get(cv4l_fd &fd);
+void common_list(cv4l_fd &fd);
+void common_process_controls(cv4l_fd &fd);
 void common_control_event(const struct v4l2_event *ev);
 int common_find_ctrl_id(const char *name);
 
 // v4l2-ctl-tuner.cpp
 void tuner_usage(void);
 void tuner_cmd(int ch, char *optarg);
-void tuner_set(int fd);
-void tuner_get(int fd);
+void tuner_set(cv4l_fd &fd);
+void tuner_get(cv4l_fd &fd);
 
 // v4l2-ctl-io.cpp
 void io_usage(void);
 void io_cmd(int ch, char *optarg);
-void io_set(int fd);
-void io_get(int fd);
-void io_list(int fd);
+void io_set(cv4l_fd &fd);
+void io_get(cv4l_fd &fd);
+void io_list(cv4l_fd &fd);
 
 // v4l2-ctl-stds.cpp
 void stds_usage(void);
 void stds_cmd(int ch, char *optarg);
-void stds_set(int fd);
-void stds_get(int fd);
-void stds_list(int fd);
+void stds_set(cv4l_fd &fd);
+void stds_get(cv4l_fd &fd);
+void stds_list(cv4l_fd &fd);
 
 // v4l2-ctl-vidcap.cpp
 void vidcap_usage(void);
 void vidcap_cmd(int ch, char *optarg);
-void vidcap_set(int fd);
-void vidcap_get(int fd);
-void vidcap_list(int fd);
+void vidcap_set(cv4l_fd &fd);
+void vidcap_get(cv4l_fd &fd);
+void vidcap_list(cv4l_fd &fd);
 
 // v4l2-ctl-vidout.cpp
 void vidout_usage(void);
 void vidout_cmd(int ch, char *optarg);
-void vidout_set(int fd);
-void vidout_get(int fd);
-void vidout_list(int fd);
+void vidout_set(cv4l_fd &fd);
+void vidout_get(cv4l_fd &fd);
+void vidout_list(cv4l_fd &fd);
 
 // v4l2-ctl-overlay.cpp
 void overlay_usage(void);
 void overlay_cmd(int ch, char *optarg);
-void overlay_set(int fd);
-void overlay_get(int fd);
-void overlay_list(int fd);
+void overlay_set(cv4l_fd &fd);
+void overlay_get(cv4l_fd &fd);
+void overlay_list(cv4l_fd &fd);
 
 // v4l2-ctl-vbi.cpp
 void vbi_usage(void);
 void vbi_cmd(int ch, char *optarg);
-void vbi_set(int fd);
-void vbi_get(int fd);
-void vbi_list(int fd);
+void vbi_set(cv4l_fd &fd);
+void vbi_get(cv4l_fd &fd);
+void vbi_list(cv4l_fd &fd);
 
 // v4l2-ctl-sdr.cpp
 void sdr_usage(void);
 void sdr_cmd(int ch, char *optarg);
-void sdr_set(int fd);
-void sdr_get(int fd);
-void sdr_list(int fd);
+void sdr_set(cv4l_fd &fd);
+void sdr_get(cv4l_fd &fd);
+void sdr_list(cv4l_fd &fd);
 
 // v4l2-ctl-meta.cpp
 void meta_usage(void);
 void meta_cmd(int ch, char *optarg);
-void meta_set(int fd);
-void meta_get(int fd);
-void meta_list(int fd);
+void meta_set(cv4l_fd &fd);
+void meta_get(cv4l_fd &fd);
+void meta_list(cv4l_fd &fd);
+
+// v4l2-ctl-subdev.cpp
+void subdev_usage(void);
+void subdev_cmd(int ch, char *optarg);
+void subdev_set(cv4l_fd &fd);
+void subdev_get(cv4l_fd &fd);
+void subdev_list(cv4l_fd &fd);
 
 // v4l2-ctl-selection.cpp
 void selection_usage(void);
 void selection_cmd(int ch, char *optarg);
-void selection_set(int fd);
-void selection_get(int fd);
+void selection_set(cv4l_fd &fd);
+void selection_get(cv4l_fd &fd);
 
 // v4l2-ctl-misc.cpp
 // This one is also used by the streaming code.
 extern struct v4l2_decoder_cmd dec_cmd;
 void misc_usage(void);
 void misc_cmd(int ch, char *optarg);
-void misc_set(int fd);
-void misc_get(int fd);
+void misc_set(cv4l_fd &fd);
+void misc_get(cv4l_fd &fd);
 
 // v4l2-ctl-streaming.cpp
 void streaming_usage(void);
 void streaming_cmd(int ch, char *optarg);
-void streaming_set(int fd, int out_fd);
-void streaming_list(int fd, int out_fd);
+void streaming_set(cv4l_fd &fd, cv4l_fd &out_fd);
+void streaming_list(cv4l_fd &fd, cv4l_fd &out_fd);
 
 // v4l2-ctl-edid.cpp
 void edid_usage(void);
 void edid_cmd(int ch, char *optarg);
-void edid_set(int fd);
-void edid_get(int fd);
+void edid_set(cv4l_fd &fd);
+void edid_get(cv4l_fd &fd);
 
 /* v4l2-ctl-modes.cpp */
 bool calc_cvt_modeline(int image_width, int image_height,

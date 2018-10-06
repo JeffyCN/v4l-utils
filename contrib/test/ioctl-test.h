@@ -15,7 +15,10 @@ union v4l_parms {
 	enum v4l2_priority prio;
 
 	/* ioctl structs */
+	struct dmx_buffer			p_dmx_buffer;
+	struct dmx_exportbuffer			p_dmx_exportbuffer;
 	struct dmx_pes_filter_params		p_dmx_pes_filter_params;
+	struct dmx_requestbuffers		p_dmx_requestbuffers;
 	struct dmx_sct_filter_params		p_dmx_sct_filter_params;
 	struct dmx_stc				p_dmx_stc;
 	struct dtv_properties			p_dtv_properties;
@@ -86,9 +89,14 @@ static const struct {
 } ioctls[] = {
 	/* ioctl structs */
 	ioc(demux, DMX_ADD_PID),							/*  __u16 */
+	ioc(demux, DMX_DQBUF),								/*  struct dmx_buffer */
+	ioc(demux, DMX_EXPBUF),								/*  struct dmx_exportbuffer */
 	ioc(demux, DMX_GET_PES_PIDS),							/*  __u16[5] */
 	ioc(demux, DMX_GET_STC),							/*  struct dmx_stc */
+	ioc(demux, DMX_QBUF),								/*  struct dmx_buffer */
+	ioc(demux, DMX_QUERYBUF),							/*  struct dmx_buffer */
 	ioc(demux, DMX_REMOVE_PID),							/*  __u16 */
+	ioc(demux, DMX_REQBUFS),							/*  struct dmx_requestbuffers */
 	ioc(demux, DMX_SET_BUFFER_SIZE),						/*  void */
 	ioc(demux, DMX_SET_FILTER),							/*  struct dmx_sct_filter_params */
 	ioc(demux, DMX_SET_PES_FILTER),							/*  struct dmx_pes_filter_params */
@@ -168,10 +176,10 @@ static const struct {
 	ioc(video, VIDIOC_QUERY_DV_TIMINGS),						/*  struct v4l2_dv_timings */
 	ioc(video, VIDIOC_QUERY_EXT_CTRL),						/*  struct v4l2_query_ext_ctrl */
 	ioc(video, VIDIOC_REQBUFS),							/*  struct v4l2_requestbuffers */
-	ioc(video, VIDIOC_RESERVED),							/*  void */
 	ioc(video, VIDIOC_STREAMOFF),							/*  int */
 	ioc(video, VIDIOC_STREAMON),							/*  int */
 	ioc(subdev, VIDIOC_SUBDEV_DV_TIMINGS_CAP),					/*  struct v4l2_dv_timings_cap */
+	ioc(subdev, VIDIOC_SUBDEV_ENUMSTD),						/*  struct v4l2_standard */
 	ioc(subdev, VIDIOC_SUBDEV_ENUM_DV_TIMINGS),					/*  struct v4l2_enum_dv_timings */
 	ioc(subdev, VIDIOC_SUBDEV_ENUM_FRAME_INTERVAL),					/*  struct v4l2_subdev_frame_interval_enum */
 	ioc(subdev, VIDIOC_SUBDEV_ENUM_FRAME_SIZE),					/*  struct v4l2_subdev_frame_size_enum */
@@ -182,6 +190,8 @@ static const struct {
 	ioc(subdev, VIDIOC_SUBDEV_G_FMT),						/*  struct v4l2_subdev_format */
 	ioc(subdev, VIDIOC_SUBDEV_G_FRAME_INTERVAL),					/*  struct v4l2_subdev_frame_interval */
 	ioc(subdev, VIDIOC_SUBDEV_G_SELECTION),						/*  struct v4l2_subdev_selection */
+	ioc(subdev, VIDIOC_SUBDEV_G_STD),						/*  v4l2_std_id */
+	ioc(subdev, VIDIOC_SUBDEV_QUERYSTD),						/*  v4l2_std_id */
 	ioc(subdev, VIDIOC_SUBDEV_QUERY_DV_TIMINGS),					/*  struct v4l2_dv_timings */
 	ioc(subdev, VIDIOC_SUBDEV_S_CROP),						/*  struct v4l2_subdev_crop */
 	ioc(subdev, VIDIOC_SUBDEV_S_DV_TIMINGS),					/*  struct v4l2_dv_timings */
@@ -189,6 +199,7 @@ static const struct {
 	ioc(subdev, VIDIOC_SUBDEV_S_FMT),						/*  struct v4l2_subdev_format */
 	ioc(subdev, VIDIOC_SUBDEV_S_FRAME_INTERVAL),					/*  struct v4l2_subdev_frame_interval */
 	ioc(subdev, VIDIOC_SUBDEV_S_SELECTION),						/*  struct v4l2_subdev_selection */
+	ioc(subdev, VIDIOC_SUBDEV_S_STD),						/*  v4l2_std_id */
 	ioc(video, VIDIOC_SUBSCRIBE_EVENT),						/*  struct v4l2_event_subscription */
 	ioc(video, VIDIOC_S_AUDIO),							/*  struct v4l2_audio */
 	ioc(video, VIDIOC_S_AUDOUT),							/*  struct v4l2_audioout */

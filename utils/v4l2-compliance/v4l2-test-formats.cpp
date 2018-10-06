@@ -329,9 +329,8 @@ static int testColorspace(__u32 pixelformat, __u32 colorspace, __u32 ycbcr_enc, 
 {
 	fail_on_test(!colorspace);
 	fail_on_test(colorspace == V4L2_COLORSPACE_BT878);
-	fail_on_test(pixelformat == V4L2_PIX_FMT_JPEG &&
-		     colorspace != V4L2_COLORSPACE_JPEG);
 	fail_on_test(pixelformat != V4L2_PIX_FMT_JPEG &&
+		     pixelformat != V4L2_PIX_FMT_MJPEG &&
 		     colorspace == V4L2_COLORSPACE_JPEG);
 	fail_on_test(colorspace >= 0xff);
 	fail_on_test(ycbcr_enc >= 0xff);
@@ -452,7 +451,7 @@ static int testFormatsType(struct node *node, int ret,  unsigned type, struct v4
 		if (!node->is_m2m)
 			fail_on_test(testColorspace(pix_mp.pixelformat, pix_mp.colorspace, 
                                             pix_mp.ycbcr_enc, pix_mp.quantization));
-		fail_on_test(pix.field == V4L2_FIELD_ANY);
+		fail_on_test(pix_mp.field == V4L2_FIELD_ANY);
 		ret = check_0(pix_mp.reserved, sizeof(pix_mp.reserved));
 		if (ret)
 			return fail("pix_mp.reserved not zeroed\n");
@@ -1174,6 +1173,13 @@ static int testParmType(struct node *node, unsigned type)
 
 	memset(&parm, 0, sizeof(parm));
 	parm.type = type;
+	if (V4L2_TYPE_IS_OUTPUT(type))
+		memset(parm.parm.output.reserved, 0xff,
+		       sizeof(parm.parm.output.reserved));
+	else
+		memset(parm.parm.capture.reserved, 0xff,
+		       sizeof(parm.parm.capture.reserved));
+
 	ret = doioctl(node, VIDIOC_G_PARM, &parm);
 	switch (type) {
 	case V4L2_BUF_TYPE_VIDEO_CAPTURE:
@@ -1182,6 +1188,8 @@ static int testParmType(struct node *node, unsigned type)
 	case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
 		if (type && (node->g_caps() & buftype2cap[type]))
 			fail_on_test(ret && node->has_frmintervals);
+		if (ret)
+			break;
 		break;
 	default:
 		fail_on_test(ret == 0);
@@ -1203,10 +1211,23 @@ static int testParmType(struct node *node, unsigned type)
 
 	memset(&parm, 0, sizeof(parm));
 	parm.type = type;
+	if (V4L2_TYPE_IS_OUTPUT(type))
+		memset(parm.parm.output.reserved, 0xff,
+		       sizeof(parm.parm.output.reserved));
+	else
+		memset(parm.parm.capture.reserved, 0xff,
+		       sizeof(parm.parm.capture.reserved));
 	ret = doioctl(node, VIDIOC_S_PARM, &parm);
+
+	__u32 cap;
+
+	if (V4L2_TYPE_IS_OUTPUT(type))
+		cap = parm.parm.output.capability;
+	else
+		cap = parm.parm.capture.capability;
 	fail_on_test(ret && node->has_frmintervals);
-	if (!ret && !node->has_frmintervals)
-		warn("S_PARM is supported for buftype %d, but not ENUM_FRAMEINTERVALS\n", type);
+	if (!ret && (cap & V4L2_CAP_TIMEPERFRAME) && !node->has_frmintervals)
+		warn("S_PARM is supported for buftype %d, but not for ENUM_FRAMEINTERVALS\n", type);
 	if (ret == ENOTTY)
 		return 0;
 	if (ret)
@@ -1214,6 +1235,28 @@ static int testParmType(struct node *node, unsigned type)
 	fail_on_test(parm.type != type);
 	if (!(parm.parm.capture.capability & V4L2_CAP_TIMEPERFRAME))
 		warn("S_PARM is supported but doesn't report V4L2_CAP_TIMEPERFRAME\n");
+	ret = testParmStruct(node, parm);
+	if (ret)
+		return ret;
+	if (V4L2_TYPE_IS_OUTPUT(type)) {
+		parm.parm.output.timeperframe.numerator = 0;
+		parm.parm.output.timeperframe.denominator = 1;
+	} else {
+		parm.parm.capture.timeperframe.numerator = 0;
+		parm.parm.capture.timeperframe.denominator = 1;
+	}
+	fail_on_test(doioctl(node, VIDIOC_S_PARM, &parm));
+	ret = testParmStruct(node, parm);
+	if (ret)
+		return ret;
+	if (V4L2_TYPE_IS_OUTPUT(type)) {
+		parm.parm.output.timeperframe.numerator = 1;
+		parm.parm.output.timeperframe.denominator = 0;
+	} else {
+		parm.parm.capture.timeperframe.numerator = 1;
+		parm.parm.capture.timeperframe.denominator = 0;
+	}
+	fail_on_test(doioctl(node, VIDIOC_S_PARM, &parm));
 	return testParmStruct(node, parm);
 }
 
@@ -1230,14 +1273,12 @@ int testParm(struct node *node)
 			return ret;
 		if (!ret) {
 			supported = true;
-			if (type != V4L2_BUF_TYPE_VIDEO_CAPTURE &&
-			    type != V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE &&
-			    type != V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE &&
-			    type != V4L2_BUF_TYPE_VIDEO_OUTPUT)
-				return fail("G/S_PARM is only allowed for video capture/output\n");
-			if (!(node->g_caps() & buftype2cap[type]))
-				return fail("%s cap not set, but G/S_PARM worked\n",
-						buftype2s(type).c_str());
+			if (V4L2_TYPE_IS_OUTPUT(type)) {
+				if (!node->has_vid_out())
+					return fail("video output caps not set, but G/S_PARM worked\n");
+			} else if (!node->has_vid_cap()) {
+				return fail("video capture caps not set, but G/S_PARM worked\n");
+			}
 		}
 	}
 
@@ -1366,12 +1407,22 @@ static int testLegacyCrop(struct node *node)
 	if (!doioctl(node, VIDIOC_CROPCAP, &cap)) {
 		fail_on_test(doioctl(node, VIDIOC_G_SELECTION, &sel));
 
-		// Checks for invalid types
-		if (cap.type == V4L2_BUF_TYPE_VIDEO_CAPTURE)
+		// Checks for mplane types
+		switch (cap.type) {
+		case V4L2_BUF_TYPE_VIDEO_CAPTURE:
 			cap.type = V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE;
-		else
+			break;
+		case V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE:
+			cap.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
+			break;
+		case V4L2_BUF_TYPE_VIDEO_OUTPUT:
 			cap.type = V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE;
-		fail_on_test(doioctl(node, VIDIOC_CROPCAP, &cap) != EINVAL);
+			break;
+		case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
+			cap.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
+			break;
+		}
+		fail_on_test(doioctl(node, VIDIOC_CROPCAP, &cap));
 		cap.type = 0xff;
 		fail_on_test(doioctl(node, VIDIOC_CROPCAP, &cap) != EINVAL);
 	} else {

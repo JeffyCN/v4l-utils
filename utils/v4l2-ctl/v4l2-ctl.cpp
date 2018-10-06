@@ -33,10 +33,15 @@
 #include <errno.h>
 #include <sys/ioctl.h>
 #include <sys/time.h>
+#include <sys/sysmacros.h>
 #include <dirent.h>
 #include <math.h>
 
+#include <linux/media.h>
+
 #include "v4l2-ctl.h"
+
+#include <media-info.h>
 
 #ifdef HAVE_SYS_KLOG_H
 #include <sys/klog.h>
@@ -83,6 +88,7 @@ static struct option long_options[] = {
 	{"help-vbi", no_argument, 0, OptHelpVbi},
 	{"help-sdr", no_argument, 0, OptHelpSdr},
 	{"help-meta", no_argument, 0, OptHelpMeta},
+	{"help-subdev", no_argument, 0, OptHelpSubDev},
 	{"help-selection", no_argument, 0, OptHelpSelection},
 	{"help-misc", no_argument, 0, OptHelpMisc},
 	{"help-streaming", no_argument, 0, OptHelpStreaming},
@@ -114,7 +120,11 @@ static struct option long_options[] = {
 	{"list-formats-sdr", no_argument, 0, OptListSdrFormats},
 	{"list-formats-sdr-out", no_argument, 0, OptListSdrOutFormats},
 	{"list-formats-out", no_argument, 0, OptListOutFormats},
+	{"list-formats-out-ext", no_argument, 0, OptListOutFormatsExt},
 	{"list-formats-meta", no_argument, 0, OptListMetaFormats},
+	{"list-subdev-mbus-codes", optional_argument, 0, OptListSubDevMBusCodes},
+	{"list-subdev-framesizes", required_argument, 0, OptListSubDevFrameSizes},
+	{"list-subdev-frameintervals", required_argument, 0, OptListSubDevFrameIntervals},
 	{"list-fields-out", no_argument, 0, OptListOutFields},
 	{"clear-clips", no_argument, 0, OptClearClips},
 	{"clear-bitmap", no_argument, 0, OptClearBitmap},
@@ -164,6 +174,9 @@ static struct option long_options[] = {
 	{"get-fmt-meta", no_argument, 0, OptGetMetaFormat},
 	{"set-fmt-meta", required_argument, 0, OptSetMetaFormat},
 	{"try-fmt-meta", required_argument, 0, OptTryMetaFormat},
+	{"get-subdev-fmt", optional_argument, 0, OptGetSubDevFormat},
+	{"set-subdev-fmt", required_argument, 0, OptSetSubDevFormat},
+	{"try-subdev-fmt", required_argument, 0, OptTrySubDevFormat},
 	{"get-sliced-vbi-cap", no_argument, 0, OptGetSlicedVbiCap},
 	{"get-sliced-vbi-out-cap", no_argument, 0, OptGetSlicedVbiOutCap},
 	{"get-fbuf", no_argument, 0, OptGetFBuf},
@@ -184,6 +197,11 @@ static struct option long_options[] = {
 	{"set-selection", required_argument, 0, OptSetSelection},
 	{"get-selection-output", required_argument, 0, OptGetOutputSelection},
 	{"set-selection-output", required_argument, 0, OptSetOutputSelection},
+	{"get-subdev-selection", required_argument, 0, OptGetSubDevSelection},
+	{"set-subdev-selection", required_argument, 0, OptSetSubDevSelection},
+	{"try-subdev-selection", required_argument, 0, OptTrySubDevSelection},
+	{"get-subdev-fps", optional_argument, 0, OptGetSubDevFPS},
+	{"set-subdev-fps", required_argument, 0, OptSetSubDevFPS},
 	{"get-jpeg-comp", no_argument, 0, OptGetJpegComp},
 	{"set-jpeg-comp", required_argument, 0, OptSetJpegComp},
 	{"get-modulator", no_argument, 0, OptGetModulator},
@@ -195,11 +213,11 @@ static struct option long_options[] = {
 	{"overlay", required_argument, 0, OptOverlay},
 	{"sleep", required_argument, 0, OptSleep},
 	{"list-devices", no_argument, 0, OptListDevices},
-	{"list-dv-timings", no_argument, 0, OptListDvTimings},
+	{"list-dv-timings", optional_argument, 0, OptListDvTimings},
 	{"query-dv-timings", no_argument, 0, OptQueryDvTimings},
 	{"get-dv-timings", no_argument, 0, OptGetDvTimings},
 	{"set-dv-bt-timings", required_argument, 0, OptSetDvBtTimings},
-	{"get-dv-timings-cap", no_argument, 0, OptGetDvTimingsCap},
+	{"get-dv-timings-cap", optional_argument, 0, OptGetDvTimingsCap},
 	{"freq-seek", required_argument, 0, OptFreqSeek},
 	{"encoder-cmd", required_argument, 0, OptEncoderCmd},
 	{"try-encoder-cmd", required_argument, 0, OptTryEncoderCmd},
@@ -228,12 +246,15 @@ static struct option long_options[] = {
 	{"stream-no-query", no_argument, 0, OptStreamNoQuery},
 #ifndef NO_STREAM_TO
 	{"stream-to", required_argument, 0, OptStreamTo},
+	{"stream-to-hdr", required_argument, 0, OptStreamToHdr},
+	{"stream-lossless", no_argument, 0, OptStreamLossless},
 	{"stream-to-host", required_argument, 0, OptStreamToHost},
 #endif
 	{"stream-mmap", optional_argument, 0, OptStreamMmap},
 	{"stream-user", optional_argument, 0, OptStreamUser},
 	{"stream-dmabuf", no_argument, 0, OptStreamDmaBuf},
 	{"stream-from", required_argument, 0, OptStreamFrom},
+	{"stream-from-hdr", required_argument, 0, OptStreamFromHdr},
 	{"stream-from-host", required_argument, 0, OptStreamFromHost},
 	{"stream-out-pattern", required_argument, 0, OptStreamOutPattern},
 	{"stream-out-square", no_argument, 0, OptStreamOutSquare},
@@ -273,16 +294,6 @@ static void usage_all(void)
        edid_usage();
 }
 
-static int test_open(const char *file, int oflag)
-{
- 	return options[OptUseWrapper] ? v4l2_open(file, oflag) : open(file, oflag);
-}
-
-static int test_close(int fd)
-{
-	return options[OptUseWrapper] ? v4l2_close(fd) : close(fd);
-}
-
 int test_ioctl(int fd, int cmd, void *arg)
 {
 	return options[OptUseWrapper] ? v4l2_ioctl(fd, cmd, arg) : ioctl(fd, cmd, arg);
@@ -301,234 +312,6 @@ int doioctl_name(int fd, unsigned long int request, void *parm, const char *name
 		printf("%s: ok\n", name);
 
 	return retval;
-}
-
-static std::string num2s(unsigned num)
-{
-	char buf[10];
-
-	sprintf(buf, "%08x", num);
-	return buf;
-}
-
-std::string buftype2s(int type)
-{
-	switch (type) {
-	case 0:
-		return "Invalid";
-	case V4L2_BUF_TYPE_VIDEO_CAPTURE:
-		return "Video Capture";
-	case V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE:
-		return "Video Capture Multiplanar";
-	case V4L2_BUF_TYPE_VIDEO_OUTPUT:
-		return "Video Output";
-	case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
-		return "Video Output Multiplanar";
-	case V4L2_BUF_TYPE_VIDEO_OVERLAY:
-		return "Video Overlay";
-	case V4L2_BUF_TYPE_VBI_CAPTURE:
-		return "VBI Capture";
-	case V4L2_BUF_TYPE_VBI_OUTPUT:
-		return "VBI Output";
-	case V4L2_BUF_TYPE_SLICED_VBI_CAPTURE:
-		return "Sliced VBI Capture";
-	case V4L2_BUF_TYPE_SLICED_VBI_OUTPUT:
-		return "Sliced VBI Output";
-	case V4L2_BUF_TYPE_VIDEO_OUTPUT_OVERLAY:
-		return "Video Output Overlay";
-	case V4L2_BUF_TYPE_SDR_CAPTURE:
-		return "SDR Capture";
-	case V4L2_BUF_TYPE_SDR_OUTPUT:
-		return "SDR Output";
-	case V4L2_BUF_TYPE_META_CAPTURE:
-		return "Metadata Capture";
-	default:
-		return "Unknown (" + num2s(type) + ")";
-	}
-}
-
-std::string fcc2s(unsigned int val)
-{
-	std::string s;
-
-	s += val & 0x7f;
-	s += (val >> 8) & 0x7f;
-	s += (val >> 16) & 0x7f;
-	s += (val >> 24) & 0x7f;
-	if (val & (1 << 31))
-		s += "-BE";
-	return s;
-}
-
-std::string field2s(int val)
-{
-	switch (val) {
-	case V4L2_FIELD_ANY:
-		return "Any";
-	case V4L2_FIELD_NONE:
-		return "None";
-	case V4L2_FIELD_TOP:
-		return "Top";
-	case V4L2_FIELD_BOTTOM:
-		return "Bottom";
-	case V4L2_FIELD_INTERLACED:
-		return "Interlaced";
-	case V4L2_FIELD_SEQ_TB:
-		return "Sequential Top-Bottom";
-	case V4L2_FIELD_SEQ_BT:
-		return "Sequential Bottom-Top";
-	case V4L2_FIELD_ALTERNATE:
-		return "Alternating";
-	case V4L2_FIELD_INTERLACED_TB:
-		return "Interlaced Top-Bottom";
-	case V4L2_FIELD_INTERLACED_BT:
-		return "Interlaced Bottom-Top";
-	default:
-		return "Unknown (" + num2s(val) + ")";
-	}
-}
-
-std::string colorspace2s(int val)
-{
-	switch (val) {
-	case V4L2_COLORSPACE_DEFAULT:
-		return "Default";
-	case V4L2_COLORSPACE_SMPTE170M:
-		return "SMPTE 170M";
-	case V4L2_COLORSPACE_SMPTE240M:
-		return "SMPTE 240M";
-	case V4L2_COLORSPACE_REC709:
-		return "Rec. 709";
-	case V4L2_COLORSPACE_BT878:
-		return "Broken Bt878";
-	case V4L2_COLORSPACE_470_SYSTEM_M:
-		return "470 System M";
-	case V4L2_COLORSPACE_470_SYSTEM_BG:
-		return "470 System BG";
-	case V4L2_COLORSPACE_JPEG:
-		return "JPEG";
-	case V4L2_COLORSPACE_SRGB:
-		return "sRGB";
-	case V4L2_COLORSPACE_ADOBERGB:
-		return "AdobeRGB";
-	case V4L2_COLORSPACE_DCI_P3:
-		return "DCI-P3";
-	case V4L2_COLORSPACE_BT2020:
-		return "BT.2020";
-	case V4L2_COLORSPACE_RAW:
-		return "Raw";
-	default:
-		return "Unknown (" + num2s(val) + ")";
-	}
-}
-
-static std::string xfer_func2s(int val)
-{
-	switch (val) {
-	case V4L2_XFER_FUNC_DEFAULT:
-		return "Default";
-	case V4L2_XFER_FUNC_709:
-		return "Rec. 709";
-	case V4L2_XFER_FUNC_SRGB:
-		return "sRGB";
-	case V4L2_XFER_FUNC_ADOBERGB:
-		return "AdobeRGB";
-	case V4L2_XFER_FUNC_DCI_P3:
-		return "DCI-P3";
-	case V4L2_XFER_FUNC_SMPTE2084:
-		return "SMPTE 2084";
-	case V4L2_XFER_FUNC_SMPTE240M:
-		return "SMPTE 240M";
-	case V4L2_XFER_FUNC_NONE:
-		return "None";
-	default:
-		return "Unknown (" + num2s(val) + ")";
-	}
-}
-
-static std::string ycbcr_enc2s(int val)
-{
-	switch (val) {
-	case V4L2_YCBCR_ENC_DEFAULT:
-		return "Default";
-	case V4L2_YCBCR_ENC_601:
-		return "ITU-R 601";
-	case V4L2_YCBCR_ENC_709:
-		return "Rec. 709";
-	case V4L2_YCBCR_ENC_XV601:
-		return "xvYCC 601";
-	case V4L2_YCBCR_ENC_XV709:
-		return "xvYCC 709";
-	case V4L2_YCBCR_ENC_BT2020:
-		return "BT.2020";
-	case V4L2_YCBCR_ENC_BT2020_CONST_LUM:
-		return "BT.2020 Constant Luminance";
-	case V4L2_YCBCR_ENC_SMPTE240M:
-		return "SMPTE 240M";
-	case V4L2_HSV_ENC_180:
-		return "HSV with Hue 0-179";
-	case V4L2_HSV_ENC_256:
-		return "HSV with Hue 0-255";
-	default:
-		return "Unknown (" + num2s(val) + ")";
-	}
-}
-
-static std::string quantization2s(int val)
-{
-	switch (val) {
-	case V4L2_QUANTIZATION_DEFAULT:
-		return "Default";
-	case V4L2_QUANTIZATION_FULL_RANGE:
-		return "Full Range";
-	case V4L2_QUANTIZATION_LIM_RANGE:
-		return "Limited Range";
-	default:
-		return "Unknown (" + num2s(val) + ")";
-	}
-}
-
-std::string flags2s(unsigned val, const flag_def *def)
-{
-	std::string s;
-
-	while (def->flag) {
-		if (val & def->flag) {
-			if (s.length()) s += ", ";
-			s += def->str;
-			val &= ~def->flag;
-		}
-		def++;
-	}
-	if (val) {
-		if (s.length()) s += ", ";
-		s += num2s(val);
-	}
-	return s;
-}
-
-
-static const flag_def pixflags_def[] = {
-	{ V4L2_PIX_FMT_FLAG_PREMUL_ALPHA,  "premultiplied-alpha" },
-	{ 0, NULL }
-};
-
-std::string pixflags2s(unsigned flags)
-{
-	return flags2s(flags, pixflags_def);
-}
-
-static const flag_def service_def[] = {
-	{ V4L2_SLICED_TELETEXT_B,  "teletext" },
-	{ V4L2_SLICED_VPS,         "vps" },
-	{ V4L2_SLICED_CAPTION_525, "cc" },
-	{ V4L2_SLICED_WSS_625,     "wss" },
-	{ 0, NULL }
-};
-
-std::string service2s(unsigned service)
-{
-	return flags2s(service, service_def);
 }
 
 /*
@@ -588,13 +371,23 @@ static bool is_rgb_or_hsv(__u32 pixelformat)
 	}
 }
 
-void printfmt(const struct v4l2_format &vfmt)
+static std::string printfmtname(int fd, __u32 type, __u32 pixfmt)
 {
-	const flag_def vbi_def[] = {
-		{ V4L2_VBI_UNSYNC,     "unsynchronized" },
-		{ V4L2_VBI_INTERLACED, "interlaced" },
-		{ 0, NULL }
-	};
+	struct v4l2_fmtdesc fmt;
+	std::string s(" (");
+
+	fmt.index = 0;
+	fmt.type = type;
+	while (test_ioctl(fd, VIDIOC_ENUM_FMT, &fmt) >= 0) {
+		if (fmt.pixelformat == pixfmt)
+			return s + (const char *)fmt.description + ")";
+		fmt.index++;
+	}
+	return "";
+}
+
+void printfmt(int fd, const struct v4l2_format &vfmt)
+{
 	__u32 colsp = vfmt.fmt.pix.colorspace;
 	__u32 ycbcr_enc = vfmt.fmt.pix.ycbcr_enc;
 
@@ -604,7 +397,8 @@ void printfmt(const struct v4l2_format &vfmt)
 	case V4L2_BUF_TYPE_VIDEO_CAPTURE:
 	case V4L2_BUF_TYPE_VIDEO_OUTPUT:
 		printf("\tWidth/Height      : %u/%u\n", vfmt.fmt.pix.width, vfmt.fmt.pix.height);
-		printf("\tPixel Format      : '%s'\n", fcc2s(vfmt.fmt.pix.pixelformat).c_str());
+		printf("\tPixel Format      : '%s'%s\n", fcc2s(vfmt.fmt.pix.pixelformat).c_str(),
+		       printfmtname(fd, vfmt.type, vfmt.fmt.pix.pixelformat).c_str());
 		printf("\tField             : %s\n", field2s(vfmt.fmt.pix.field).c_str());
 		printf("\tBytes per Line    : %u\n", vfmt.fmt.pix.bytesperline);
 		printf("\tSize Image        : %u\n", vfmt.fmt.pix.sizeimage);
@@ -632,13 +426,14 @@ void printfmt(const struct v4l2_format &vfmt)
 	case V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE:
 	case V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE:
 		printf("\tWidth/Height      : %u/%u\n", vfmt.fmt.pix_mp.width, vfmt.fmt.pix_mp.height);
-		printf("\tPixel Format      : '%s'\n", fcc2s(vfmt.fmt.pix_mp.pixelformat).c_str());
+		printf("\tPixel Format      : '%s'%s\n", fcc2s(vfmt.fmt.pix_mp.pixelformat).c_str(),
+		       printfmtname(fd, vfmt.type, vfmt.fmt.pix_mp.pixelformat).c_str());
 		printf("\tField             : %s\n", field2s(vfmt.fmt.pix_mp.field).c_str());
 		printf("\tNumber of planes  : %u\n", vfmt.fmt.pix_mp.num_planes);
 		printf("\tFlags             : %s\n", pixflags2s(vfmt.fmt.pix_mp.flags).c_str());
 		printf("\tColorspace        : %s\n", colorspace2s(vfmt.fmt.pix_mp.colorspace).c_str());
 		printf("\tTransfer Function : %s\n", xfer_func2s(vfmt.fmt.pix_mp.xfer_func).c_str());
-		printf("\tYCbCr Encoding    : %s\n", ycbcr_enc2s(vfmt.fmt.pix_mp.ycbcr_enc).c_str());
+		printf("\tYCbCr/HSV Encoding: %s\n", ycbcr_enc2s(vfmt.fmt.pix_mp.ycbcr_enc).c_str());
 		printf("\tQuantization      : %s\n", quantization2s(vfmt.fmt.pix_mp.quantization).c_str());
 		for (int i = 0; i < vfmt.fmt.pix_mp.num_planes && i < VIDEO_MAX_PLANES; i++) {
 			printf("\tPlane %d           :\n", i);
@@ -684,13 +479,13 @@ void printfmt(const struct v4l2_format &vfmt)
 				vfmt.fmt.vbi.offset,
 				(double)vfmt.fmt.vbi.offset / (double)vfmt.fmt.vbi.sampling_rate);
 		printf("\tSamples per Line: %u\n", vfmt.fmt.vbi.samples_per_line);
-		printf("\tSample Format   : %s\n", fcc2s(vfmt.fmt.vbi.sample_format).c_str());
+		printf("\tSample Format   : '%s'\n", fcc2s(vfmt.fmt.vbi.sample_format).c_str());
 		printf("\tStart 1st Field : %u\n", vfmt.fmt.vbi.start[0]);
 		printf("\tCount 1st Field : %u\n", vfmt.fmt.vbi.count[0]);
 		printf("\tStart 2nd Field : %u\n", vfmt.fmt.vbi.start[1]);
 		printf("\tCount 2nd Field : %u\n", vfmt.fmt.vbi.count[1]);
 		if (vfmt.fmt.vbi.flags)
-			printf("\tFlags           : %s\n", flags2s(vfmt.fmt.vbi.flags, vbi_def).c_str());
+			printf("\tFlags           : %s\n", vbiflags2s(vfmt.fmt.vbi.flags).c_str());
 		break;
 	case V4L2_BUF_TYPE_SLICED_VBI_CAPTURE:
 	case V4L2_BUF_TYPE_SLICED_VBI_OUTPUT:
@@ -705,107 +500,136 @@ void printfmt(const struct v4l2_format &vfmt)
 		break;
 	case V4L2_BUF_TYPE_SDR_CAPTURE:
 	case V4L2_BUF_TYPE_SDR_OUTPUT:
-		printf("\tSample Format   : %s\n", fcc2s(vfmt.fmt.sdr.pixelformat).c_str());
+		printf("\tSample Format   : '%s'%s\n", fcc2s(vfmt.fmt.sdr.pixelformat).c_str(),
+		       printfmtname(fd, vfmt.type, vfmt.fmt.sdr.pixelformat).c_str());
 		printf("\tBuffer Size     : %u\n", vfmt.fmt.sdr.buffersize);
 		break;
 	case V4L2_BUF_TYPE_META_CAPTURE:
-		printf("\tSample Format   : %s\n", fcc2s(vfmt.fmt.meta.dataformat).c_str());
+		printf("\tSample Format   : '%s'%s\n", fcc2s(vfmt.fmt.meta.dataformat).c_str(),
+		       printfmtname(fd, vfmt.type, vfmt.fmt.meta.dataformat).c_str());
 		printf("\tBuffer Size     : %u\n", vfmt.fmt.meta.buffersize);
 		break;
 	}
 }
 
-static const flag_def fmtdesc_def[] = {
-	{ V4L2_FMT_FLAG_COMPRESSED, "compressed" },
-	{ V4L2_FMT_FLAG_EMULATED, "emulated" },
-	{ 0, NULL }
-};
-
-std::string fmtdesc2s(unsigned flags)
+static std::string frmtype2s(unsigned type)
 {
-	return flags2s(flags, fmtdesc_def);
+	static const char *types[] = {
+		"Unknown",
+		"Discrete",
+		"Continuous",
+		"Stepwise"
+	};
+
+	if (type > 3)
+		type = 0;
+	return types[type];
 }
 
-void print_video_formats(int fd, __u32 type)
+static std::string fract2sec(const struct v4l2_fract &f)
 {
-	struct v4l2_fmtdesc fmt;
+	char buf[100];
 
-	memset(&fmt, 0, sizeof(fmt));
-	fmt.type = type;
-	while (test_ioctl(fd, VIDIOC_ENUM_FMT, &fmt) >= 0) {
-		printf("\tIndex       : %d\n", fmt.index);
-		printf("\tType        : %s\n", buftype2s(type).c_str());
-		printf("\tPixel Format: '%s'", fcc2s(fmt.pixelformat).c_str());
-		if (fmt.flags)
-			printf(" (%s)", fmtdesc2s(fmt.flags).c_str());
-		printf("\n");
-		printf("\tName        : %s\n", fmt.description);
-		printf("\n");
-		fmt.index++;
+	sprintf(buf, "%.3f", (1.0 * f.numerator) / f.denominator);
+	return buf;
+}
+
+static std::string fract2fps(const struct v4l2_fract &f)
+{
+	char buf[100];
+
+	sprintf(buf, "%.3f", (1.0 * f.denominator) / f.numerator);
+	return buf;
+}
+
+void print_frmsize(const struct v4l2_frmsizeenum &frmsize, const char *prefix)
+{
+	printf("%s\tSize: %s ", prefix, frmtype2s(frmsize.type).c_str());
+	if (frmsize.type == V4L2_FRMSIZE_TYPE_DISCRETE) {
+		printf("%dx%d", frmsize.discrete.width, frmsize.discrete.height);
+	} else if (frmsize.type == V4L2_FRMSIZE_TYPE_STEPWISE) {
+		printf("%dx%d - %dx%d with step %d/%d",
+				frmsize.stepwise.min_width,
+				frmsize.stepwise.min_height,
+				frmsize.stepwise.max_width,
+				frmsize.stepwise.max_height,
+				frmsize.stepwise.step_width,
+				frmsize.stepwise.step_height);
+	}
+	printf("\n");
+}
+
+void print_frmival(const struct v4l2_frmivalenum &frmival, const char *prefix)
+{
+	printf("%s\tInterval: %s ", prefix, frmtype2s(frmival.type).c_str());
+	if (frmival.type == V4L2_FRMIVAL_TYPE_DISCRETE) {
+		printf("%ss (%s fps)\n", fract2sec(frmival.discrete).c_str(),
+				fract2fps(frmival.discrete).c_str());
+	} else if (frmival.type == V4L2_FRMIVAL_TYPE_CONTINUOUS) {
+		printf("%ss - %ss (%s-%s fps)\n",
+				fract2sec(frmival.stepwise.min).c_str(),
+				fract2sec(frmival.stepwise.max).c_str(),
+				fract2fps(frmival.stepwise.max).c_str(),
+				fract2fps(frmival.stepwise.min).c_str());
+	} else if (frmival.type == V4L2_FRMIVAL_TYPE_STEPWISE) {
+		printf("%ss - %ss with step %ss (%s-%s fps)\n",
+				fract2sec(frmival.stepwise.min).c_str(),
+				fract2sec(frmival.stepwise.max).c_str(),
+				fract2sec(frmival.stepwise.step).c_str(),
+				fract2fps(frmival.stepwise.max).c_str(),
+				fract2fps(frmival.stepwise.min).c_str());
 	}
 }
 
-static std::string cap2s(unsigned cap)
+void print_video_formats(cv4l_fd &fd, __u32 type)
 {
-	std::string s;
+	cv4l_disable_trace dt(fd);
+	struct v4l2_fmtdesc fmt;
 
-	if (cap & V4L2_CAP_VIDEO_CAPTURE)
-		s += "\t\tVideo Capture\n";
-	if (cap & V4L2_CAP_VIDEO_CAPTURE_MPLANE)
-		s += "\t\tVideo Capture Multiplanar\n";
-	if (cap & V4L2_CAP_VIDEO_OUTPUT)
-		s += "\t\tVideo Output\n";
-	if (cap & V4L2_CAP_VIDEO_OUTPUT_MPLANE)
-		s += "\t\tVideo Output Multiplanar\n";
-	if (cap & V4L2_CAP_VIDEO_M2M)
-		s += "\t\tVideo Memory-to-Memory\n";
-	if (cap & V4L2_CAP_VIDEO_M2M_MPLANE)
-		s += "\t\tVideo Memory-to-Memory Multiplanar\n";
-	if (cap & V4L2_CAP_VIDEO_OVERLAY)
-		s += "\t\tVideo Overlay\n";
-	if (cap & V4L2_CAP_VIDEO_OUTPUT_OVERLAY)
-		s += "\t\tVideo Output Overlay\n";
-	if (cap & V4L2_CAP_VBI_CAPTURE)
-		s += "\t\tVBI Capture\n";
-	if (cap & V4L2_CAP_VBI_OUTPUT)
-		s += "\t\tVBI Output\n";
-	if (cap & V4L2_CAP_SLICED_VBI_CAPTURE)
-		s += "\t\tSliced VBI Capture\n";
-	if (cap & V4L2_CAP_SLICED_VBI_OUTPUT)
-		s += "\t\tSliced VBI Output\n";
-	if (cap & V4L2_CAP_RDS_CAPTURE)
-		s += "\t\tRDS Capture\n";
-	if (cap & V4L2_CAP_RDS_OUTPUT)
-		s += "\t\tRDS Output\n";
-	if (cap & V4L2_CAP_SDR_CAPTURE)
-		s += "\t\tSDR Capture\n";
-	if (cap & V4L2_CAP_SDR_OUTPUT)
-		s += "\t\tSDR Output\n";
-	if (cap & V4L2_CAP_META_CAPTURE)
-		s += "\t\tMetadata Capture\n";
-	if (cap & V4L2_CAP_TUNER)
-		s += "\t\tTuner\n";
-	if (cap & V4L2_CAP_TOUCH)
-		s += "\t\tTouch Device\n";
-	if (cap & V4L2_CAP_HW_FREQ_SEEK)
-		s += "\t\tHW Frequency Seek\n";
-	if (cap & V4L2_CAP_MODULATOR)
-		s += "\t\tModulator\n";
-	if (cap & V4L2_CAP_AUDIO)
-		s += "\t\tAudio\n";
-	if (cap & V4L2_CAP_RADIO)
-		s += "\t\tRadio\n";
-	if (cap & V4L2_CAP_READWRITE)
-		s += "\t\tRead/Write\n";
-	if (cap & V4L2_CAP_ASYNCIO)
-		s += "\t\tAsync I/O\n";
-	if (cap & V4L2_CAP_STREAMING)
-		s += "\t\tStreaming\n";
-	if (cap & V4L2_CAP_EXT_PIX_FORMAT)
-		s += "\t\tExtended Pix Format\n";
-	if (cap & V4L2_CAP_DEVICE_CAPS)
-		s += "\t\tDevice Capabilities\n";
-	return s;
+	printf("\tType: %s\n\n", buftype2s(type).c_str());
+	if (fd.enum_fmt(fmt, true, 0, type))
+		return;
+	do {
+		printf("\t[%d]: '%s' (%s", fmt.index, fcc2s(fmt.pixelformat).c_str(),
+		       fmt.description);
+		if (fmt.flags)
+			printf(", %s", fmtdesc2s(fmt.flags).c_str());
+		printf(")\n");
+	} while (!fd.enum_fmt(fmt));
+}
+
+void print_video_formats_ext(cv4l_fd &fd, __u32 type)
+{
+	cv4l_disable_trace dt(fd);
+	struct v4l2_fmtdesc fmt;
+	struct v4l2_frmsizeenum frmsize;
+	struct v4l2_frmivalenum frmival;
+
+	printf("\tType: %s\n\n", buftype2s(type).c_str());
+	if (fd.enum_fmt(fmt, true, 0, type))
+		return;
+	do {
+		printf("\t[%d]: '%s' (%s", fmt.index, fcc2s(fmt.pixelformat).c_str(),
+		       fmt.description);
+		if (fmt.flags)
+			printf(", %s", fmtdesc2s(fmt.flags).c_str());
+		printf(")\n");
+		if (fd.enum_framesizes(frmsize, fmt.pixelformat))
+			continue;
+		do {
+			print_frmsize(frmsize, "\t");
+			if (frmsize.type != V4L2_FRMSIZE_TYPE_DISCRETE)
+				continue;
+
+			if (fd.enum_frameintervals(frmival, fmt.pixelformat,
+						   frmsize.discrete.width,
+						   frmsize.discrete.height))
+				continue;
+			do {
+				print_frmival(frmival, "\t\t");
+			} while (!fd.enum_frameintervals(frmival));
+		} while (!fd.enum_framesizes(frmsize));
+	} while (!fd.enum_fmt(fmt));
 }
 
 int parse_subopt(char **subs, const char * const *subopts, char **value)
@@ -824,80 +648,6 @@ int parse_subopt(char **subs, const char * const *subopts, char **value)
 	return opt;
 }
 
-static std::string partstd2s(const char *prefix, const char *stds[], unsigned long long std)
-{
-	std::string s = std::string(prefix) + "-";
-	int first = 1;
-
-	while (*stds) {
-		if (std & 1) {
-			if (!first)
-				s += "/";
-			first = 0;
-			s += *stds;
-		}
-		stds++;
-		std >>= 1;
-	}
-	return s;
-}
-
-static const char *std_pal[] = {
-	"B", "B1", "G", "H", "I", "D", "D1", "K",
-	"M", "N", "Nc", "60",
-	NULL
-};
-static const char *std_ntsc[] = {
-	"M", "M-JP", "443", "M-KR",
-	NULL
-};
-static const char *std_secam[] = {
-	"B", "D", "G", "H", "K", "K1", "L", "Lc",
-	NULL
-};
-static const char *std_atsc[] = {
-	"8-VSB", "16-VSB",
-	NULL
-};
-
-std::string std2s(v4l2_std_id std)
-{
-	std::string s;
-
-	if (std & 0xfff) {
-		s += partstd2s("PAL", std_pal, std);
-	}
-	if (std & 0xf000) {
-		if (s.length()) s += " ";
-		s += partstd2s("NTSC", std_ntsc, std >> 12);
-	}
-	if (std & 0xff0000) {
-		if (s.length()) s += " ";
-		s += partstd2s("SECAM", std_secam, std >> 16);
-	}
-	if (std & 0xf000000) {
-		if (s.length()) s += " ";
-		s += partstd2s("ATSC", std_atsc, std >> 24);
-	}
-	return s;
-}
-
-void print_v4lstd(v4l2_std_id std)
-{
-	if (std & 0xfff) {
-		printf("\t%s\n", partstd2s("PAL", std_pal, std).c_str());
-	}
-	if (std & 0xf000) {
-		printf("\t%s\n", partstd2s("NTSC", std_ntsc, std >> 12).c_str());
-	}
-	if (std & 0xff0000) {
-		printf("\t%s\n", partstd2s("SECAM", std_secam, std >> 16).c_str());
-	}
-	if (std & 0xf000000) {
-		printf("\t%s\n", partstd2s("ATSC", std_atsc, std >> 24).c_str());
-	}
-}
-
 __u32 parse_field(const char *s)
 {
 	if (!strcmp(s, "any")) return V4L2_FIELD_ANY;
@@ -913,7 +663,7 @@ __u32 parse_field(const char *s)
 	return V4L2_FIELD_ANY;
 }
 
-static __u32 parse_colorspace(const char *s)
+__u32 parse_colorspace(const char *s)
 {
 	if (!strcmp(s, "smpte170m")) return V4L2_COLORSPACE_SMPTE170M;
 	if (!strcmp(s, "smpte240m")) return V4L2_COLORSPACE_SMPTE240M;
@@ -922,26 +672,26 @@ static __u32 parse_colorspace(const char *s)
 	if (!strcmp(s, "470bg")) return V4L2_COLORSPACE_470_SYSTEM_BG;
 	if (!strcmp(s, "jpeg")) return V4L2_COLORSPACE_JPEG;
 	if (!strcmp(s, "srgb")) return V4L2_COLORSPACE_SRGB;
-	if (!strcmp(s, "adobergb")) return V4L2_COLORSPACE_ADOBERGB;
+	if (!strcmp(s, "oprgb")) return V4L2_COLORSPACE_OPRGB;
 	if (!strcmp(s, "bt2020")) return V4L2_COLORSPACE_BT2020;
 	if (!strcmp(s, "dcip3")) return V4L2_COLORSPACE_DCI_P3;
 	return 0;
 }
 
-static __u32 parse_xfer_func(const char *s)
+__u32 parse_xfer_func(const char *s)
 {
 	if (!strcmp(s, "default")) return V4L2_XFER_FUNC_DEFAULT;
 	if (!strcmp(s, "smpte240m")) return V4L2_XFER_FUNC_SMPTE240M;
 	if (!strcmp(s, "rec709")) return V4L2_XFER_FUNC_709;
 	if (!strcmp(s, "srgb")) return V4L2_XFER_FUNC_SRGB;
-	if (!strcmp(s, "adobergb")) return V4L2_XFER_FUNC_ADOBERGB;
+	if (!strcmp(s, "oprgb")) return V4L2_XFER_FUNC_OPRGB;
 	if (!strcmp(s, "dcip3")) return V4L2_XFER_FUNC_DCI_P3;
 	if (!strcmp(s, "smpte2084")) return V4L2_XFER_FUNC_SMPTE2084;
 	if (!strcmp(s, "none")) return V4L2_XFER_FUNC_NONE;
 	return 0;
 }
 
-static __u32 parse_ycbcr(const char *s)
+__u32 parse_ycbcr(const char *s)
 {
 	if (!strcmp(s, "default")) return V4L2_YCBCR_ENC_DEFAULT;
 	if (!strcmp(s, "601")) return V4L2_YCBCR_ENC_601;
@@ -954,7 +704,15 @@ static __u32 parse_ycbcr(const char *s)
 	return V4L2_YCBCR_ENC_DEFAULT;
 }
 
-static __u32 parse_quantization(const char *s)
+__u32 parse_hsv(const char *s)
+{
+	if (!strcmp(s, "default")) return V4L2_YCBCR_ENC_DEFAULT;
+	if (!strcmp(s, "180")) return V4L2_HSV_ENC_180;
+	if (!strcmp(s, "256")) return V4L2_HSV_ENC_256;
+	return V4L2_YCBCR_ENC_DEFAULT;
+}
+
+__u32 parse_quantization(const char *s)
 {
 	if (!strcmp(s, "default")) return V4L2_QUANTIZATION_DEFAULT;
 	if (!strcmp(s, "full-range")) return V4L2_QUANTIZATION_FULL_RANGE;
@@ -982,6 +740,7 @@ int parse_fmt(char *optarg, __u32 &width, __u32 &height, __u32 &pixelformat,
 			"field",
 			"colorspace",
 			"ycbcr",
+			"hsv",
 			"bytesperline",
 			"premul-alpha",
 			"quantization",
@@ -1029,6 +788,10 @@ int parse_fmt(char *optarg, __u32 &width, __u32 &height, __u32 &pixelformat,
 			fmts |= FmtYCbCr;
 			break;
 		case 6:
+			ycbcr = parse_hsv(value);
+			fmts |= FmtYCbCr;
+			break;
+		case 7:
 			bytesperline[bpl_index] = strtoul(value, 0L, 0);
 			if (bytesperline[bpl_index] > 0xffff) {
 				fprintf(stderr, "bytesperline can't be more than 65535\n");
@@ -1037,15 +800,15 @@ int parse_fmt(char *optarg, __u32 &width, __u32 &height, __u32 &pixelformat,
 			bpl_index++;
 			fmts |= FmtBytesPerLine;
 			break;
-		case 7:
+		case 8:
 			flags |= V4L2_PIX_FMT_FLAG_PREMUL_ALPHA;
 			fmts |= FmtFlags;
 			break;
-		case 8:
+		case 9:
 			quantization = parse_quantization(value);
 			fmts |= FmtQuantization;
 			break;
-		case 9:
+		case 10:
 			xfer_func = parse_xfer_func(value);
 			fmts |= FmtXferFunc;
 			break;
@@ -1054,6 +817,37 @@ int parse_fmt(char *optarg, __u32 &width, __u32 &height, __u32 &pixelformat,
 		}
 	}
 	return fmts;
+}
+
+int parse_selection_flags(const char *s)
+{
+	if (!strcmp(s, "le")) return V4L2_SEL_FLAG_LE;
+	if (!strcmp(s, "ge")) return V4L2_SEL_FLAG_GE;
+	if (!strcmp(s, "keep-config")) return V4L2_SEL_FLAG_KEEP_CONFIG;
+	return 0;
+}
+
+void print_selection(const struct v4l2_selection &sel)
+{
+	printf("Selection: %s, Left %d, Top %d, Width %d, Height %d, Flags: %s\n",
+			seltarget2s(sel.target).c_str(),
+			sel.r.left, sel.r.top, sel.r.width, sel.r.height,
+			selflags2s(sel.flags).c_str());
+}
+
+int parse_selection_target(const char *s, unsigned int &target)
+{
+	if (!strcmp(s, "crop")) target = V4L2_SEL_TGT_CROP_ACTIVE;
+	else if (!strcmp(s, "crop_default")) target = V4L2_SEL_TGT_CROP_DEFAULT;
+	else if (!strcmp(s, "crop_bounds")) target = V4L2_SEL_TGT_CROP_BOUNDS;
+	else if (!strcmp(s, "compose")) target = V4L2_SEL_TGT_COMPOSE_ACTIVE;
+	else if (!strcmp(s, "compose_default")) target = V4L2_SEL_TGT_COMPOSE_DEFAULT;
+	else if (!strcmp(s, "compose_bounds")) target = V4L2_SEL_TGT_COMPOSE_BOUNDS;
+	else if (!strcmp(s, "compose_padded")) target = V4L2_SEL_TGT_COMPOSE_PADDED;
+	else if (!strcmp(s, "native_size")) target = V4L2_SEL_TGT_NATIVE_SIZE;
+	else return -EINVAL;
+
+	return 0;
 }
 
 
@@ -1099,23 +893,30 @@ static __u32 parse_event(const char *e, const char **name)
 {
 	__u32 event = 0;
 
-	*name = NULL;
-	if (isdigit(e[0]))
+	*name = "0";
+	if (isdigit(e[0])) {
 		event = strtoul(e, 0L, 0);
-	else if (!strcmp(e, "eos"))
+		if (event == V4L2_EVENT_CTRL) {
+			fprintf(stderr, "Missing control name for ctrl event, use ctrl=<name>\n");
+			misc_usage();
+			exit(1);
+		}
+	} else if (!strcmp(e, "eos")) {
 		event = V4L2_EVENT_EOS;
-	else if (!strcmp(e, "vsync"))
+	} else if (!strcmp(e, "vsync")) {
 		event = V4L2_EVENT_VSYNC;
-	else if (!strcmp(e, "frame_sync"))
+	} else if (!strcmp(e, "frame_sync")) {
 		event = V4L2_EVENT_FRAME_SYNC;
-	else if (!strcmp(e, "motion_det"))
+	} else if (!strcmp(e, "motion_det")) {
 		event = V4L2_EVENT_MOTION_DET;
-	else if (!strncmp(e, "ctrl=", 5)) {
+	} else if (!strncmp(e, "ctrl=", 5)) {
 		event = V4L2_EVENT_CTRL;
 		*name = e + 5;
 	} else if (!strncmp(e, "source_change=", 14)) {
 		event = V4L2_EVENT_SOURCE_CHANGE;
 		*name = e + 14;
+	} else if (!strcmp(e, "source_change")) {
+		event = V4L2_EVENT_SOURCE_CHANGE;
 	}
 
 	if (event == 0) {
@@ -1143,65 +944,15 @@ __u32 find_pixel_format(int fd, unsigned index, bool output, bool mplane)
 	return fmt.pixelformat;
 }
 
-static bool is_subdevice(int fd)
-{
-	struct stat sb;
-	if (fstat(fd, &sb) == -1) {
-		fprintf(stderr, "failed to stat file\n");
-		exit(1);
-	}
-
-	char uevent_path[100];
-	if (snprintf(uevent_path, sizeof(uevent_path), "/sys/dev/char/%d:%d/uevent",
-		     major(sb.st_rdev), minor(sb.st_rdev)) == -1) {
-		fprintf(stderr, "failed to create uevent file path\n");
-		exit(1);
-	}
-
-	std::ifstream uevent_file(uevent_path);
-	if (uevent_file.fail()) {
-		fprintf(stderr, "failed to open %s\n", uevent_path);
-		exit(1);
-	}
-
-	std::string line;
-
-	while (std::getline(uevent_file, line)) {
-		if (line.compare(0, 8, "DEVNAME="))
-			continue;
-
-		static const char * devnames[] = {
-			"v4l-subdev",
-			"video",
-			"vbi",
-			"radio",
-			"swradio",
-			"v4l-touch",
-			NULL
-		};
-
-		for (size_t i = 0; devnames[i]; i++) {
-			size_t len = strlen(devnames[i]);
-
-			if (!line.compare(8, len, devnames[i]) && isdigit(line[8+len])) {
-				uevent_file.close();
-				return i == 0;
-			}
-		}
-	}
-
-	uevent_file.close();
-
-	fprintf(stderr, "unknown device name\n");
-	exit(1);
-}
-
 int main(int argc, char **argv)
 {
 	int i;
-
+	cv4l_fd c_fd;
+	cv4l_fd c_out_fd;
 	int fd = -1;
 	int out_fd = -1;
+	int media_fd = -1;
+	bool is_subdev = false;
 
 	/* command args */
 	int ch;
@@ -1243,6 +994,18 @@ int main(int argc, char **argv)
 			break;
 
 		options[(int)ch] = 1;
+		if (!option_index) {
+			for (i = 0; long_options[i].val; i++) {
+				if (long_options[i].val == ch) {
+					option_index = i;
+					break;
+				}
+			}
+		}
+		if (long_options[option_index].has_arg == optional_argument &&
+		    !optarg && argv[optind] && argv[optind][0] != '-')
+			optarg = argv[optind++];
+
 		switch (ch) {
 		case OptHelp:
 			common_usage();
@@ -1273,6 +1036,9 @@ int main(int argc, char **argv)
 			return 0;
 		case OptHelpMeta:
 			meta_usage();
+			return 0;
+		case OptHelpSubDev:
+			subdev_usage();
 			return 0;
 		case OptHelpSelection:
 			selection_usage();
@@ -1341,6 +1107,7 @@ int main(int argc, char **argv)
 			vbi_cmd(ch, optarg);
 			sdr_cmd(ch, optarg);
 			meta_cmd(ch, optarg);
+			subdev_cmd(ch, optarg);
 			selection_cmd(ch, optarg);
 			misc_cmd(ch, optarg);
 			streaming_cmd(ch, optarg);
@@ -1357,20 +1124,61 @@ int main(int argc, char **argv)
 		return 1;
 	}
 
-	if ((fd = test_open(device, O_RDWR)) < 0) {
+	media_type type = mi_media_detect_type(device);
+	if (type == MEDIA_TYPE_CANT_STAT) {
+		fprintf(stderr, "Cannot open device %s, exiting.\n",
+			device);
+		exit(1);
+	}
+
+	switch (type) {
+		// For now we can only handle V4L2 devices
+	case MEDIA_TYPE_VIDEO:
+	case MEDIA_TYPE_VBI:
+	case MEDIA_TYPE_RADIO:
+	case MEDIA_TYPE_SDR:
+	case MEDIA_TYPE_TOUCH:
+	case MEDIA_TYPE_SUBDEV:
+		break;
+	default:
+		type = MEDIA_TYPE_UNKNOWN;
+		break;
+	}
+
+	if (type == MEDIA_TYPE_UNKNOWN) {
+		fprintf(stderr, "Unable to detect what device %s is, exiting.\n",
+			device);
+		exit(1);
+	}
+	is_subdev = type == MEDIA_TYPE_SUBDEV;
+	if (is_subdev)
+		options[OptUseWrapper] = 0;
+	c_fd.s_direct(!options[OptUseWrapper]);
+	c_out_fd.s_direct(!options[OptUseWrapper]);
+
+	if (is_subdev)
+		fd = c_fd.subdev_open(device);
+	else
+		fd = c_fd.open(device);
+
+	if (fd < 0) {
 		fprintf(stderr, "Failed to open %s: %s\n", device,
 			strerror(errno));
 		exit(1);
 	}
-
 	verbose = options[OptVerbose];
-	if (!is_subdevice(fd) && doioctl(fd, VIDIOC_QUERYCAP, &vcap)) {
+	c_fd.s_trace(options[OptSilent] ? 0 : (verbose ? 2 : 1));
+	c_out_fd.s_trace(options[OptSilent] ? 0 : (verbose ? 2 : 1));
+
+	if (!is_subdev && doioctl(fd, VIDIOC_QUERYCAP, &vcap)) {
 		fprintf(stderr, "%s: not a v4l2 node\n", device);
 		exit(1);
 	}
 	capabilities = vcap.capabilities;
 	if (capabilities & V4L2_CAP_DEVICE_CAPS)
 		capabilities = vcap.device_caps;
+
+	media_fd = mi_get_media_fd(fd);
 
 	priv_magic = (capabilities & V4L2_CAP_EXT_PIX_FORMAT) ?
 			V4L2_PIX_FMT_PRIV_MAGIC : 0;
@@ -1384,7 +1192,8 @@ int main(int argc, char **argv)
 					  V4L2_BUF_TYPE_VIDEO_OUTPUT;
 
 	if (out_device) {
-		if ((out_fd = test_open(out_device, O_RDWR)) < 0) {
+		out_fd = c_out_fd.open(out_device);
+		if (out_fd < 0) {
 			fprintf(stderr, "Failed to open %s: %s\n", out_device,
 					strerror(errno));
 			exit(1);
@@ -1400,7 +1209,7 @@ int main(int argc, char **argv)
 				V4L2_PIX_FMT_PRIV_MAGIC : 0;
 	}
 
-	common_process_controls(fd);
+	common_process_controls(c_fd);
 
 	if (wait_for_event == V4L2_EVENT_CTRL && wait_event_id)
 		if (!common_find_ctrl_id(wait_event_id)) {
@@ -1450,69 +1259,65 @@ int main(int argc, char **argv)
 
 	/* Information Opts */
 
-	if (options[OptGetDriverInfo]) {
-		printf("Driver Info (%susing libv4l2):\n",
-				options[OptUseWrapper] ? "" : "not ");
-		printf("\tDriver name   : %s\n", vcap.driver);
-		printf("\tCard type     : %s\n", vcap.card);
-		printf("\tBus info      : %s\n", vcap.bus_info);
-		printf("\tDriver version: %d.%d.%d\n",
-				vcap.version >> 16,
-				(vcap.version >> 8) & 0xff,
-				vcap.version & 0xff);
-		printf("\tCapabilities  : 0x%08X\n", vcap.capabilities);
-		printf("%s", cap2s(vcap.capabilities).c_str());
-		if (vcap.capabilities & V4L2_CAP_DEVICE_CAPS) {
-			printf("\tDevice Caps   : 0x%08X\n", vcap.device_caps);
-			printf("%s", cap2s(vcap.device_caps).c_str());
-		}
+	if (!is_subdev && options[OptGetDriverInfo]) {
+		printf("Driver Info%s:\n",
+				options[OptUseWrapper] ? " (using libv4l2)" : "");
+		v4l2_info_capability(vcap);
 	}
+	if (options[OptGetDriverInfo] && media_fd >= 0)
+		mi_media_info_for_fd(media_fd, fd);
 
 	/* Set options */
 
-	common_set(fd);
-	tuner_set(fd);
-	io_set(fd);
-	stds_set(fd);
-	vidcap_set(fd);
-	vidout_set(fd);
-	overlay_set(fd);
-	vbi_set(fd);
-	sdr_set(fd);
-	meta_set(fd);
-	selection_set(fd);
-	streaming_set(fd, out_fd);
-	misc_set(fd);
-	edid_set(fd);
+	common_set(c_fd);
+	tuner_set(c_fd);
+	io_set(c_fd);
+	stds_set(c_fd);
+	vidcap_set(c_fd);
+	vidout_set(c_fd);
+	overlay_set(c_fd);
+	vbi_set(c_fd);
+	sdr_set(c_fd);
+	meta_set(c_fd);
+	subdev_set(c_fd);
+	selection_set(c_fd);
+	misc_set(c_fd);
+	edid_set(c_fd);
 
 	/* Get options */
 
-	common_get(fd);
-	tuner_get(fd);
-	io_get(fd);
-	stds_get(fd);
-	vidcap_get(fd);
-	vidout_get(fd);
-	overlay_get(fd);
-	vbi_get(fd);
-	sdr_get(fd);
-	meta_get(fd);
-	selection_get(fd);
-	misc_get(fd);
-	edid_get(fd);
+	common_get(c_fd);
+	tuner_get(c_fd);
+	io_get(c_fd);
+	stds_get(c_fd);
+	vidcap_get(c_fd);
+	vidout_get(c_fd);
+	overlay_get(c_fd);
+	vbi_get(c_fd);
+	sdr_get(c_fd);
+	meta_get(c_fd);
+	subdev_get(c_fd);
+	selection_get(c_fd);
+	misc_get(c_fd);
+	edid_get(c_fd);
 
 	/* List options */
 
-	common_list(fd);
-	io_list(fd);
-	stds_list(fd);
-	vidcap_list(fd);
-	vidout_list(fd);
-	overlay_list(fd);
-	vbi_list(fd);
-	sdr_list(fd);
-	meta_list(fd);
-	streaming_list(fd, out_fd);
+	common_list(c_fd);
+	io_list(c_fd);
+	stds_list(c_fd);
+	vidcap_list(c_fd);
+	vidout_list(c_fd);
+	overlay_list(c_fd);
+	vbi_list(c_fd);
+	sdr_list(c_fd);
+	meta_list(c_fd);
+	subdev_list(c_fd);
+	streaming_list(c_fd, c_out_fd);
+
+	/* Special case: handled last */
+
+	streaming_set(c_fd, c_out_fd);
 
 	if (options[OptWaitForEvent]) {
 		struct v4l2_event_subscription sub;
@@ -1567,15 +1372,17 @@ int main(int argc, char **argv)
 	if (options[OptSleep]) {
 		sleep(secs);
 		printf("Test VIDIOC_QUERYCAP:\n");
-		if (test_ioctl(fd, VIDIOC_QUERYCAP, &vcap) == 0)
+		if (c_fd.querycap(vcap, true) == 0)
 			printf("\tDriver name   : %s\n", vcap.driver);
 		else
 			perror("VIDIOC_QUERYCAP");
 	}
 
-	test_close(fd);
+	c_fd.close();
 	if (out_device)
-		test_close(out_fd);
+		c_out_fd.close();
+	if (media_fd >= 0)
+		close(media_fd);
 
 	// --all sets --silent to avoid ioctl errors to be shown when an ioctl
 	// is not implemented by the driver. Which is fine, but we shouldn't

@@ -1,18 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright 2016 Cisco Systems, Inc. and/or its affiliates. All rights reserved.
- *
- * This program is free software; you may redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; version 2 of the License.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
  */
 
 #include <unistd.h>
@@ -371,74 +359,6 @@ static unsigned parse_phys_addr(const char *value)
 
 static char options[512];
 
-static std::string tx_status2s(const struct cec_msg &msg)
-{
-	std::string s;
-	char num[4];
-	unsigned stat = msg.tx_status;
-
-	if (stat)
-		s += "Tx";
-	if (stat & CEC_TX_STATUS_OK)
-		s += ", OK";
-	if (stat & CEC_TX_STATUS_ARB_LOST) {
-		sprintf(num, "%u", msg.tx_arb_lost_cnt);
-		s += ", Arbitration Lost";
-		if (msg.tx_arb_lost_cnt)
-			s += " (" + std::string(num) + ")";
-	}
-	if (stat & CEC_TX_STATUS_NACK) {
-		sprintf(num, "%u", msg.tx_nack_cnt);
-		s += ", Not Acknowledged";
-		if (msg.tx_nack_cnt)
-			s += " (" + std::string(num) + ")";
-	}
-	if (stat & CEC_TX_STATUS_LOW_DRIVE) {
-		sprintf(num, "%u", msg.tx_low_drive_cnt);
-		s += ", Low Drive";
-		if (msg.tx_low_drive_cnt)
-			s += " (" + std::string(num) + ")";
-	}
-	if (stat & CEC_TX_STATUS_ERROR) {
-		sprintf(num, "%u", msg.tx_error_cnt);
-		s += ", Error";
-		if (msg.tx_error_cnt)
-			s += " (" + std::string(num) + ")";
-	}
-	if (stat & CEC_TX_STATUS_MAX_RETRIES)
-		s += ", Max Retries";
-	return s;
-}
-
-static std::string rx_status2s(unsigned stat)
-{
-	std::string s;
-
-	if (stat)
-		s += "Rx";
-	if (stat & CEC_RX_STATUS_OK)
-		s += ", OK";
-	if (stat & CEC_RX_STATUS_TIMEOUT)
-		s += ", Timeout";
-	if (stat & CEC_RX_STATUS_FEATURE_ABORT)
-		s += ", Feature Abort";
-	return s;
-}
-
-static std::string status2s(const struct cec_msg &msg)
-{
-	std::string s;
-
-	if (msg.tx_status)
-		s = tx_status2s(msg);
-	if (msg.rx_status) {
-		if (!s.empty())
-			s += ", ";
-		s += rx_status2s(msg.rx_status);
-	}
-	return s;
-}
-
 static void log_arg(const struct arg *arg, const char *arg_name, __u32 val)
 {
 	unsigned i;
@@ -508,14 +428,12 @@ static void log_htng_unknown_msg(const struct cec_msg *msg);
 static void log_unknown_msg(const struct cec_msg *msg);
 
 #define VENDOR_EXTRA \
-	"  --vendor-command=payload=<byte>[:<byte>]*\n" \
+	"  --vendor-command payload=<byte>[:<byte>]*\n" \
 	"                                  Send VENDOR_COMMAND message (" xstr(CEC_MSG_VENDOR_COMMAND) ")\n" \
-	"  --vendor-command-with-id=vendor-id=<val>,cmd=<byte>[:<byte>]*\n" \
+	"  --vendor-command-with-id vendor-id=<val>,cmd=<byte>[:<byte>]*\n" \
 	"                                  Send VENDOR_COMMAND_WITH_ID message (" xstr(CEC_MSG_VENDOR_COMMAND_WITH_ID) ")\n" \
-	"  --vendor-remote-button-down=rc-code=<byte>[:<byte>]*\n" \
-	"                                  Send VENDOR_REMOTE_BUTTON_DOWN message (" xstr(CEC_MSG_VENDOR_REMOTE_BUTTON_DOWN) ")\n" \
-	"  --custom-command=cmd=<byte>,payload=<byte>[:<byte>]*\n" \
-	"                                  Send custom message\n"
+	"  --vendor-remote-button-down rc-code=<byte>[:<byte>]*\n" \
+	"                                  Send VENDOR_REMOTE_BUTTON_DOWN message (" xstr(CEC_MSG_VENDOR_REMOTE_BUTTON_DOWN) ")\n"
 
 #include "cec-ctl-gen.h"
 
@@ -651,9 +569,12 @@ enum Option {
 	OptSetDevice = 'd',
 	OptFrom = 'f',
 	OptHelp = 'h',
+	OptLogicalAddress = 'l',
+	OptLogicalAddresses = 'L',
 	OptMonitor = 'm',
 	OptMonitorAll = 'M',
-	OptNoReply = 'n',
+	OptToggleNoReply = 'n',
+	OptNonBlocking = 'N',
 	OptOsdName = 'o',
 	OptPhysAddr = 'p',
 	OptPoll = 'P',
@@ -665,6 +586,7 @@ enum Option {
 	OptVerbose = 'v',
 	OptVendorID = 'V',
 	OptWallClock = 'w',
+	OptWaitForMsgs = 'W',
 
 	OptTV = 128,
 	OptRecord,
@@ -721,7 +643,7 @@ struct node {
 
 #define doioctl(n, r, p) cec_named_ioctl((n)->fd, #r, r, p)
 
-bool show_info;
+bool verbose;
 
 typedef std::vector<cec_msg> msg_vec;
 
@@ -748,6 +670,7 @@ static struct option long_options[] = {
 	{ "reply-to-followers", no_argument, 0, OptReplyToFollowers },
 	{ "timeout", required_argument, 0, OptTimeout },
 	{ "clear", no_argument, 0, OptClear },
+	{ "wait-for-msgs", no_argument, 0, OptWaitForMsgs },
 	{ "monitor", no_argument, 0, OptMonitor },
 	{ "monitor-all", no_argument, 0, OptMonitorAll },
 	{ "monitor-pin", no_argument, 0, OptMonitorPin },
@@ -755,7 +678,10 @@ static struct option long_options[] = {
 	{ "ignore", required_argument, 0, OptIgnore },
 	{ "store-pin", required_argument, 0, OptStorePin },
 	{ "analyze-pin", required_argument, 0, OptAnalyzePin },
-	{ "no-reply", no_argument, 0, OptNoReply },
+	{ "no-reply", no_argument, 0, OptToggleNoReply },
+	{ "non-blocking", no_argument, 0, OptNonBlocking },
+	{ "logical-address", no_argument, 0, OptLogicalAddress },
+	{ "logical-addresses", no_argument, 0, OptLogicalAddresses },
 	{ "to", required_argument, 0, OptTo },
 	{ "from", required_argument, 0, OptFrom },
 	{ "skip-info", no_argument, 0, OptSkipInfo },
@@ -803,15 +729,18 @@ static struct option long_options[] = {
 static void usage(void)
 {
 	printf("Usage:\n"
-	       "  -d, --device=<dev>       Use device <dev> instead of /dev/cec0\n"
+	       "  -d, --device <dev>       Use device <dev> instead of /dev/cec0\n"
 	       "                           If <dev> starts with a digit, then /dev/cec<dev> is used.\n"
-	       "  -p, --phys-addr=<addr>   Use this physical address\n"
-	       "  -o, --osd-name=<name>    Use this OSD name\n"
-	       "  -V, --vendor-id=<id>     Use this vendor ID\n"
+	       "  -p, --phys-addr <addr>   Use this physical address\n"
+	       "  -o, --osd-name <name>    Use this OSD name\n"
+	       "  -V, --vendor-id <id>     Use this vendor ID\n"
+	       "  -l, --logical-address    Show first configured logical address\n"
+	       "  -L, --logical-addresses  Show all configured logical addresses\n"
 	       "  -C, --clear              Clear all logical addresses\n"
-	       "  -n, --no-reply           Don't wait for a reply\n"
-	       "  -t, --to=<la>            Send message to the given logical address\n"
-	       "  -f, --from=<la>          Send message from the given logical address\n"
+	       "  -n, --no-reply           Toggle 'don't wait for a reply'\n"
+	       "  -N, --non-blocking       Transmit messages in non-blocking mode\n"
+	       "  -t, --to <la>            Send message to the given logical address\n"
+	       "  -f, --from <la>          Send message from the given logical address\n"
 	       "                           By default use the first assigned logical address\n"
 	       "  -r, --show-raw           Show the raw CEC message (hex values)\n"
 	       "  -s, --skip-info          Skip Driver Info output\n"
@@ -821,12 +750,13 @@ static void usage(void)
 	       "  --help-all               Show all help messages\n"
 	       "  -T, --trace              Trace all called ioctls\n"
 	       "  -v, --verbose            Turn on verbose reporting\n"
-	       "  -w, --wall-clock         Show timestamps as wall-clock time\n"
+	       "  -w, --wall-clock         Show timestamps as wall-clock time (implies -v)\n"
+	       "  -W, --wait-for-msgs      Wait for messages and events for up to --monitor-time secs.\n"
 	       "  --cec-version-1.4        Use CEC Version 1.4 instead of 2.0\n"
 	       "  --allow-unreg-fallback   Allow fallback to Unregistered\n"
 	       "  --no-rc-passthrough      Disable the RC passthrough\n"
 	       "  --reply-to-followers     The reply will be sent to followers as well\n"
-	       "  --timeout=<ms>           Set the reply timeout in milliseconds (default is 1000 ms)\n"
+	       "  --timeout <ms>           Set the reply timeout in milliseconds (default is 1000 ms)\n"
 	       "  --list-ui-commands       List all UI commands that can be used with --user-control-pressed\n"
 	       "  --list-devices           List all cec devices\n"
 	       "\n"
@@ -861,17 +791,20 @@ static void usage(void)
 	       "  -m, --monitor            Monitor CEC traffic\n"
 	       "  -M, --monitor-all        Monitor all CEC traffic\n"
 	       "  --monitor-pin            Monitor low-level CEC pin\n"
-	       "  --monitor-time=<secs>    Monitor for <secs> seconds (default is forever)\n"
-	       "  --ignore=<la>,<opcode>   Ignore messages from logical address <la> and opcode\n"
+	       "  --monitor-time <secs>    Monitor for <secs> seconds (default is forever)\n"
+	       "  --ignore <la>,<opcode>   Ignore messages from logical address <la> and opcode\n"
 	       "                           <opcode> when monitoring. 'all' can be used for <la>\n"
 	       "                           or <opcode> to match all logical addresses or opcodes.\n"
 	       "                           To ignore poll messages use 'poll' as <opcode>.\n"
-	       "  --store-pin=<to>         Store the low-level CEC pin changes to the file <to>.\n"
+	       "  --store-pin <to>         Store the low-level CEC pin changes to the file <to>.\n"
 	       "                           Use - for stdout.\n"
-	       "  --analyze-pin=<from>     Analyze the low-level CEC pin changes from the file <from>.\n"
+	       "  --analyze-pin <from>     Analyze the low-level CEC pin changes from the file <from>.\n"
 	       "                           Use - for stdin.\n"
 	       "\n"
 	       CEC_USAGE
+	       "\n"
+	       "  --custom-command cmd=<byte>[,payload=<byte>[:<byte>]*]\n"
+	       "                                      Send custom message\n"
 	       );
 }
 
@@ -888,72 +821,6 @@ static const char *power_status2s(__u8 power_status)
 		return "In transition On to Standby";
 	default:
 		return "Unknown";
-	}
-}
-
-/*
- * Most of these vendor IDs come from include/cectypes.h from libcec.
- */
-static const char *vendor2s(unsigned vendor)
-{
-	switch (vendor) {
-	case 0x000039:
-	case 0x000ce7:
-		return " (Toshiba)";
-	case 0x0000f0:
-		return " (Samsung)";
-	case 0x0005cd:
-		return " (Denon)";
-	case 0x000678:
-		return " (Marantz)";
-	case 0x000982:
-		return " (Loewe)";
-	case 0x0009b0:
-		return " (Onkyo)";
-	case 0x000c03:
-		return " (HDMI)";
-	case 0x001582:
-		return " (Pulse-Eight)";
-	case 0x001950:
-	case 0x9c645e:
-		return " (Harman Kardon)";
-	case 0x001a11:
-		return " (Google)";
-	case 0x0020c7:
-		return " (Akai)";
-	case 0x002467:
-		return " (AOC)";
-	case 0x005060:
-		return " (Cisco)";
-	case 0x008045:
-		return " (Panasonic)";
-	case 0x00903e:
-		return " (Philips)";
-	case 0x009053:
-		return " (Daewoo)";
-	case 0x00a0de:
-		return " (Yamaha)";
-	case 0x00d0d5:
-		return " (Grundig)";
-	case 0x00d38d:
-		return " (Hospitality Profile)";
-	case 0x00e036:
-		return " (Pioneer)";
-	case 0x00e091:
-		return " (LG)";
-	case 0x08001f:
-	case 0x534850:
-		return " (Sharp)";
-	case 0x080046:
-		return " (Sony)";
-	case 0x18c086:
-		return " (Broadcom)";
-	case 0x6b746d:
-		return " (Vizio)";
-	case 0x8065e9:
-		return " (Benq)";
-	default:
-		return "";
 	}
 }
 
@@ -981,6 +848,17 @@ std::string ts2s(__u64 ts)
 	return s + "." + buf;
 }
 
+std::string ts2s(double ts)
+{
+	if (!options[OptWallClock]) {
+		char buf[64];
+
+		sprintf(buf, "%10.06f", ts);
+		return buf;
+	}
+	return ts2s((__u64)(ts * 1000000000.0));
+}
+
 int cec_named_ioctl(int fd, const char *name,
 		    unsigned long int request, void *parm)
 {
@@ -995,11 +873,23 @@ int cec_named_ioctl(int fd, const char *name,
 	return retval == -1 ? e : (retval ? -1 : 0);
 }
 
+static void print_bytes(const __u8 *bytes, unsigned len)
+{
+	for (unsigned i = 0; i < len; i++)
+		printf(" 0x%02x", bytes[i]);
+	printf(" (");
+	for (unsigned i = 0; i < len; i++)
+		if (bytes[i] >= 32 && bytes[i] <= 127)
+		    printf("%c", bytes[i]);
+		else
+		    printf(" ");
+	printf(")");
+}
+
 static void log_raw_msg(const struct cec_msg *msg)
 {
-	printf("\tRaw: ");
-	for (unsigned i = 0; i < msg->len; i++)
-		printf("%02x ", msg->msg[i]);
+	printf("\tRaw:");
+	print_bytes(msg->msg, msg->len);
 	printf("\n");
 }
 
@@ -1008,15 +898,13 @@ static void log_htng_unknown_msg(const struct cec_msg *msg)
 	__u32 vendor_id;
 	const __u8 *bytes;
 	__u8 size;
-	unsigned i;
 
 	cec_ops_vendor_command_with_id(msg, &vendor_id, &size, &bytes);
 	printf("CEC_MSG_VENDOR_COMMAND_WITH_ID (0x%02x):\n",
 	       CEC_MSG_VENDOR_COMMAND_WITH_ID);
 	log_arg(&arg_vendor_id, "vendor-id", vendor_id);
 	printf("\tvendor-specific-data:");
-	for (i = 0; i < size; i++)
-		printf(" 0x%02x", bytes[i]);
+	print_bytes(bytes, size);
 	printf("\n");
 }
 
@@ -1034,8 +922,7 @@ static void log_unknown_msg(const struct cec_msg *msg)
 		       CEC_MSG_VENDOR_COMMAND);
 		cec_ops_vendor_command(msg, &size, &bytes);
 		printf("\tvendor-specific-data:");
-		for (i = 0; i < size; i++)
-			printf(" 0x%02x", bytes[i]);
+		print_bytes(bytes, size);
 		printf("\n");
 		break;
 	case CEC_MSG_VENDOR_COMMAND_WITH_ID:
@@ -1049,8 +936,7 @@ static void log_unknown_msg(const struct cec_msg *msg)
 			       CEC_MSG_VENDOR_COMMAND_WITH_ID);
 			log_arg(&arg_vendor_id, "vendor-id", vendor_id);
 			printf("\tvendor-specific-data:");
-			for (i = 0; i < size; i++)
-				printf(" 0x%02x", bytes[i]);
+			print_bytes(bytes, size);
 			printf("\n");
 			break;
 		}
@@ -1077,10 +963,34 @@ static void log_unknown_msg(const struct cec_msg *msg)
 		break;
 	default:
 		printf("CEC_MSG (0x%02x)%s", msg->msg[1], msg->len > 2 ? ":\n\tpayload:" : "");
-		for (i = 2; i < msg->len; i++)
-			printf(" 0x%02x", msg->msg[i]);
+		if (msg->len > 2)
+			print_bytes(msg->msg + 2, msg->len - 2);
 		printf("\n");
 		break;
+	}
+}
+
+static const char *event2s(__u32 event)
+{
+	switch (event) {
+	case CEC_EVENT_STATE_CHANGE:
+		return "State Change";
+	case CEC_EVENT_LOST_MSGS:
+		return "Lost Messages";
+	case CEC_EVENT_PIN_CEC_LOW:
+		return "CEC Pin Low";
+	case CEC_EVENT_PIN_CEC_HIGH:
+		return "CEC Pin High";
+	case CEC_EVENT_PIN_HPD_LOW:
+		return "HPD Pin Low";
+	case CEC_EVENT_PIN_HPD_HIGH:
+		return "HPD Pin High";
+	case CEC_EVENT_PIN_5V_LOW:
+		return "5V Pin Low";
+	case CEC_EVENT_PIN_5V_HIGH:
+		return "5V Pin High";
+	default:
+		return "Unknown";
 	}
 }
 
@@ -1090,10 +1000,11 @@ static void log_event(struct cec_event &ev, bool show)
 	__u16 pa;
 
 	if (ev.event != CEC_EVENT_PIN_CEC_LOW && ev.event != CEC_EVENT_PIN_CEC_HIGH &&
-	    ev.event != CEC_EVENT_PIN_HPD_LOW && ev.event != CEC_EVENT_PIN_HPD_HIGH)
+	    ev.event != CEC_EVENT_PIN_HPD_LOW && ev.event != CEC_EVENT_PIN_HPD_HIGH &&
+	    ev.event != CEC_EVENT_PIN_5V_LOW && ev.event != CEC_EVENT_PIN_5V_HIGH)
 		printf("\n");
 	if ((ev.flags & CEC_EVENT_FL_DROPPED_EVENTS) && show)
-		printf("(Note: events were lost)\n");
+		printf("(warn: %s events were lost)\n", event2s(ev.event));
 	if ((ev.flags & CEC_EVENT_FL_INITIAL_STATE) && show)
 		printf("Initial ");
 	switch (ev.event) {
@@ -1107,7 +1018,8 @@ static void log_event(struct cec_event &ev, bool show)
 		break;
 	case CEC_EVENT_LOST_MSGS:
 		if (show)
-			printf("Event: Lost Messages\n");
+			printf("Event: Lost %d messages\n",
+			       ev.lost_msgs.lost_msgs);
 		break;
 	case CEC_EVENT_PIN_CEC_LOW:
 	case CEC_EVENT_PIN_CEC_HIGH:
@@ -1122,12 +1034,18 @@ static void log_event(struct cec_event &ev, bool show)
 			printf("Event: HPD Pin %s\n",
 			       ev.event == CEC_EVENT_PIN_HPD_HIGH ? "High" : "Low");
 		break;
+	case CEC_EVENT_PIN_5V_LOW:
+	case CEC_EVENT_PIN_5V_HIGH:
+		if (show)
+			printf("Event: 5V Pin %s\n",
+			       ev.event == CEC_EVENT_PIN_5V_HIGH ? "High" : "Low");
+		break;
 	default:
 		if (show)
 			printf("Event: Unknown (0x%x)\n", ev.event);
 		break;
 	}
-	if (show_info && show)
+	if (verbose && show)
 		printf("\tTimestamp: %s\n", ts2s(ev.ts).c_str());
 }
 
@@ -1175,7 +1093,7 @@ static int showTopologyDevice(struct node *node, unsigned i, unsigned la)
 	if (!cec_msg_status_is_ok(&msg))
 		printf("%s\n", status2s(msg).c_str());
 	else
-		printf("0x%02x%02x%02x%s\n",
+		printf("0x%02x%02x%02x %s\n",
 		       msg.msg[2], msg.msg[3], msg.msg[4],
 		       vendor2s(msg.msg[2] << 16 | msg.msg[3] << 8 | msg.msg[4]));
 
@@ -1284,6 +1202,9 @@ static int showTopology(struct node *node)
 
 	doioctl(node, CEC_ADAP_G_LOG_ADDRS, &laddrs);
 
+	if (!laddrs.num_log_addrs)
+		return 0;
+
 	for (unsigned i = 0; i < 15; i++) {
 		int ret;
 
@@ -1295,7 +1216,7 @@ static int showTopology(struct node *node)
 
 		if (msg.tx_status & CEC_TX_STATUS_OK)
 			showTopologyDevice(node, i, laddrs.log_addr[0]);
-		else if (show_info && !(msg.tx_status & CEC_TX_STATUS_MAX_RETRIES))
+		else if (verbose && !(msg.tx_status & CEC_TX_STATUS_MAX_RETRIES))
 			printf("\t\t%s for addr %d\n", status2s(msg).c_str(), i);
 	}
 
@@ -1368,6 +1289,83 @@ static void generate_eob_event(__u64 ts, FILE *fstore)
 	log_event(ev_eob, fstore != stdout);
 }
 
+static void show_msg(const cec_msg &msg)
+{
+	__u8 from = cec_msg_initiator(&msg);
+	__u8 to = cec_msg_destination(&msg);
+
+	if (ignore_la[from])
+		return;
+	if ((msg.len == 1 && (ignore_opcode[POLL_FAKE_OPCODE] & (1 << from))) ||
+	    (msg.len > 1 && (ignore_opcode[msg.msg[1]] & (1 << from))))
+		return;
+
+	bool transmitted = msg.tx_status != 0;
+	printf("%s %s to %s (%d to %d): ",
+	       transmitted ? "Transmitted by" : "Received from",
+	       la2s(from), to == 0xf ? "all" : la2s(to), from, to);
+	log_msg(&msg);
+	if (options[OptShowRaw])
+		log_raw_msg(&msg);
+	if (verbose && transmitted)
+		printf("\tSequence: %u Tx Timestamp: %s\n",
+		       msg.sequence, ts2s(msg.tx_ts).c_str());
+	else if (verbose && !transmitted)
+		printf("\tSequence: %u Rx Timestamp: %s\n",
+		       msg.sequence, ts2s(msg.rx_ts).c_str());
+}
+
+static void wait_for_msgs(struct node &node, __u32 monitor_time)
+{
+	__u32 monitor = CEC_MODE_INITIATOR | CEC_MODE_FOLLOWER;
+	fd_set rd_fds;
+	fd_set ex_fds;
+	int fd = node.fd;
+	time_t t;
+	
+	if (doioctl(&node, CEC_S_MODE, &monitor)) {
+		fprintf(stderr, "Selecting follower mode failed.\n");
+		return;
+	}
+
+	fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) | O_NONBLOCK);
+	t = time(NULL) + monitor_time;
+
+	while (!monitor_time || time(NULL) < t) {
+		struct timeval tv = { 1, 0 };
+		int res;
+
+		fflush(stdout);
+		FD_ZERO(&rd_fds);
+		FD_ZERO(&ex_fds);
+		FD_SET(fd, &rd_fds);
+		FD_SET(fd, &ex_fds);
+		res = select(fd + 1, &rd_fds, NULL, &ex_fds, &tv);
+		if (res < 0)
+			break;
+		if (FD_ISSET(fd, &rd_fds)) {
+			struct cec_msg msg = { };
+
+			res = doioctl(&node, CEC_RECEIVE, &msg);
+			if (res == ENODEV) {
+				fprintf(stderr, "Device was disconnected.\n");
+				break;
+			}
+			if (!res)
+				show_msg(msg);
+		}
+		if (FD_ISSET(fd, &ex_fds)) {
+			struct cec_event ev;
+
+			if (doioctl(&node, CEC_DQEVENT, &ev))
+				continue;
+			log_event(ev, true);
+		}
+	}
+}
+
+#define MONITOR_FL_DROPPED_EVENTS     (1 << 16)
+
 static void monitor(struct node &node, __u32 monitor_time, const char *store_pin)
 {
 	__u32 monitor = CEC_MODE_MONITOR;
@@ -1395,6 +1393,16 @@ static void monitor(struct node &node, __u32 monitor_time, const char *store_pin
 	if (doioctl(&node, CEC_S_MODE, &monitor)) {
 		fprintf(stderr, "Selecting monitor mode failed, you may have to run this as root.\n");
 		return;
+	}
+
+	if (monitor == CEC_MODE_MONITOR_PIN) {
+		struct cec_log_addrs laddrs = { };
+
+		doioctl(&node, CEC_ADAP_G_LOG_ADDRS, &laddrs);
+		if (laddrs.log_addr_mask && !options[OptSkipInfo]) {
+			fprintf(stderr, "note: this CEC adapter is configured. This may cause inaccurate event\n");
+			fprintf(stderr, "      timestamps. It is recommended to unconfigure the adapter (cec-ctl -C)\n");
+		}
 	}
 
 	if (store_pin) {
@@ -1440,36 +1448,14 @@ static void monitor(struct node &node, __u32 monitor_time, const char *store_pin
 			break;
 		if (FD_ISSET(fd, &rd_fds)) {
 			struct cec_msg msg = { };
-			__u8 from, to;
 
 			res = doioctl(&node, CEC_RECEIVE, &msg);
 			if (res == ENODEV) {
 				fprintf(stderr, "Device was disconnected.\n");
 				break;
 			}
-			if (res || fstore == stdout)
-				continue;
-			from = cec_msg_initiator(&msg);
-			to = cec_msg_destination(&msg);
-			if (ignore_la[from])
-				continue;
-			if ((msg.len == 1 && (ignore_opcode[POLL_FAKE_OPCODE] & (1 << from))) ||
-			    (msg.len > 1 && (ignore_opcode[msg.msg[1]] & (1 << from))))
-				continue;
-
-			bool transmitted = msg.tx_status != 0;
-			printf("%s %s to %s (%d to %d): ",
-			       transmitted ? "Transmitted by" : "Received from",
-			       la2s(from), to == 0xf ? "all" : la2s(to), from, to);
-			log_msg(&msg);
-			if (options[OptShowRaw])
-				log_raw_msg(&msg);
-			if (show_info && transmitted)
-				printf("\tSequence: %u Tx Timestamp: %s\n",
-				       msg.sequence, ts2s(msg.tx_ts).c_str());
-			else if (show_info && !transmitted)
-				printf("\tSequence: %u Rx Timestamp: %s\n",
-				       msg.sequence, ts2s(msg.rx_ts).c_str());
+			if (!res && fstore != stdout)
+				show_msg(msg);
 		}
 		if (FD_ISSET(fd, &ex_fds)) {
 			struct cec_event ev;
@@ -1479,13 +1465,18 @@ static void monitor(struct node &node, __u32 monitor_time, const char *store_pin
 			if (ev.event == CEC_EVENT_PIN_CEC_LOW ||
 			    ev.event == CEC_EVENT_PIN_CEC_HIGH ||
 			    ev.event == CEC_EVENT_PIN_HPD_LOW ||
-			    ev.event == CEC_EVENT_PIN_HPD_HIGH)
+			    ev.event == CEC_EVENT_PIN_HPD_HIGH ||
+			    ev.event == CEC_EVENT_PIN_5V_LOW ||
+			    ev.event == CEC_EVENT_PIN_5V_HIGH)
 				pin_event = true;
 			generate_eob_event(ev.ts, fstore);
 			if (pin_event && fstore) {
+				unsigned int v = ev.event - CEC_EVENT_PIN_CEC_LOW;
+
+				if (ev.flags & CEC_EVENT_FL_DROPPED_EVENTS)
+					v |= MONITOR_FL_DROPPED_EVENTS;
 				fprintf(fstore, "%llu.%09llu %d\n",
-					ev.ts / 1000000000, ev.ts % 1000000000,
-					ev.event - CEC_EVENT_PIN_CEC_LOW);
+					ev.ts / 1000000000, ev.ts % 1000000000, v);
 				fflush(fstore);
 			}
 			if (!pin_event || options[OptMonitorPin])
@@ -1566,11 +1557,17 @@ static void analyze(const char *analyze_pin)
 			line++;
 			continue;
 		}
-		if (sscanf(s, "%lu.%09lu %d\n", &tv_sec, &tv_nsec, &event) != 3 || event > 3) {
+		if (sscanf(s, "%lu.%09lu %d\n", &tv_sec, &tv_nsec, &event) != 3 ||
+		    (event & ~MONITOR_FL_DROPPED_EVENTS) > 5) {
 			fprintf(stderr, "malformed data at line %d\n", line);
 			break;
 		}
 		ev.ts = tv_sec * 1000000000ULL + tv_nsec;
+		ev.flags = 0;
+		if (event & MONITOR_FL_DROPPED_EVENTS) {
+			event &= ~MONITOR_FL_DROPPED_EVENTS;
+			ev.flags = CEC_EVENT_FL_DROPPED_EVENTS;
+		}
 		ev.event = event + CEC_EVENT_PIN_CEC_LOW;
 		log_event(ev, true);
 		line++;
@@ -1698,7 +1695,7 @@ int main(int argc, char **argv)
 	__u32 monitor_time = 0;
 	__u32 vendor_id = 0x000c03; /* HDMI LLC vendor ID */
 	__u16 phys_addr;
-	__u8 from = 0, to = 0;
+	__u8 from = 0, to = 0, first_to = 0xff;
 	__u8 dev_features = 0;
 	__u8 rc_tv = 0;
 	__u8 rc_src = 0;
@@ -1732,8 +1729,8 @@ int main(int argc, char **argv)
 		if (ch == -1)
 			break;
 
-		if (ch > OptMessages || ch == OptPoll)
-			cec_msg_init(&msg, 0, 0);
+		cec_msg_init(&msg, 0, 0);
+		msg.msg[0] = cec_msg_is_broadcast(&msg) ? 0xf : (options[OptTo] ? to : 0xf0);
 		options[(int)ch] = 1;
 
 		switch (ch) {
@@ -1750,13 +1747,15 @@ int main(int argc, char **argv)
 			}
 			break;
 		case OptVerbose:
-			show_info = true;
+			verbose = true;
 			break;
 		case OptFrom:
 			from = strtoul(optarg, NULL, 0) & 0xf;
 			break;
 		case OptTo:
 			to = strtoul(optarg, NULL, 0) & 0xf;
+			if (first_to == 0xff)
+				first_to = to;
 			break;
 		case OptTimeout:
 			timeout = strtoul(optarg, NULL, 0);
@@ -1810,8 +1809,8 @@ int main(int argc, char **argv)
 		case OptAnalyzePin:
 			analyze_pin = optarg;
 			break;
-		case OptNoReply:
-			reply = false;
+		case OptToggleNoReply:
+			reply = !reply;
 			break;
 		case OptPhysAddr:
 			phys_addr = parse_phys_addr(optarg);
@@ -2098,6 +2097,9 @@ int main(int argc, char **argv)
 		return 0;
 	}
 
+	if (options[OptWallClock] && !options[OptMonitorPin])
+		verbose = true;
+
 	if (store_pin && !strcmp(store_pin, "-"))
 		options[OptSkipInfo] = 1;
 
@@ -2321,6 +2323,17 @@ int main(int argc, char **argv)
 	if (options[OptShowTopology])
 		showTopology(&node);
 
+	if (options[OptLogicalAddress])
+		printf("%d\n", laddrs.log_addr[0] & 0xf);
+	if (options[OptLogicalAddresses]) {
+		for (i = 0; i < laddrs.num_log_addrs; i++)
+			printf("%d ", laddrs.log_addr[i] & 0xf);
+		printf("\n");
+	}
+
+	if (options[OptNonBlocking])
+		fcntl(node.fd, F_SETFL, fcntl(node.fd, F_GETFL) | O_NONBLOCK);
+
 	for (msg_vec::iterator iter = msgs.begin(); iter != msgs.end(); ++iter) {
 		struct cec_msg msg = *iter;
 
@@ -2329,10 +2342,12 @@ int main(int argc, char **argv)
 			fprintf(stderr, "attempting to send message without --to\n");
 			exit(1);
 		}
-		printf("\nTransmit from %s to %s (%d to %d):\n", la2s(from),
-		       (cec_msg_is_broadcast(&msg) || to == 0xf) ? "all" : la2s(to),
-		       from, cec_msg_is_broadcast(&msg) ? 0xf : to);
-		msg.msg[0] |= (from << 4) | (cec_msg_is_broadcast(&msg) ? 0xf : to);
+		if (msg.msg[0] == 0xf0)
+			msg.msg[0] = first_to;
+		msg.msg[0] |= from << 4;
+		to = msg.msg[0] & 0xf;
+		printf("\nTransmit from %s to %s (%d to %d):\n",
+		       la2s(from), to == 0xf ? "all" : la2s(to), from, to);
 		msg.flags = options[OptReplyToFollowers] ? CEC_MSG_FL_REPLY_TO_FOLLOWERS : 0;
 		msg.timeout = msg.reply ? timeout : 0;
 		log_msg(&msg);
@@ -2352,15 +2367,20 @@ int main(int argc, char **argv)
 				ts2s(msg.rx_ts).c_str(),
 				response_time_ms(msg));
 		printf("\n");
-		if (!cec_msg_status_is_ok(&msg) || show_info)
+		if (!cec_msg_status_is_ok(&msg) || verbose)
 			printf("\t%s\n", status2s(msg).c_str());
 	}
 	fflush(stdout);
+
+	if (options[OptNonBlocking])
+		fcntl(node.fd, F_SETFL, fcntl(node.fd, F_GETFL) & ~O_NONBLOCK);
 
 skip_la:
 	if (options[OptMonitor] || options[OptMonitorAll] ||
 	    options[OptMonitorPin] || options[OptStorePin])
 		monitor(node, monitor_time, store_pin);
+	else if (options[OptWaitForMsgs])
+		wait_for_msgs(node, monitor_time);
 	fflush(stdout);
 	close(fd);
 	return 0;

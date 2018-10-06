@@ -1,18 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright 2016 Cisco Systems, Inc. and/or its affiliates. All rights reserved.
- *
- * This program is free software; you may redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; version 2 of the License.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
  */
 
 #include <unistd.h>
@@ -340,7 +328,7 @@ static int osd_string_set_default(struct node *node, unsigned me, unsigned la, b
 		return NOTSUPPORTED;
 	else if (refused(&msg))
 		return REFUSED;
-	else {
+	else if (cec_msg_status_is_abort(&msg)) {
 		warn("The device is in an unsuitable state or cannot display the complete message.\n");
 		unsuitable = true;
 	}
@@ -483,7 +471,7 @@ static int routing_control_set_stream_path(struct node *node, unsigned me, unsig
 	   In CEC 2.0 it is mandatory for sources to send Active Source. */
 	if (is_tv(la, node->remote[la].prim_type))
 		interactive_info(true, "Please ensure that the device is in standby.");
-	announce("Sending Set Stream Path and waiting for reply. This may take up to %u s.", long_timeout);
+	announce("Sending Set Stream Path and waiting for reply. This may take up to %llu s.", (long long)long_timeout);
 	cec_msg_init(&msg, me, la);
 	cec_msg_set_stream_path(&msg, node->remote[la].phys_addr);
 	msg.reply = CEC_MSG_ACTIVE_SOURCE;
@@ -1290,7 +1278,7 @@ static int cdc_hec_discover(struct node *node, unsigned me, unsigned la, bool pr
 				}
 				oss << "\b\b ";
 			}
-			info("HEC Suppport Field    : %s\n", oss.str().c_str());
+			info("HEC Support Field    : %s\n", oss.str().c_str());
 		}
 	}
 
