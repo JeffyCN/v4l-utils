@@ -1,0 +1,5 @@
+ir-keytable: binary-from-other-architecture lib/udev/rc_keymaps/protocols/grundig.o
+ir-keytable: binary-from-other-architecture lib/udev/rc_keymaps/protocols/manchester.o
+ir-keytable: binary-from-other-architecture lib/udev/rc_keymaps/protocols/pulse_distance.o
+ir-keytable: binary-from-other-architecture lib/udev/rc_keymaps/protocols/pulse_length.o
+ir-keytable: binary-from-other-architecture lib/udev/rc_keymaps/protocols/rc_mm.o

@@ -9,3 +9,6 @@ usr/lib/x86_64-linux-gnu/libv4lconvert.la
 usr/lib/x86_64-linux-gnu/v4l1compat.so
 usr/lib/x86_64-linux-gnu/v4l2convert.so
 usr/lib/x86_64-linux-gnu/libv4l/plugins/libv4l-mplane.la
+usr/share/locale/*/LC_MESSAGES/v4l-utils.mo
+usr/share/locale/*/LC_MESSAGES/libdvbv5.mo
+
