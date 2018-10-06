@@ -28,11 +28,11 @@ void vidcap_usage(void)
 	       "  --list-formats     display supported video formats [VIDIOC_ENUM_FMT]\n"
 	       "  --list-formats-ext display supported video formats including frame sizes\n"
 	       "                     and intervals\n"
-	       "  --list-framesizes=<f>\n"
+	       "  --list-framesizes <f>\n"
 	       "                     list supported framesizes for pixelformat <f>\n"
 	       "                     [VIDIOC_ENUM_FRAMESIZES]\n"
 	       "                     pixelformat is the fourcc value as a string\n"
-	       "  --list-frameintervals=width=<w>,height=<h>,pixelformat=<f>\n"
+	       "  --list-frameintervals width=<w>,height=<h>,pixelformat=<f>\n"
 	       "                     list supported frame intervals for pixelformat <f> and\n"
 	       "                     the given width and height [VIDIOC_ENUM_FRAMEINTERVALS]\n"
 	       "                     pixelformat is the fourcc value as a string\n"
@@ -40,8 +40,9 @@ void vidcap_usage(void)
 	       "  -V, --get-fmt-video\n"
 	       "     		     query the video capture format [VIDIOC_G_FMT]\n"
 	       "  -v, --set-fmt-video\n"
-	       "  --try-fmt-video=width=<w>,height=<h>,pixelformat=<pf>,field=<f>,colorspace=<c>,\n"
-	       "                  xfer=<xf>,ycbcr=<y>,quantization=<q>,premul-alpha,bytesperline=<bpl>\n"
+	       "  --try-fmt-video width=<w>,height=<h>,pixelformat=<pf>,field=<f>,colorspace=<c>,\n"
+	       "                  xfer=<xf>,ycbcr=<y>,hsv=<hsv>,quantization=<q>,\n"
+	       "                  premul-alpha,bytesperline=<bpl>\n"
 	       "                     set/try the video capture format [VIDIOC_S/TRY_FMT]\n"
 	       "                     pixelformat is either the format index as reported by\n"
 	       "                       --list-formats, or the fourcc value as a string.\n"
@@ -52,120 +53,16 @@ void vidcap_usage(void)
 	       "                       alternate, interlaced_tb, interlaced_bt\n"
 	       "                     <c> can be one of the following colorspaces:\n"
 	       "                       smpte170m, smpte240m, rec709, 470m, 470bg, jpeg, srgb,\n"
-	       "                       adobergb, bt2020, dcip3\n"
+	       "                       oprgb, bt2020, dcip3\n"
 	       "                     <xf> can be one of the following transfer functions:\n"
-	       "                       default, 709, srgb, adobergb, smpte240m, smpte2084, dcip3, none\n"
+	       "                       default, 709, srgb, oprgb, smpte240m, smpte2084, dcip3, none\n"
 	       "                     <y> can be one of the following Y'CbCr encodings:\n"
 	       "                       default, 601, 709, xv601, xv709, bt2020, bt2020c, smpte240m\n"
+	       "                     <hsv> can be one of the following HSV encodings:\n"
+	       "                       default, 180, 256\n"
 	       "                     <q> can be one of the following quantization methods:\n"
 	       "                       default, full-range, lim-range\n"
 	       );
-}
-
-static std::string frmtype2s(unsigned type)
-{
-	static const char *types[] = {
-		"Unknown",
-		"Discrete",
-		"Continuous",
-		"Stepwise"
-	};
-
-	if (type > 3)
-		type = 0;
-	return types[type];
-}
-
-static std::string fract2sec(const struct v4l2_fract &f)
-{
-	char buf[100];
-
-	sprintf(buf, "%.3f", (1.0 * f.numerator) / f.denominator);
-	return buf;
-}
-
-static std::string fract2fps(const struct v4l2_fract &f)
-{
-	char buf[100];
-
-	sprintf(buf, "%.3f", (1.0 * f.denominator) / f.numerator);
-	return buf;
-}
-
-static void print_frmsize(const struct v4l2_frmsizeenum &frmsize, const char *prefix)
-{
-	printf("%s\tSize: %s ", prefix, frmtype2s(frmsize.type).c_str());
-	if (frmsize.type == V4L2_FRMSIZE_TYPE_DISCRETE) {
-		printf("%dx%d", frmsize.discrete.width, frmsize.discrete.height);
-	} else if (frmsize.type == V4L2_FRMSIZE_TYPE_STEPWISE) {
-		printf("%dx%d - %dx%d with step %d/%d",
-				frmsize.stepwise.min_width,
-				frmsize.stepwise.min_height,
-				frmsize.stepwise.max_width,
-				frmsize.stepwise.max_height,
-				frmsize.stepwise.step_width,
-				frmsize.stepwise.step_height);
-	}
-	printf("\n");
-}
-
-static void print_frmival(const struct v4l2_frmivalenum &frmival, const char *prefix)
-{
-	printf("%s\tInterval: %s ", prefix, frmtype2s(frmival.type).c_str());
-	if (frmival.type == V4L2_FRMIVAL_TYPE_DISCRETE) {
-		printf("%ss (%s fps)\n", fract2sec(frmival.discrete).c_str(),
-				fract2fps(frmival.discrete).c_str());
-	} else if (frmival.type == V4L2_FRMIVAL_TYPE_CONTINUOUS) {
-		printf("%ss - %ss (%s-%s fps)\n",
-				fract2sec(frmival.stepwise.min).c_str(),
-				fract2sec(frmival.stepwise.max).c_str(),
-				fract2fps(frmival.stepwise.max).c_str(),
-				fract2fps(frmival.stepwise.min).c_str());
-	} else if (frmival.type == V4L2_FRMIVAL_TYPE_STEPWISE) {
-		printf("%ss - %ss with step %ss (%s-%s fps)\n",
-				fract2sec(frmival.stepwise.min).c_str(),
-				fract2sec(frmival.stepwise.max).c_str(),
-				fract2sec(frmival.stepwise.step).c_str(),
-				fract2fps(frmival.stepwise.max).c_str(),
-				fract2fps(frmival.stepwise.min).c_str());
-	}
-}
-
-static void print_video_formats_ext(int fd, __u32 type)
-{
-	struct v4l2_fmtdesc fmt;
-	struct v4l2_frmsizeenum frmsize;
-	struct v4l2_frmivalenum frmival;
-
-	fmt.index = 0;
-	fmt.type = type;
-	while (test_ioctl(fd, VIDIOC_ENUM_FMT, &fmt) >= 0) {
-		printf("\tIndex       : %d\n", fmt.index);
-		printf("\tType        : %s\n", buftype2s(type).c_str());
-		printf("\tPixel Format: '%s'", fcc2s(fmt.pixelformat).c_str());
-		if (fmt.flags)
-			printf(" (%s)", fmtdesc2s(fmt.flags).c_str());
-		printf("\n");
-		printf("\tName        : %s\n", fmt.description);
-		frmsize.pixel_format = fmt.pixelformat;
-		frmsize.index = 0;
-		while (test_ioctl(fd, VIDIOC_ENUM_FRAMESIZES, &frmsize) >= 0) {
-			print_frmsize(frmsize, "\t");
-			if (frmsize.type == V4L2_FRMSIZE_TYPE_DISCRETE) {
-				frmival.index = 0;
-				frmival.pixel_format = fmt.pixelformat;
-				frmival.width = frmsize.discrete.width;
-				frmival.height = frmsize.discrete.height;
-				while (test_ioctl(fd, VIDIOC_ENUM_FRAMEINTERVALS, &frmival) >= 0) {
-					print_frmival(frmival, "\t\t");
-					frmival.index++;
-				}
-			}
-			frmsize.index++;
-		}
-		printf("\n");
-		fmt.index++;
-	}
 }
 
 static void print_video_fields(int fd)
@@ -256,8 +153,9 @@ void vidcap_cmd(int ch, char *optarg)
 	}
 }
 
-void vidcap_set(int fd)
+void vidcap_set(cv4l_fd &_fd)
 {
+	int fd = _fd.g_fd();
 	int ret;
 
 	if (options[OptSetVideoFormat] || options[OptTryVideoFormat]) {
@@ -328,12 +226,12 @@ void vidcap_set(int fd)
 			else
 				ret = doioctl(fd, VIDIOC_TRY_FMT, &vfmt);
 			if (ret == 0 && (verbose || options[OptTryVideoFormat]))
-				printfmt(vfmt);
+				printfmt(fd, vfmt);
 		}
 	}
 }
 
-void vidcap_get(int fd)
+void vidcap_get(cv4l_fd &fd)
 {
 	if (options[OptGetVideoFormat]) {
 		struct v4l2_format vfmt;
@@ -341,12 +239,12 @@ void vidcap_get(int fd)
 		memset(&vfmt, 0, sizeof(vfmt));
 		vfmt.fmt.pix.priv = priv_magic;
 		vfmt.type = vidcap_buftype;
-		if (doioctl(fd, VIDIOC_G_FMT, &vfmt) == 0)
-			printfmt(vfmt);
+		if (doioctl(fd.g_fd(), VIDIOC_G_FMT, &vfmt) == 0)
+			printfmt(fd.g_fd(), vfmt);
 	}
 }
 
-void vidcap_list(int fd)
+void vidcap_list(cv4l_fd &fd)
 {
 	if (options[OptListFormats]) {
 		printf("ioctl: VIDIOC_ENUM_FMT\n");
@@ -359,13 +257,13 @@ void vidcap_list(int fd)
 	}
 
 	if (options[OptListFields]) {
-		print_video_fields(fd);
+		print_video_fields(fd.g_fd());
 	}
 
 	if (options[OptListFrameSizes]) {
 		printf("ioctl: VIDIOC_ENUM_FRAMESIZES\n");
 		frmsize.index = 0;
-		while (test_ioctl(fd, VIDIOC_ENUM_FRAMESIZES, &frmsize) >= 0) {
+		while (test_ioctl(fd.g_fd(), VIDIOC_ENUM_FRAMESIZES, &frmsize) >= 0) {
 			print_frmsize(frmsize, "");
 			frmsize.index++;
 		}
@@ -374,7 +272,7 @@ void vidcap_list(int fd)
 	if (options[OptListFrameIntervals]) {
 		printf("ioctl: VIDIOC_ENUM_FRAMEINTERVALS\n");
 		frmival.index = 0;
-		while (test_ioctl(fd, VIDIOC_ENUM_FRAMEINTERVALS, &frmival) >= 0) {
+		while (test_ioctl(fd.g_fd(), VIDIOC_ENUM_FRAMEINTERVALS, &frmival) >= 0) {
 			print_frmival(frmival, "");
 			frmival.index++;
 		}

@@ -28,6 +28,8 @@
 #include <set>
 #include <map>
 #include <linux/videodev2.h>
+#include <linux/v4l2-subdev.h>
+#include <linux/media.h>
 
 #ifdef ANDROID
 #include <android-config.h>
@@ -40,6 +42,8 @@
 #endif
 
 #include <cv4l-helpers.h>
+#include <v4l2-info.h>
+#include <media-info.h>
 
 #if !defined(ENODATA) && (defined(__FreeBSD__) || defined(__FreeBSD_kernel__))
 #define ENODATA ENOTSUP
@@ -47,7 +51,10 @@
 
 extern bool show_info;
 extern bool show_warnings;
+extern bool exit_on_fail;
+extern bool exit_on_warn;
 extern int kernel_version;
+extern int media_fd;
 extern unsigned warnings;
 
 struct test_query_ext_ctrl: v4l2_query_ext_ctrl {
@@ -90,6 +97,20 @@ struct base_node {
 	unsigned std_compound_controls;
 	unsigned priv_controls;
 	unsigned priv_compound_controls;
+	__u32 media_version;
+	media_entity_desc entity;
+	media_pad_desc *pads;
+	media_link_desc *links;
+	media_v2_topology *topology;
+	v4l2_subdev_frame_interval_enum subdev_ival;
+	bool is_passthrough_subdev;
+	__u8 has_subdev_enum_code;
+	__u8 has_subdev_enum_fsize;
+	__u8 has_subdev_enum_fival;
+	__u8 has_subdev_fmt;
+	__u8 has_subdev_selection;
+	int frame_interval_pad;
+	int enum_frame_interval_pad;
 	__u32 fbuf_caps;
 	pixfmt_map buftype_pixfmts[V4L2_BUF_TYPE_LAST + 1];
 	frmsizes_set frmsizes;
@@ -118,6 +139,8 @@ struct node : public base_node, public cv4l_fd {
 		warnings++;					\
 		if (show_warnings)				\
  			printf("\t\twarn: %s(%d): " fmt, __FILE__, __LINE__, ##args);	\
+		if (exit_on_warn)				\
+			exit(1);				\
 	} while (0)
 
 #define warn_once(fmt, args...)						\
@@ -130,12 +153,16 @@ struct node : public base_node, public cv4l_fd {
 			if (show_warnings)				\
 				printf("\t\twarn: %s(%d): " fmt,	\
 					__FILE__, __LINE__, ##args); 	\
+			if (exit_on_warn)				\
+				exit(1);				\
 		}							\
 	} while (0)
 
 #define fail(fmt, args...) 						\
 ({ 									\
  	printf("\t\tfail: %s(%d): " fmt, __FILE__, __LINE__, ##args);	\
+	if (exit_on_fail)						\
+		exit(1);						\
 	1;								\
 })
 
@@ -159,21 +186,20 @@ static inline double fract2f(const struct v4l2_fract *f)
 
 #define doioctl(n, r, p) v4l_named_ioctl((n)->g_v4l_fd(), #r, r, p)
 
-std::string cap2s(unsigned cap);
-std::string buftype2s(int type);
-std::string fcc2s(unsigned int val);
-
-static inline std::string buftype2s(enum v4l2_buf_type type)
-{
-       return buftype2s((int)type);
-}
-
 const char *ok(int res);
 int check_string(const char *s, size_t len);
 int check_ustring(const __u8 *s, int len);
 int check_0(const void *p, int len);
 int restoreFormat(struct node *node);
-std::string pixfmt2s(unsigned id);
+void testNode(struct node &node, struct node &expbuf_node, media_type type,
+	      unsigned frame_count);
+
+// Media Controller ioctl tests
+int testMediaDeviceInfo(struct node *node);
+int testMediaTopology(struct node *node);
+int testMediaEnum(struct node *node);
+int testMediaSetupLink(struct node *node);
+void walkTopology(struct node &node, struct node &expbuf_node, unsigned frame_count);
 
 // Debug ioctl tests
 int testRegister(struct node *node);
@@ -225,10 +251,17 @@ int testEncoder(struct node *node);
 int testEncIndex(struct node *node);
 int testDecoder(struct node *node);
 
+// SubDev ioctl tests
+int testSubDevEnum(struct node *node, unsigned which, unsigned pad);
+int testSubDevFormat(struct node *node, unsigned which, unsigned pad);
+int testSubDevSelection(struct node *node, unsigned which, unsigned pad);
+int testSubDevFrameInterval(struct node *node, unsigned pad);
+
 // Buffer ioctl tests
 int testReqBufs(struct node *node);
 int testReadWrite(struct node *node);
 int testExpBuf(struct node *node);
+int testBlockingWait(struct node *node);
 int testMmap(struct node *node, unsigned frame_count);
 int testUserPtr(struct node *node, unsigned frame_count);
 int testDmaBuf(struct node *expbuf_node, struct node *node, unsigned frame_count);

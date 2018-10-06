@@ -24,12 +24,16 @@ void vidout_usage(void)
 {
 	printf("\nVideo Output Formats options:\n"
 	       "  --list-formats-out display supported video output formats [VIDIOC_ENUM_FMT]\n"
+	       "  --list-formats-out-ext\n"
+	       "                     display supported video output formats including frame sizes\n"
+	       "                     and intervals\n"
 	       "  --list-fields-out  list supported fields for the current output format\n"
-	       "  --get-fmt-video-out\n"
+	       "  -X, --get-fmt-video-out\n"
 	       "     		     query the video output format [VIDIOC_G_FMT]\n"
-	       "  --set-fmt-video-out\n"
-	       "  --try-fmt-video-out=width=<w>,height=<h>,pixelformat=<pf>,field=<f>,colorspace=<c>,\n"
-	       "                      xfer=<xf>,ycbcr=<y>,quantization=<q>,premul-alpha,bytesperline=<bpl>\n"
+	       "  -x, --set-fmt-video-out\n"
+	       "  --try-fmt-video-out width=<w>,height=<h>,pixelformat=<pf>,field=<f>,colorspace=<c>,\n"
+	       "                      xfer=<xf>,ycbcr=<y>,hsv=<hsv>,quantization=<q>,\n"
+	       "                      premul-alpha,bytesperline=<bpl>\n"
 	       "                     set/try the video output format [VIDIOC_S/TRY_FMT]\n"
 	       "                     pixelformat is either the format index as reported by\n"
 	       "                       --list-formats-out, or the fourcc value as a string.\n"
@@ -40,11 +44,13 @@ void vidout_usage(void)
 	       "                       alternate, interlaced_tb, interlaced_bt\n"
 	       "                     <c> can be one of the following colorspaces:\n"
 	       "                       smpte170m, smpte240m, rec709, 470m, 470bg, jpeg, srgb,\n"
-	       "                       adobergb, bt2020, dcip3\n"
+	       "                       oprgb, bt2020, dcip3\n"
 	       "                     <xf> can be one of the following transfer functions:\n"
-	       "                       default, 709, srgb, adobergb, smpte240m, smpte2084, dcip3, none\n"
+	       "                       default, 709, srgb, oprgb, smpte240m, smpte2084, dcip3, none\n"
 	       "                     <y> can be one of the following Y'CbCr encodings:\n"
 	       "                       default, 601, 709, xv601, xv709, bt2020, bt2020c, smpte240m\n"
+	       "                     <hsv> can be one of the following HSV encodings:\n"
+	       "                       default, 180, 256\n"
 	       "                     <q> can be one of the following quantization methods:\n"
 	       "                       default, full-range, lim-range\n"
 	       );
@@ -96,8 +102,9 @@ void vidout_cmd(int ch, char *optarg)
 	}
 }
 
-void vidout_set(int fd)
+void vidout_set(cv4l_fd &_fd)
 {
+	int fd = _fd.g_fd();
 	int ret;
 
 	if (options[OptSetVideoOutFormat] || options[OptTryVideoOutFormat]) {
@@ -183,12 +190,12 @@ void vidout_set(int fd)
 			else
 				ret = doioctl(fd, VIDIOC_TRY_FMT, &vfmt);
 			if (ret == 0 && (verbose || options[OptTryVideoOutFormat]))
-				printfmt(vfmt);
+				printfmt(fd, vfmt);
 		}
 	}
 }
 
-void vidout_get(int fd)
+void vidout_get(cv4l_fd &fd)
 {
 	if (options[OptGetVideoOutFormat]) {
 		struct v4l2_format vfmt;
@@ -196,19 +203,24 @@ void vidout_get(int fd)
 		memset(&vfmt, 0, sizeof(vfmt));
 		vfmt.fmt.pix.priv = priv_magic;
 		vfmt.type = vidout_buftype;
-		if (doioctl(fd, VIDIOC_G_FMT, &vfmt) == 0)
-			printfmt(vfmt);
+		if (doioctl(fd.g_fd(), VIDIOC_G_FMT, &vfmt) == 0)
+			printfmt(fd.g_fd(), vfmt);
 	}
 }
 
-void vidout_list(int fd)
+void vidout_list(cv4l_fd &fd)
 {
 	if (options[OptListOutFormats]) {
 		printf("ioctl: VIDIOC_ENUM_FMT\n");
 		print_video_formats(fd, vidout_buftype);
 	}
 
+	if (options[OptListOutFormatsExt]) {
+		printf("ioctl: VIDIOC_ENUM_FMT\n");
+		print_video_formats_ext(fd, vidout_buftype);
+	}
+
 	if (options[OptListOutFields]) {
-		print_video_out_fields(fd);
+		print_video_out_fields(fd.g_fd());
 	}
 }

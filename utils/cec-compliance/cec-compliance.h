@@ -1,20 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * CEC API compliance test tool.
  *
  * Copyright 2016 Cisco Systems, Inc. and/or its affiliates. All rights reserved.
- *
- * This program is free software; you may redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; version 2 of the License.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
  */
 
 #ifndef _CEC_COMPLIANCE_H_
@@ -23,6 +11,7 @@
 #include <stdarg.h>
 #include <cerrno>
 #include <string>
+#include <time.h>
 #include <linux/cec-funcs.h>
 #include "cec-htng-funcs.h"
 
@@ -32,7 +21,7 @@
 #include <config.h>
 #endif
 
-#include <cec-common.h>
+#include <cec-info.h>
 
 #define TAG_AUDIO_RATE_CONTROL		1
 #define TAG_ARC_CONTROL 		(1 << 1)
@@ -123,9 +112,11 @@ struct short_audio_desc {
 
 extern bool show_info;
 extern bool show_warnings;
+extern bool exit_on_fail;
+extern bool exit_on_warn;
 extern unsigned warnings;
 extern unsigned reply_threshold;
-extern unsigned long_timeout;
+extern time_t long_timeout;
 
 struct remote {
 	bool recognized_op[256];
@@ -222,6 +213,8 @@ struct remote_subtest {
 		warnings++;					\
 		if (show_warnings)				\
 			printf("\t\twarn: %s(%d): " fmt, __FILE__, __LINE__, ##args);	\
+		if (exit_on_warn)				\
+			exit(1);				\
 	} while (0)
 
 #define warn_once(fmt, args...)						\
@@ -234,12 +227,16 @@ struct remote_subtest {
 			if (show_warnings)				\
 				printf("\t\twarn: %s(%d): " fmt,	\
 					__FILE__, __LINE__, ##args); 	\
+			if (exit_on_warn)				\
+				exit(1);				\
 		}							\
 	} while (0)
 
 #define fail(fmt, args...) 						\
 ({ 									\
 	printf("\t\tfail: %s(%d): " fmt, __FILE__, __LINE__, ##args);	\
+	if (exit_on_fail)						\
+		exit(1);						\
 	FAIL;								\
 })
 

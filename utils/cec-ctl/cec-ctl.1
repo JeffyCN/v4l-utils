@@ -1,4 +1,4 @@
-.TH "CEC-CTL" "1" "August 2016" "v4l-utils 1.14.2" "User Commands"
+.TH "CEC-CTL" "1" "August 2016" "v4l-utils 1.16.0" "User Commands"
 .SH NAME
 cec-ctl - An application to control cec devices
 .SH SYNOPSIS
@@ -10,25 +10,36 @@ any aspect of such devices covering the full CEC API.
 
 .SH OPTIONS
 .TP
-\fB\-d\fR, \fB\-\-device\fR=\fI<dev>\fR
+\fB\-d\fR, \fB\-\-device\fR \fI<dev>\fR
 Use device <dev> as the CEC device. If <dev> is a number, then /dev/cec<dev> is used.
 .TP
 \fB\-v\fR, \fB\-\-verbose\fR
 Turn on verbose reporting.
 .TP
+\fB\-w\fR, \fB\-\-wall\-clock\fR
+Show timestamps as wall-clock time. This also turns on verbose reporting. 
+.TP
 \fB\-h\fR, \fB\-\-help\fR
 Prints the help message.
 .TP
-\fB\-p\fR, \fB\-\-phys\-addr\fR=\fI<addr>\fR
+\fB\-p\fR, \fB\-\-phys\-addr\fR \fI<addr>\fR
 Use this physical address. The address can be a number (e.g. 0 or 0x11b1)
 or formatted as a.b.c.d where each component is a hex value from 0-f
 (e.g. 0.0.0.0 or 1.1.b.1).
 .TP
-\fB\-o\fR, \fB\-\-osd\-name\fR=\fI<name>\fR
+\fB\-o\fR, \fB\-\-osd\-name\fR \fI<name>\fR
 Use this OSD name. The maximum length is 14 characters.
 .TP
-\fB\-V\fR, \fB\-\-vendor\-id\fR=\fI<id>\fR
+\fB\-V\fR, \fB\-\-vendor\-id\fR \fI<id>\fR
 Use this vendor ID. The vendor ID is a number from 0x0 to 0xffffff.
+.TP
+\fB\-l\fR, \fB\-\-logical\-address\fR
+Show first configured logical address or nothing if the device is unconfigured.
+Useful for scripts, e.g.: la=`cec-ctl -s -l`
+.TP
+\fB\-L\fR, \fB\-\-logical\-addresses\fR
+Show all configured logical addresses or nothing if the device is unconfigured.
+Useful for scripts, e.g.: las=`cec-ctl -s -L`
 .TP
 \fB\-C\fR, \fB\-\-clear\fR
 Clear all logical addresses, leaving the CEC device unconfigured.
@@ -36,12 +47,17 @@ Clear all logical addresses, leaving the CEC device unconfigured.
 \fB\-n\fR, \fB\-\-no\-reply\fR
 By default when sending a CEC message that expects a reply this utility will
 wait for that reply. With this option it will just send it without waiting
-for the reply.
+for the reply. This option applies to the messages following this option.
+It acts as a toggle, so after you specify it a second time then the following
+messages will wait for a reply again. 
 .TP
-\fB\-t\fR, \fB\-\-to\fR=\fI<la>\fR
+\fB\-N\fR, \fB\-\-non\-blocking\fR
+Transmit messages in non-blocking mode.
+.TP
+\fB\-t\fR, \fB\-\-to\fR \fI<la>\fR
 Send the message to the given logical address (0-15).
 .TP
-\fB\-f\fR, \fB\-\-from\fR=\fI<la>\fR
+\fB\-f\fR, \fB\-\-from\fR \fI<la>\fR
 Send message from the given logical address. It is only necessary to use this
 option if multiple logical addresses are claimed. By default the first assigned
 logical address will be used.
@@ -60,9 +76,6 @@ Send a poll message.
 .TP
 \fB\-T\fR, \fB\-\-trace\fR
 Trace all called ioctls. Useful for debugging.
-.TP
-\fB\-w\fR, \fB\-\-wall\-clock\fR
-Show timestamps as wall-clock time.
 .TP
 \fB\-\-cec\-version\-1.4\fR
 Use CEC Version 1.4 instead of 2.0 (the default).
@@ -83,7 +96,7 @@ go to the follower that initiated the CEC message. But if you have other
 followers running as well, then by giving this option they will also receive
 the reply.
 .TP
-\fB\-\-timeout\fR=\fI<ms>\fR
+\fB\-\-timeout\fR \fI<ms>\fR
 Set the reply timeout in milliseconds (default is 1000 ms).
 .TP
 \fB\-\-list\-ui\-commands\fR
@@ -178,20 +191,20 @@ possible if the device has the CEC_CAP_MONITOR_PIN capability. This option requi
 When in pin monitoring mode all 0->1 and 1->0 CEC pin transitions are monitored and
 analysed. This is effectively a cheap CEC bus analyzer.
 .TP
-\fB\-\-monitor\-time\fR=\fI<secs>\fR
+\fB\-\-monitor\-time\fR \fI<secs>\fR
 Monitor for the given number of seconds, then exit. The default (0) is to monitor
 forever.
 .TP
-\fB\-\-ignore\fR=\fI<la>\fR,\fI<opcode>\fR
+\fB\-\-ignore\fR \fI<la>\fR,\fI<opcode>\fR
 Ignore messages from logical address <la> and opcode <opcode> when monitoring.
 "all" can be used for <la> or <opcode> to match all logical addresses or opcodes.
 To ignore poll messages use "poll" as <opcode>.
 .TP
-\fB\-\-store\-pin\fR=\fI<to>\fR
+\fB\-\-store\-pin\fR \fI<to>\fR
 Store the CEC pin events to the given file. This can be read and analyzed later
 via the \fB\-\-analyze\-pin\fR option. Use \- to write to stdout instead of to a file.
 .TP
-\fB\-\-analyze\-pin\fR=\fI<from>\fR
+\fB\-\-analyze\-pin\fR \fI<from>\fR
 Read and analyze the CEC pin events from the given file. Use \- to read from stdin
 instead of from a file.
 .TP

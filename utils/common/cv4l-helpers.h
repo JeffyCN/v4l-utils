@@ -1,37 +1,9 @@
+/* SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause) */
 /*
  * V4L2 C++ helper header providing wrappers to simplify access to the various
  * v4l2 functions.
  *
  * Copyright 2014-2016 Cisco Systems, Inc. and/or its affiliates. All rights reserved.
- *
- * This program is free software; you may redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; version 2 of the License.
- *
- * Alternatively you can redistribute this file under the terms of the
- * BSD license as stated below:
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. The names of its contributors may not be used to endorse or promote
- *    products derived from this software without specific prior written
- *    permission.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
  */
 
 #ifndef _CV4L_HELPERS_H_
@@ -52,7 +24,17 @@ public:
 	{
 		*this = *fd;
 	}
+	cv4l_fd &operator= (const cv4l_fd &_fd)
+	{
+		memcpy(this, &_fd, sizeof(_fd));
+		if (_fd.fd >= 0)
+			fd = dup(_fd.fd);
+		return *this;
+	}
 
+	bool is_subdev() const { return v4l_fd_is_subdev(this); }
+	bool is_media() const { return v4l_fd_is_media(this); }
+	bool is_v4l2() const { return v4l_fd_is_v4l2(this); }
 	__u32 g_type() const { return type; }
 	void s_type(__u32 type) { v4l_s_type(this, type); }
 	__u32 g_selection_type() const { return v4l_g_selection_type(this); }
@@ -61,10 +43,15 @@ public:
 	v4l_fd *g_v4l_fd() { return this; }
 	bool g_direct() const { return v4l_fd_g_direct(this); }
 	void s_direct(bool direct) { v4l_fd_s_direct(this, direct); }
-	bool g_trace() const { return v4l_fd_g_trace(this); }
-	void s_trace(bool trace) { v4l_fd_s_trace(this, trace); }
+	unsigned int g_trace() const { return v4l_fd_g_trace(this); }
+	void s_trace(unsigned int trace) { v4l_fd_s_trace(this, trace); }
 
 	int open(const char *devname, bool non_blocking = false) { return v4l_open(this, devname, non_blocking); }
+	int s_fd(int fd, const char *devname, bool direct) { return v4l_s_fd(this, fd, devname, direct); }
+	int subdev_open(const char *devname, bool non_blocking = false) { return v4l_subdev_open(this, devname, non_blocking); }
+	int subdev_s_fd(int fd, const char *devname) { return v4l_subdev_s_fd(this, fd, devname); }
+	int media_open(const char *devname, bool non_blocking = false) { return v4l_media_open(this, devname, non_blocking); }
+	int media_s_fd(int fd, const char *devname) { return v4l_media_s_fd(this, fd, devname); }
 	int close() { return v4l_close(this); }
 	int reopen(bool non_blocking = false) { return v4l_reopen(this, non_blocking); }
 	ssize_t read(void *buffer, size_t n) { return v4l_read(this, buffer, n); }
@@ -96,9 +83,12 @@ public:
 	bool has_streaming() const { return v4l_has_streaming(this); }
 	bool has_ext_pix_format() const { return v4l_has_ext_pix_format(this); }
 
-	void querycap(v4l2_capability &cap)
+	int querycap(v4l2_capability &cap, bool force = false)
 	{
+		if (force)
+			return cv4l_ioctl(VIDIOC_QUERYCAP, &cap);
 		cap = this->cap;
+		return 0;
 	}
 
 	int queryctrl(v4l2_queryctrl &qc)
@@ -429,6 +419,12 @@ public:
 		return cv4l_ioctl(VIDIOC_STREAMOFF, &type);
 	}
 
+	int querybuf(v4l_buffer &buf)
+	{
+		return v4l_buffer_querybuf(this, &buf,
+					   v4l_buffer_g_index(&buf));
+	}
+
 	int querybuf(v4l_buffer &buf, unsigned index)
 	{
 		return v4l_buffer_querybuf(this, &buf, index);
@@ -491,11 +487,11 @@ public:
 	{
 		if (init) {
 			memset(&fmt, 0, sizeof(fmt));
+			fmt.type = type ? type : g_type();
 			fmt.index = index;
 		} else {
 			fmt.index++;
 		}
-		fmt.type = type ? type : g_type();
 		return cv4l_ioctl(VIDIOC_ENUM_FMT, &fmt);
 	}
 
@@ -710,6 +706,7 @@ public:
 	unsigned g_xfer_func() const { return v4l_format_g_xfer_func(this); }
 	void s_xfer_func(unsigned xfer_func) { v4l_format_s_xfer_func(this, xfer_func); }
 	unsigned g_ycbcr_enc() const { return v4l_format_g_ycbcr_enc(this); }
+	unsigned g_hsv_enc() const { return v4l_format_g_hsv_enc(this); }
 	void s_ycbcr_enc(unsigned ycbcr_enc) { v4l_format_s_ycbcr_enc(this, ycbcr_enc); }
 	unsigned g_quantization() const { return v4l_format_g_quantization(this); }
 	void s_quantization(unsigned quantization) { v4l_format_s_quantization(this, quantization); }
@@ -795,9 +792,9 @@ public:
 	{
 		return v4l_queue_has_expbuf(fd->g_v4l_fd());
 	}
-	int export_bufs(cv4l_fd *fd)
+	int export_bufs(cv4l_fd *fd, unsigned exp_type)
 	{
-		return v4l_queue_export_bufs(fd->g_v4l_fd(), this);
+		return v4l_queue_export_bufs(fd->g_v4l_fd(), this, exp_type);
 	}
 	void close_exported_fds()
 	{
@@ -840,7 +837,7 @@ public:
 	}
 	void init(const cv4l_buffer &b)
 	{
-		memcpy(this, &b, sizeof(b));
+		memcpy((v4l2_buffer *)this, (v4l2_buffer *)&b, sizeof(b));
 		if (v4l_type_is_planar(g_type()))
 			buf.m.planes = planes;
 	}

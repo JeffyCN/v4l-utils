@@ -10,6 +10,8 @@ sub maxprefix {
 	return $p;
 }
 
+my $cur_msg;
+
 sub process_func
 {
 	my $feature = shift;
@@ -63,6 +65,7 @@ sub process_func
 	$msg_dash_name =~ s/_/-/g;
 	$msg_lc_name = $msg;
 	$msg_lc_name =~ s/([A-Z])/\l\1/g;
+	$cur_msg = $msg;
 
 	if ($cec_msg eq $msg) {
 		if ($cec_msg =~ /_CDC_/ && !$cdc_case) {
@@ -174,7 +177,7 @@ sub process_func
 		$long_opts .= "\t{ \"$msg_dash_name\", required_argument, 0, Opt$opt }, \\\n";
 		$usage .= "\t\"  --$msg_dash_name";
 		my $prefix = "\t\"    " . sprintf("%-30s", " ");
-		my $sep = "=";
+		my $sep = " ";
 		foreach (@args) {
 			($type, $name) = /(.*?) ?([a-zA-Z_]\w+)$/;
 			$name =~ s/_/-/g;
@@ -292,7 +295,7 @@ sub process_func
 	}
 	$messages .= "\t\t\"$msg_name\"\n";
 	$messages .= "\t}, {\n";
-	$feature_usage{$feature} .= $usage;
+	push @{$feature_usage{$feature}}, $msg;
 }
 
 $is_log = shift;
@@ -311,11 +314,9 @@ while (<>) {
 	last if /_CEC_UAPI_FUNCS_H/;
 	if (/^\/\*.*Feature \*\/$/) {
 		($feature) = /^\/\* (.*) Feature/;
-		$feature_usage{$feature} = "";
 	}
 	elsif (/^\/\*.*General Protocol Messages \*\/$/) {
 		$feature = "Abort";
-		$feature_usage{$feature} = "";
 	}
 	if ($operand_name ne "" && !/^#define/) {
 		@{$types{$operand_name}} = @ops;
@@ -366,6 +367,9 @@ while (<>) {
 	elsif (/^\/\*.*General Protocol Messages \*\/$/) {
 		$feature = "Abort";
 	}
+	if (/\/\* broadcast \*\//) {
+		$usage_msg{$cur_msg} =~ s/"\)\\n"$/", bcast)\\n"/;
+	}
 	s/\/\*.*\*\///;
 	if ($comment) {
 		next unless /\*\//;
@@ -379,14 +383,14 @@ while (<>) {
 	next if /^\s*$/;
 	next if /cec_msg_reply_feature_abort/;
 	next if /cec_msg_htng_init/;
-	if (/^static inline void cec_msg.*\(.*\)/) {
-		s/static\sinline\svoid\s//;
+	if (/^static (__)?inline(__)? void cec_msg.*\(.*\)/) {
+		s/static\s(__)?inline(__)?\svoid\s//;
 		s/struct cec_msg \*msg, //;
 		s/struct cec_msg \*msg//;
 		process_func($feature, $_);
 		next;
 	}
-	if (/^static inline void cec_msg/) {
+	if (/^static (__)?inline(__)? void cec_msg/) {
 		$func = $_;
 		next;
 	}
@@ -394,7 +398,7 @@ while (<>) {
 		$func .= $_;
 		next unless /\)$/;
 		$func =~ s/\s+/ /g;
-		$func =~ s/static\sinline\svoid\s//;
+		$func =~ s/static\s(__)?inline(__)?\svoid\s//;
 		$func =~ s/struct cec_msg \*msg, //;
 		$func =~ s/struct cec_msg \*msg//;
 		process_func($feature, $func);
@@ -429,7 +433,10 @@ if ($is_log == 0) {
 		s/([A-Z])/\l\1/g;
 		$usage_var = $_ . "_usage";
 		printf "static const char *$usage_var =\n";
-		$usage = $feature_usage{$name};
+		$usage = "";
+		foreach (@{$feature_usage{$name}}) {
+			$usage .= $usage_msg{$_};
+		}
 		foreach (@{$feature_also{$name}}) {
 			$usage .= $usage_msg{$_};
 		}

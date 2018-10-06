@@ -1,37 +1,9 @@
+/* SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause) */
 /*
  * V4L2 C helper header providing wrappers to simplify access to the various
  * v4l2 functions.
  *
  * Copyright 2014-2016 Cisco Systems, Inc. and/or its affiliates. All rights reserved.
- *
- * This program is free software; you may redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; version 2 of the License.
- *
- * Alternatively you can redistribute this file under the terms of the
- * BSD license as stated below:
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. The names of its contributors may not be used to endorse or promote
- *    products derived from this software without specific prior written
- *    permission.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
  */
 
 #ifndef _V4L_HELPERS_H_
@@ -59,12 +31,14 @@ struct v4l_fd {
 	char devname[128];
 	__u32 type;
 	__u32 caps;
-	bool trace;
+	unsigned int trace;
 	bool direct;
 	bool have_query_ext_ctrl;
 	bool have_ext_ctrls;
 	bool have_next_ctrl;
 	bool have_selection;
+	bool is_subdev;
+	bool is_media;
 
 	int (*open)(struct v4l_fd *f, const char *file, int oflag, ...);
 	int (*close)(struct v4l_fd *f);
@@ -85,7 +59,10 @@ static inline int v4l_wrap_open(struct v4l_fd *f, const char *file, int oflag, .
 
 static inline int v4l_wrap_close(struct v4l_fd *f)
 {
-	return f->direct ? close(f->fd) : v4l2_close(f->fd);
+	int ret = f->direct ? close(f->fd) : v4l2_close(f->fd);
+
+	f->fd = -1;
+	return ret;
 }
 
 static inline ssize_t v4l_wrap_read(struct v4l_fd *f, void *buffer, size_t n)
@@ -128,7 +105,8 @@ static inline bool v4l_fd_g_direct(const struct v4l_fd *f)
 
 static inline void v4l_fd_s_direct(struct v4l_fd *f, bool direct)
 {
-	f->direct = direct;
+	if (!f->is_subdev && !f->is_media)
+		f->direct = direct;
 }
 
 #else
@@ -140,7 +118,10 @@ static inline int v4l_wrap_open(struct v4l_fd *f, const char *file, int oflag, .
 
 static inline int v4l_wrap_close(struct v4l_fd *f)
 {
-	return close(f->fd);
+	int ret = close(f->fd);
+
+	f->fd = -1;
+	return ret;
 }
 
 static inline ssize_t v4l_wrap_read(struct v4l_fd *f, void *buffer, size_t n)
@@ -190,6 +171,8 @@ static inline void v4l_fd_init(struct v4l_fd *f)
 {
 	memset(f, 0, sizeof(*f));
 	f->fd = -1;
+	f->is_subdev = false;
+	f->is_media = false;
 	f->open = v4l_wrap_open;
 	f->close = v4l_wrap_close;
 	f->ioctl = v4l_wrap_ioctl;
@@ -199,12 +182,27 @@ static inline void v4l_fd_init(struct v4l_fd *f)
 	f->munmap = v4l_wrap_munmap;
 }
 
-static inline bool v4l_fd_g_trace(const struct v4l_fd *f)
+static inline bool v4l_fd_is_subdev(const struct v4l_fd *f)
+{
+	return f->is_subdev;
+}
+
+static inline bool v4l_fd_is_media(const struct v4l_fd *f)
+{
+	return f->is_media;
+}
+
+static inline bool v4l_fd_is_v4l2(const struct v4l_fd *f)
+{
+	return !f->is_subdev && !f->is_media;
+}
+
+static inline unsigned int v4l_fd_g_trace(const struct v4l_fd *f)
 {
 	return f->trace;
 }
 
-static inline void v4l_fd_s_trace(struct v4l_fd *f, bool trace)
+static inline void v4l_fd_s_trace(struct v4l_fd *f, unsigned int trace)
 {
 	f->trace = trace;
 }
@@ -217,7 +215,7 @@ static inline int v4l_named_ioctl(struct v4l_fd *f,
 
 	retval = f->ioctl(f, cmd, arg);
 	e = retval == 0 ? 0 : errno;
-	if (f->trace)
+	if (f->trace >= (e ? 1 : 2))
 		fprintf(stderr, "\t\t%s returned %d (%s)\n",
 				cmd_name, retval, strerror(e));
 	return retval == -1 ? e : (retval ? -1 : 0);
@@ -445,12 +443,20 @@ static inline __u32 v4l_determine_type(const struct v4l_fd *f)
 	return 0;
 }
 
-static inline int v4l_open(struct v4l_fd *f, const char *devname, bool non_blocking)
+static inline int v4l_s_fd(struct v4l_fd *f, int fd, const char *devname, bool direct)
 {
 	struct v4l2_query_ext_ctrl qec;
 	struct v4l2_ext_controls ec;
 	struct v4l2_queryctrl qc;
 	struct v4l2_selection sel;
+
+	if (f->fd >= 0)
+		f->close(f);
+
+	f->fd = fd;
+	f->direct = direct;
+	if (fd < 0)
+		return fd;
 
 	memset(&qec, 0, sizeof(qec));
 	qec.id = V4L2_CTRL_FLAG_NEXT_CTRL | V4L2_CTRL_FLAG_NEXT_COMPOUND;
@@ -459,18 +465,17 @@ static inline int v4l_open(struct v4l_fd *f, const char *devname, bool non_block
 	qc.id = V4L2_CTRL_FLAG_NEXT_CTRL;
 	memset(&sel, 0, sizeof(sel));
 
-	f->fd = f->open(f, devname, O_RDWR | (non_blocking ? O_NONBLOCK : 0));
-
-	if (f->fd < 0)
-		return f->fd;
-	if (f->devname != devname) {
+	if (f->devname != devname)
 		strncpy(f->devname, devname, sizeof(f->devname));
-		f->devname[sizeof(f->devname) - 1] = '\0';
-	}
+	f->devname[sizeof(f->devname) - 1] = '\0';
+
+	memset(&f->cap, 0, sizeof(f->cap));
 	if (v4l_querycap(f, &f->cap)) {
 		v4l_close(f);
 		return -1;
 	}
+	f->is_subdev = false;
+	f->is_media = false;
 	f->caps = v4l_capability_g_caps(&f->cap);
 	f->type = v4l_determine_type(f);
 
@@ -485,9 +490,86 @@ static inline int v4l_open(struct v4l_fd *f, const char *devname, bool non_block
 	return f->fd;
 }
 
+static inline int v4l_open(struct v4l_fd *f, const char *devname, bool non_blocking)
+{
+	int fd = f->open(f, devname, O_RDWR | (non_blocking ? O_NONBLOCK : 0));
+
+	return v4l_s_fd(f, fd, devname, f->direct);
+}
+
+static inline int v4l_subdev_s_fd(struct v4l_fd *f, int fd, const char *devname)
+{
+	if (f->fd >= 0)
+		f->close(f);
+
+	f->fd = fd;
+	f->direct = true;
+	if (fd < 0)
+		return fd;
+
+	if (f->devname != devname)
+		strncpy(f->devname, devname, sizeof(f->devname));
+	f->devname[sizeof(f->devname) - 1] = '\0';
+
+	memset(&f->cap, 0, sizeof(f->cap));
+	f->is_subdev = true;
+	f->is_media = false;
+	f->type = 0;
+	f->have_query_ext_ctrl = false;
+	f->have_ext_ctrls = false;
+	f->have_next_ctrl = false;
+	f->have_selection = false;
+
+	return f->fd;
+}
+
+static inline int v4l_subdev_open(struct v4l_fd *f, const char *devname, bool non_blocking)
+{
+	int fd = f->open(f, devname, O_RDWR | (non_blocking ? O_NONBLOCK : 0));
+
+	return v4l_subdev_s_fd(f, fd, devname);
+}
+
+static inline int v4l_media_s_fd(struct v4l_fd *f, int fd, const char *devname)
+{
+	if (f->fd >= 0)
+		f->close(f);
+
+	f->fd = fd;
+	f->direct = true;
+	if (fd < 0)
+		return fd;
+
+	if (f->devname != devname)
+		strncpy(f->devname, devname, sizeof(f->devname));
+	f->devname[sizeof(f->devname) - 1] = '\0';
+
+	memset(&f->cap, 0, sizeof(f->cap));
+	f->is_subdev = false;
+	f->is_media = true;
+	f->type = 0;
+	f->have_query_ext_ctrl = false;
+	f->have_ext_ctrls = false;
+	f->have_next_ctrl = false;
+	f->have_selection = false;
+
+	return f->fd;
+}
+
+static inline int v4l_media_open(struct v4l_fd *f, const char *devname, bool non_blocking)
+{
+	int fd = f->open(f, devname, O_RDWR | (non_blocking ? O_NONBLOCK : 0));
+
+	return v4l_media_s_fd(f, fd, devname);
+}
+
 static inline int v4l_reopen(struct v4l_fd *f, bool non_blocking)
 {
 	f->close(f);
+	if (f->is_subdev)
+		return v4l_subdev_open(f, f->devname, non_blocking);
+	if (f->is_media)
+		return v4l_media_open(f, f->devname, non_blocking);
 	return v4l_open(f, f->devname, non_blocking);
 }
 
@@ -778,6 +860,14 @@ v4l_format_g_ycbcr_enc(const struct v4l2_format *fmt)
 	default:
 		return 0;
 	}
+}
+
+static inline unsigned
+v4l_format_g_hsv_enc(const struct v4l2_format *fmt)
+{
+	unsigned hsv_enc = v4l_format_g_ycbcr_enc(fmt);
+
+	return hsv_enc < V4L2_HSV_ENC_180 ? V4L2_HSV_ENC_180 : hsv_enc;
 }
 
 static inline void v4l_format_s_quantization(struct v4l2_format *fmt,
@@ -1561,13 +1651,14 @@ static inline bool v4l_queue_has_expbuf(struct v4l_fd *f)
 	return v4l_ioctl(f, VIDIOC_EXPBUF, &expbuf) != ENOTTY;
 }
 
-static inline int v4l_queue_export_bufs(struct v4l_fd *f, struct v4l_queue *q)
+static inline int v4l_queue_export_bufs(struct v4l_fd *f, struct v4l_queue *q,
+					unsigned exp_type)
 {
 	struct v4l2_exportbuffer expbuf;
 	unsigned b, p;
 	int ret = 0;
 
-	expbuf.type = q->type;
+	expbuf.type = exp_type ? : f->type;
 	expbuf.flags = O_RDWR;
 	memset(expbuf.reserved, 0, sizeof(expbuf.reserved));
 	for (b = 0; b < v4l_queue_g_buffers(q); b++) {
@@ -1697,6 +1788,7 @@ static inline int v4l_query_ext_ctrl(v4l_fd *f, struct v4l2_query_ext_ctrl *qec,
 		break;
 	case V4L2_CTRL_TYPE_STRING:
 		qec->elem_size = qc.maximum + 1;
+		qec->flags |= V4L2_CTRL_FLAG_HAS_PAYLOAD;
 		break;
 	default:
 		qec->elem_size = sizeof(__s32);

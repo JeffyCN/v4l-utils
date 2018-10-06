@@ -433,6 +433,9 @@ int testSimpleControls(struct node *node)
 		} else if (ret == EIO) {
 			warn("s_ctrl returned EIO\n");
 			ret = 0;
+		} else if (ret == EILSEQ) {
+			warn("s_ctrl returned EILSEQ\n");
+			ret = 0;
 		} else if (ret) {
 			return fail("s_ctrl returned an error (%d)\n", ret);
 		}
@@ -446,7 +449,7 @@ int testSimpleControls(struct node *node)
 			ctrl.id = qctrl.id;
 			ctrl.value = qctrl.minimum - 1;
 			ret = doioctl(node, VIDIOC_S_CTRL, &ctrl);
-			if (ret && ret != EIO && ret != ERANGE)
+			if (ret && ret != EIO && ret != EILSEQ && ret != ERANGE)
 				return fail("invalid minimum range check\n");
 			if (!ret && checkSimpleCtrl(ctrl, qctrl))
 				return fail("invalid control %08x\n", qctrl.id);
@@ -456,7 +459,7 @@ int testSimpleControls(struct node *node)
 			ctrl.id = qctrl.id;
 			ctrl.value = qctrl.maximum + 1;
 			ret = doioctl(node, VIDIOC_S_CTRL, &ctrl);
-			if (ret && ret != EIO && ret != ERANGE)
+			if (ret && ret != EIO && ret != EILSEQ && ret != ERANGE)
 				return fail("invalid maximum range check\n");
 			if (!ret && checkSimpleCtrl(ctrl, qctrl))
 				return fail("invalid control %08x\n", qctrl.id);
@@ -469,7 +472,7 @@ int testSimpleControls(struct node *node)
 			if (ret == ERANGE)
 				warn("%s: returns ERANGE for in-range, but non-step-multiple value\n",
 						qctrl.name);
-			else if (ret && ret != EIO)
+			else if (ret && ret != EIO && ret != EILSEQ)
 				return fail("returns error for in-range, but non-step-multiple value\n");
 		}
 
@@ -499,15 +502,15 @@ int testSimpleControls(struct node *node)
 			ctrl.id = qctrl.id; 
 			ctrl.value = qctrl.minimum;
 			ret = doioctl(node, VIDIOC_S_CTRL, &ctrl);
-			if (ret && ret != EIO)
+			if (ret && ret != EIO && ret != EILSEQ)
 				return fail("could not set minimum value\n");
 			ctrl.value = qctrl.maximum;
 			ret = doioctl(node, VIDIOC_S_CTRL, &ctrl);
-			if (ret && ret != EIO)
+			if (ret && ret != EIO && ret != EILSEQ)
 				return fail("could not set maximum value\n");
 			ctrl.value = qctrl.default_value;
 			ret = doioctl(node, VIDIOC_S_CTRL, &ctrl);
-			if (ret && ret != EIO)
+			if (ret && ret != EIO && ret != EILSEQ)
 				return fail("could not set default value\n");
 		}
 	}
@@ -641,6 +644,9 @@ int testExtendedControls(struct node *node)
 			if (ret == EIO) {
 				warn("g_ext_ctrls returned EIO\n");
 				ret = 0;
+			} else if (ret == EILSEQ) {
+				warn("g_ext_ctrls returned EILSEQ\n");
+				ret = 0;
 			}
 			if (ret)
 				return fail("g_ext_ctrls returned an error (%d)\n", ret);
@@ -669,6 +675,9 @@ int testExtendedControls(struct node *node)
 		} else {
 			if (ret == EIO) {
 				warn("s_ext_ctrls returned EIO\n");
+				ret = 0;
+			} else if (ret == EILSEQ) {
+				warn("s_ext_ctrls returned EILSEQ\n");
 				ret = 0;
 			}
 			if (ret)
@@ -739,6 +748,9 @@ int testExtendedControls(struct node *node)
 	if (ret == EIO) {
 		warn("s_ext_ctrls returned EIO\n");
 		ret = 0;
+	} else if (ret == EILSEQ) {
+		warn("s_ext_ctrls returned EILSEQ\n");
+		ret = 0;
 	}
 	if (ret)
 		return fail("could not set all controls\n");
@@ -765,6 +777,9 @@ int testExtendedControls(struct node *node)
 	if (ret == EIO) {
 		warn("s_ext_ctrls returned EIO\n");
 		ret = 0;
+	} else if (ret == EILSEQ) {
+		warn("s_ext_ctrls returned EILSEQ\n");
+		ret = 0;
 	}
 	if (ret && !multiple_classes)
 		return fail("could not set all controls of a specific class\n");
@@ -772,6 +787,11 @@ int testExtendedControls(struct node *node)
 		return fail("should get EINVAL when setting mixed-class controls\n");
 	if (multiple_classes && ctrls.error_idx != ctrls.count)
 		warn("error_idx should be equal to count\n");
+
+	ctrls.which = V4L2_CTRL_WHICH_DEF_VAL;
+	fail_on_test(!doioctl(node, VIDIOC_S_EXT_CTRLS, &ctrls));
+	fail_on_test(!doioctl(node, VIDIOC_TRY_EXT_CTRLS, &ctrls));
+	fail_on_test(doioctl(node, VIDIOC_G_EXT_CTRLS, &ctrls));
 	return 0;
 }
 

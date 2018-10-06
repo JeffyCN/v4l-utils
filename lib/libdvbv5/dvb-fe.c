@@ -192,6 +192,8 @@ struct dvb_v5_fe_parms *dvb_fe_open_flags(int adapter, int frontend,
 	return &parms->p;
 }
 
+static int __dvb_fe_snprintf_eng(char *buf, int len, float val, int metric);
+
 int dvb_fe_open_fname(struct dvb_v5_fe_parms_priv *parms, char *fname,
 		      int flags)
 {
@@ -344,6 +346,50 @@ int dvb_fe_open_fname(struct dvb_v5_fe_parms_priv *parms, char *fname,
 	if ((flags & O_ACCMODE) == O_RDWR)
 		dvb_set_sys(&parms->p, parms->p.current_sys);
 
+	if (parms->p.verbose) {
+		char buf[256];
+		uint32_t frq_min, frq_max, frq_stp, frq_tol;
+
+		frq_min = parms->p.info.frequency_min;
+		frq_max = parms->p.info.frequency_max;
+		frq_stp = parms->p.info.frequency_stepsize;
+		frq_tol = parms->p.info.frequency_tolerance;
+		if (parms->p.info.type == FE_QPSK) {
+			/* For Satellite, frequencies are in kHz */
+			frq_min *= 1000;
+			frq_max *= 1000;
+			frq_stp *= 1000;
+			frq_tol *= 1000;
+		}
+
+		dvb_log(_("Frequency range for the current standard: "));
+
+		__dvb_fe_snprintf_eng(buf, sizeof(buf), frq_min, 1);
+		dvb_log(_("From:       %11sHz"), buf);
+		__dvb_fe_snprintf_eng(buf, sizeof(buf), frq_max, 1);
+		dvb_log(_("To:         %11sHz"), buf);
+		if (frq_stp) {
+			__dvb_fe_snprintf_eng(buf, sizeof(buf), frq_stp, 1);
+			dvb_log(_("Step:       %11sHz"), buf);
+		}
+		if (frq_tol) {
+			__dvb_fe_snprintf_eng(buf, sizeof(buf), frq_tol, 1);
+			dvb_log(_("Tolerance:  %11sHz"), buf);
+		}
+
+		if (parms->p.info.type == FE_QPSK || parms->p.info.type == FE_QAM) {
+			dvb_log(_("Symbol rate ranges for the current standard: "));
+			__dvb_fe_snprintf_eng(buf, sizeof(buf), parms->p.info.symbol_rate_min, 1);
+			dvb_log(_("From:       %11sBauds"), buf);
+			__dvb_fe_snprintf_eng(buf, sizeof(buf), parms->p.info.symbol_rate_max, 1);
+			dvb_log(_("To:         %11sBauds"), buf);
+			if (parms->p.info.symbol_rate_tolerance) {
+				__dvb_fe_snprintf_eng(buf, sizeof(buf), parms->p.info.symbol_rate_tolerance, 1);
+				dvb_log(_("Tolerance:  %11sBauds"), buf);
+			}
+		}
+	}
+
 	/*
 	 * Prepare the status struct - DVBv5.10 parameters should
 	 * come first, as they'll be read together.
@@ -450,6 +496,7 @@ int __dvb_set_sys(struct dvb_v5_fe_parms *p, fe_delivery_system_t sys)
 	struct dvb_v5_fe_parms_priv *parms = (void *)p;
 	struct dtv_property dvb_prop[1];
 	struct dtv_properties prop;
+	struct dvb_frontend_info new_info;
 	int rc;
 
 	if (sys != parms->p.current_sys) {
@@ -472,6 +519,17 @@ int __dvb_set_sys(struct dvb_v5_fe_parms *p, fe_delivery_system_t sys)
 			return -errno;
 		}
 	}
+
+	/*
+	 * This should not happen frequently, as this ioctl is pretty
+	 * straight forward. However, if it happens, it is better
+	 * to print an error message and ignore the error, as it
+	 * may still work.
+	 */
+	if (xioctl(parms->fd, FE_GET_INFO, &new_info) == -1)
+		dvb_perror(_("Can't retrieve DVB information for the new delivery system."));
+	else
+		parms->p.info = new_info;
 
 	rc = dvb_add_parms_for_sys(&parms->p, sys);
 	if (rc < 0)
@@ -1541,10 +1599,34 @@ int dvb_fe_get_event(struct dvb_v5_fe_parms *p)
 	return dvb_fe_get_stats(&parms->p);
 }
 
-int dvb_fe_snprintf_eng(char *buf, int len, float val)
+struct metric_prefixes {
+	int multiply_factor;
+	char *symbol;
+};
+
+static struct metric_prefixes prefixes[] = {
+	{  24, "Y" },
+	{  21, "Z" },
+	{  18, "E" },
+	{  15, "P" },
+	{  12, "T" },
+	{   9, "G" },
+	{   6, "M" },
+	{   3, "k" },
+	{  -3, "m" },
+	{  -6, "μ" },
+	{  -9, "n" },
+	{ -12, "p" },
+	{ -15, "f" },
+	{ -18, "a" },
+	{ -21, "z" },
+	{ -24, "y" },
+};
+
+static int __dvb_fe_snprintf_eng(char *buf, int len, float val, int metric)
 {
 	int digits = 3;
-	int exp, signal = 1;
+	int exp, signal = 1, i;
 
 	/* If value is zero, nothing to do */
 	if (val == 0.)
@@ -1577,6 +1659,14 @@ int dvb_fe_snprintf_eng(char *buf, int len, float val)
 		digits -= 1;
 
 	if (exp) {
+		if (metric) {
+			for (i = 0; i < ARRAY_SIZE(prefixes); i++) {
+				if (exp == prefixes[i].multiply_factor)
+					return snprintf(buf, len, " %.*f %s", digits - 1,
+		                                        val, prefixes[i].symbol);
+			}
+			/* Fall back to normal handling */
+		}
 		if (signal > 0)
 			return snprintf(buf, len, " %.*fx10^%d", digits - 1,
 					val, exp);
@@ -1589,6 +1679,11 @@ int dvb_fe_snprintf_eng(char *buf, int len, float val)
 		else
 			return snprintf(buf, len, " -%.*f", digits - 1, val);
 	}
+}
+
+int dvb_fe_snprintf_eng(char *buf, int len, float val)
+{
+	return __dvb_fe_snprintf_eng(buf, len, val, 0);
 }
 
 static char *sig_bits[7] = {
@@ -1774,7 +1869,11 @@ int dvb_fe_sec_voltage(struct dvb_v5_fe_parms *p, int on, int v18)
 	}
 	rc = xioctl(parms->fd, FE_SET_VOLTAGE, v);
 	if (rc == -1) {
-		dvb_perror("FE_SET_VOLTAGE");
+		if (errno == ENOTSUP) {
+			dvb_logerr("FE_SET_VOLTAGE: driver doesn't support it!");
+		} else {
+			dvb_perror("FE_SET_VOLTAGE");
+		}
 		return -errno;
 	}
 	return rc;

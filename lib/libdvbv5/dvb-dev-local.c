@@ -44,6 +44,15 @@
 # define _(string) string
 #endif
 
+/* taken from glibc unistd.h */
+#ifndef TEMP_FAILURE_RETRY
+#define TEMP_FAILURE_RETRY(expression) \
+    ({ long int __result;                                                     \
+       do __result = (long int) (expression);                                 \
+       while (__result == -1L && errno == EINTR);                             \
+       __result; })
+#endif
+
 struct dvb_dev_local_priv {
 	dvb_dev_change_t notify_dev_change;
 
@@ -287,7 +296,6 @@ static int dvb_local_find(struct dvb_device_priv *dvb,
 	struct udev_enumerate *enumerate;
 	struct udev_list_entry *devices, *dev_list_entry;
 	struct udev_device *dev;
-	int ret;
 
 	/* Free a previous list of devices */
 	if (dvb->d.num_devices)
@@ -337,6 +345,8 @@ static int dvb_local_find(struct dvb_device_priv *dvb,
 	/* Begin monitoring udev events */
 #ifdef HAVE_PTHREAD
 	if (priv->notify_dev_change) {
+		int ret;
+
 		ret = pthread_create(&priv->dev_change_id, NULL,
 				     monitor_device_changes, dvb);
 		if (ret < 0) {
@@ -355,9 +365,9 @@ static int dvb_local_find(struct dvb_device_priv *dvb,
 
 static int dvb_local_stop_monitor(struct dvb_device_priv *dvb)
 {
+#ifdef HAVE_PTHREAD
 	struct dvb_dev_local_priv *priv = dvb->priv;
 
-#ifdef HAVE_PTHREAD
 	if (priv->notify_dev_change) {
 		pthread_cancel(priv->dev_change_id);
 		udev_unref(priv->udev);
@@ -597,11 +607,15 @@ static ssize_t dvb_local_read(struct dvb_open_descriptor *open_dev,
 	 * check if read is ready, in order to emulate blocking mode
 	 */
 	if (!strcmp(dev->bus_addr, "platform:dvbloopback")) {
-		fd_set set;
-		FD_ZERO(&set);
-		FD_SET(fd, &set);
+		fd_set rset;
+		fd_set eset;
+
+		FD_ZERO(&rset);
+		FD_SET(fd, &rset);
+		FD_ZERO(&eset);
+		FD_SET(fd, &eset);
 		ret = TEMP_FAILURE_RETRY(select(FD_SETSIZE,
-						&set, NULL, &set, NULL));
+						&rset, NULL, &eset, NULL));
 		if (ret == -1) {
 			if (errno != EOVERFLOW)
 				dvb_perror("read()");

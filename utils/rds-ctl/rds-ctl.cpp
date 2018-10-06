@@ -1,23 +1,10 @@
+// SPDX-License-Identifier: LGPL-2.1-or-later
 /*
  * rds-ctl.cpp is based on v4l2-ctl.cpp
  *
  * the following applies for all RDS related parts:
  * Copyright 2012 Cisco Systems, Inc. and/or its affiliates. All rights reserved.
  * Author: Konke Radlow <koradlow@gmail.com>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as published by
- * the Free Software Foundation; either version 2.1 of the License, or
- * (at your option) any later version.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Suite 500, Boston, MA  02110-1335  USA
  */
 
 #include <unistd.h>
@@ -38,7 +25,6 @@
 #include <signal.h>
 
 #include <linux/videodev2.h>
-#include <libv4l2.h>
 #include <libv4l2rds.h>
 
 #include <list>
@@ -68,7 +54,6 @@ enum Option {
 	OptHelp = 'h',
 	OptReadRds = 'R',
 	OptGetTuner = 'T',
-	OptUseWrapper = 'w',
 	OptAll = 128,
 	OptFreqSeek,
 	OptListDevices,
@@ -117,7 +102,6 @@ static struct option long_options[] = {
 	{"silent", no_argument, 0, OptSilent},
 	{"verbose", no_argument, 0, OptVerbose},
 	{"wait-limit", required_argument, 0, OptWaitLimit},
-	{"wrapper", no_argument, 0, OptUseWrapper},
 	{0, 0, 0, 0}
 };
 
@@ -131,12 +115,11 @@ static void usage_common(void)
 	printf("\nGeneral/Common options:\n"
 	       "  --all              display all device information available\n"
 	       "  -D, --info         show driver info [VIDIOC_QUERYCAP]\n"
-	       "  -d, --device=<dev> use device <dev>\n"
+	       "  -d, --device <dev> use device <dev>\n"
 	       "                     If <dev> starts with a digit, then /dev/radio<dev> is used\n"
 	       "                     default: checks for RDS-capable devices,\n"
 	       "                     uses device with lowest ID\n"
 	       "  -h, --help         display this help message\n"
-	       "  -w, --wrapper      use the libv4l2 wrapper library.\n"
 	       "  --list-devices     list all v4l radio devices with RDS capabilities\n"
 	       );
 }
@@ -145,11 +128,11 @@ static void usage_tuner(void)
 {
 	printf("\nTuner/Modulator options:\n"
 	       "  -F, --get-freq     query the frequency [VIDIOC_G_FREQUENCY]\n"
-	       "  -f, --set-freq=<freq>\n"
+	       "  -f, --set-freq <freq>\n"
 	       "                     set the frequency to <freq> MHz [VIDIOC_S_FREQUENCY]\n"
 	       "  -T, --get-tuner    query the tuner settings [VIDIOC_G_TUNER]\n"
-	       "  --tuner-index=<idx> Use idx as tuner idx for tuner/modulator commands\n"
-	       "  --freq-seek=dir=<0/1>,wrap=<0/1>,spacing=<hz>\n"
+	       "  --tuner-index <idx> Use idx as tuner idx for tuner/modulator commands\n"
+	       "  --freq-seek dir=<0/1>,wrap=<0/1>,spacing=<hz>\n"
 	       "                     perform a hardware frequency seek [VIDIOC_S_HW_FREQ_SEEK]\n"
 	       "                     dir is 0 (seek downward) or 1 (seek upward)\n"
 	       "                     wrap is 0 (do not wrap around) or 1 (wrap around)\n"
@@ -164,9 +147,9 @@ static void usage_rds(void)
 	printf("\nRDS options: \n"
 	       "  -b, --rbds         parse the RDS data according to the RBDS standard\n"
 	       "  -R, --read-rds     enable reading of RDS data from device\n"
-	       "  --file=<path>      open a RDS stream file dump instead of a device\n"
+	       "  --file <path>      open a RDS stream file dump instead of a device\n"
 	       "                     all General and Tuner Options are disabled in this mode\n"
-	       "  --wait-limit=<ms>  defines the maximum wait duration for avaibility of new\n"
+	       "  --wait-limit <ms>  defines the maximum wait duration for avaibility of new\n"
 	       "                     RDS data\n"
 	       "                     <default>: 5000 ms\n"
 	       "  --print-block      prints all valid RDS fields, whenever a value is updated\n"
@@ -192,24 +175,9 @@ static void signal_handler_interrupt(int signum)
 	params.terminate_decoding = true;
 }
 
-static int test_open(const char *file, int oflag)
-{
- 	return params.options[OptUseWrapper] ? v4l2_open(file, oflag) : open(file, oflag);
-}
-
-static int test_close(int fd)
-{
-	return params.options[OptUseWrapper] ? v4l2_close(fd) : close(fd);
-}
-
-static int test_ioctl(int fd, int cmd, void *arg)
-{
-	return params.options[OptUseWrapper] ? v4l2_ioctl(fd, cmd, arg) : ioctl(fd, cmd, arg);
-}
-
 static int doioctl_name(int fd, unsigned long int request, void *parm, const char *name)
 {
-	int retval = test_ioctl(fd, request, parm);
+	int retval = ioctl(fd, request, parm);
 
 	if (retval < 0) {
 		app_result = -1;
@@ -797,7 +765,7 @@ static int parse_cl(int argc, char **argv)
 		params.options[(int)opt] = 1;
 		switch (opt) {
 		case OptSetDevice:
-			strncpy(params.fd_name, optarg, sizeof(params.fd_name));
+			strncpy(params.fd_name, optarg, sizeof(params.fd_name) - 1);
 			if (optarg[0] >= '0' && optarg[0] <= '9' && strlen(optarg) <= 3) {
 				snprintf(params.fd_name, sizeof(params.fd_name), "/dev/radio%s", optarg);
 			}
@@ -868,8 +836,7 @@ static int parse_cl(int argc, char **argv)
 static void print_driver_info(const struct v4l2_capability *vcap)
 {
 
-	printf("Driver Info (%susing libv4l2):\n",
-			params.options[OptUseWrapper] ? "" : "not ");
+	printf("Driver Info:\n");
 	printf("\tDriver name   : %s\n", vcap->driver);
 	printf("\tCard type     : %s\n", vcap->card);
 	printf("\tBus info      : %s\n", vcap->bus_info);
@@ -962,7 +929,7 @@ static void get_options(const int fd, const int capabilities, struct v4l2_freque
 		band.type = V4L2_TUNER_RADIO;
 		band.index = 0;
 		printf("ioctl: VIDIOC_ENUM_FREQ_BANDS\n");
-		while (test_ioctl(fd, VIDIOC_ENUM_FREQ_BANDS, &band) >= 0) {
+		while (ioctl(fd, VIDIOC_ENUM_FREQ_BANDS, &band) >= 0) {
 			if (band.index)
 				printf("\n");
 			printf("\tIndex          : %d\n", band.index);
@@ -1015,7 +982,7 @@ int main(int argc, char **argv)
 			exit(1);
 		}
 		read_rds_from_fd(fd);
-		test_close(fd);
+		close(fd);
 		exit(0);
 	}
 
@@ -1031,7 +998,7 @@ int main(int argc, char **argv)
 		params.fd_name[sizeof(params.fd_name) - 1] = '\0';
 		printf("Using device: %s\n", params.fd_name);
 	}
-	if ((fd = test_open(params.fd_name, O_RDONLY | O_NONBLOCK)) < 0) {
+	if ((fd = open(params.fd_name, O_RDONLY | O_NONBLOCK)) < 0) {
 		fprintf(stderr, "Failed to open %s: %s\n", params.fd_name,
 			strerror(errno));
 		exit(1);
@@ -1049,6 +1016,6 @@ int main(int argc, char **argv)
 	if (params.options[OptReadRds])
 		read_rds_from_fd(fd);
 
-	test_close(fd);
+	close(fd);
 	exit(app_result);
 }

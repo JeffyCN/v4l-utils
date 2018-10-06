@@ -49,37 +49,37 @@ void selection_usage(void)
 	printf("\nSelection/Cropping options:\n"
 	       "  --get-cropcap      query the crop capabilities [VIDIOC_CROPCAP]\n"
 	       "  --get-crop	     query the video capture crop window [VIDIOC_G_CROP]\n"
-	       "  --set-crop=top=<x>,left=<y>,width=<w>,height=<h>\n"
+	       "  --set-crop top=<x>,left=<y>,width=<w>,height=<h>\n"
 	       "                     set the video capture crop window [VIDIOC_S_CROP]\n"
 	       "  --get-cropcap-output\n"
 	       "                     query crop capabilities for video output [VIDIOC_CROPCAP]\n"
 	       "  --get-crop-output  query the video output crop window [VIDIOC_G_CROP]\n"
-	       "  --set-crop-output=top=<x>,left=<y>,width=<w>,height=<h>\n"
+	       "  --set-crop-output top=<x>,left=<y>,width=<w>,height=<h>\n"
 	       "                     set the video output crop window [VIDIOC_S_CROP]\n"
 	       "  --get-cropcap-overlay\n"
 	       "                     query crop capabilities for video overlay [VIDIOC_CROPCAP]\n"
 	       "  --get-crop-overlay query the video overlay crop window [VIDIOC_G_CROP]\n"
-	       "  --set-crop-overlay=top=<x>,left=<y>,width=<w>,height=<h>\n"
+	       "  --set-crop-overlay top=<x>,left=<y>,width=<w>,height=<h>\n"
 	       "                     set the video overlay crop window [VIDIOC_S_CROP]\n"
 	       "  --get-cropcap-output-overlay\n"
 	       "                     query the crop capabilities for video output overlays\n"
 	       "                     [VIDIOC_CROPCAP]\n"
 	       "  --get-crop-output-overlay\n"
 	       "                     query the video output overlay crop window [VIDIOC_G_CROP]\n"
-	       "  --set-crop-output-overlay=top=<x>,left=<y>,width=<w>,height=<h>\n"
+	       "  --set-crop-output-overlay top=<x>,left=<y>,width=<w>,height=<h>\n"
 	       "                     set the video output overlay crop window [VIDIOC_S_CROP]\n"
-	       "  --get-selection=target=<target>\n"
+	       "  --get-selection target=<target>\n"
 	       "                     query the video capture selection rectangle [VIDIOC_G_SELECTION]\n"
 	       "                     See --set-selection command for the valid <target> values.\n"
-	       "  --set-selection=target=<target>,flags=<flags>,top=<x>,left=<y>,width=<w>,height=<h>\n"
+	       "  --set-selection target=<target>,flags=<flags>,top=<x>,left=<y>,width=<w>,height=<h>\n"
 	       "                     set the video capture selection rectangle [VIDIOC_S_SELECTION]\n"
 	       "                     target=crop|crop_bounds|crop_default|compose|compose_bounds|\n"
 	       "                            compose_default|compose_padded|native_size\n"
-	       "                     flags=le|ge\n"
-	       "  --get-selection-output=target=<target>\n"
+	       "                     flags=le|ge|keep-config\n"
+	       "  --get-selection-output target=<target>\n"
 	       "                     query the video output selection rectangle [VIDIOC_G_SELECTION]\n"
 	       "                     See --set-selection command for the valid <target> values.\n"
-	       "  --set-selection-output=target=<target>,flags=<flags>,top=<x>,left=<y>,width=<w>,height=<h>\n"
+	       "  --set-selection-output target=<target>,flags=<flags>,top=<x>,left=<y>,width=<w>,height=<h>\n"
 	       "                     set the video output selection rectangle [VIDIOC_S_SELECTION]\n"
 	       "                     See --set-selection command for the arguments.\n"
 	       );
@@ -163,28 +163,6 @@ static void do_selection(int fd, unsigned int set_selection, struct v4l2_selecti
 	}
 }
 
-static int parse_selection_target(const char *s, unsigned int &target)
-{
-	if (!strcmp(s, "crop")) target = V4L2_SEL_TGT_CROP_ACTIVE;
-	else if (!strcmp(s, "crop_default")) target = V4L2_SEL_TGT_CROP_DEFAULT;
-	else if (!strcmp(s, "crop_bounds")) target = V4L2_SEL_TGT_CROP_BOUNDS;
-	else if (!strcmp(s, "compose")) target = V4L2_SEL_TGT_COMPOSE_ACTIVE;
-	else if (!strcmp(s, "compose_default")) target = V4L2_SEL_TGT_COMPOSE_DEFAULT;
-	else if (!strcmp(s, "compose_bounds")) target = V4L2_SEL_TGT_COMPOSE_BOUNDS;
-	else if (!strcmp(s, "compose_padded")) target = V4L2_SEL_TGT_COMPOSE_PADDED;
-	else if (!strcmp(s, "native_size")) target = V4L2_SEL_TGT_NATIVE_SIZE;
-	else return -EINVAL;
-
-	return 0;
-}
-
-static int parse_selection_flags(const char *s)
-{
-	if (!strcmp(s, "le")) return V4L2_SEL_FLAG_LE;
-	if (!strcmp(s, "ge")) return V4L2_SEL_FLAG_GE;
-	return 0;
-}
-
 static int parse_selection(char *optarg, unsigned int &set_sel, v4l2_selection &vsel)
 {
 	char *value;
@@ -222,11 +200,11 @@ static int parse_selection(char *optarg, unsigned int &set_sel, v4l2_selection &
 			set_sel |= SelectionTop;
 			break;
 		case 4:
-			vsel.r.width = strtol(value, 0L, 0);
+			vsel.r.width = strtoul(value, 0L, 0);
 			set_sel |= SelectionWidth;
 			break;
 		case 5:
-			vsel.r.height = strtol(value, 0L, 0);
+			vsel.r.height = strtoul(value, 0L, 0);
 			set_sel |= SelectionHeight;
 			break;
 		default:
@@ -253,37 +231,6 @@ static void printcropcap(const struct v4l2_cropcap &cropcap)
 	printf("\tDefault     : Left %d, Top %d, Width %d, Height %d\n",
 			cropcap.defrect.left, cropcap.defrect.top, cropcap.defrect.width, cropcap.defrect.height);
 	printf("\tPixel Aspect: %u/%u\n", cropcap.pixelaspect.numerator, cropcap.pixelaspect.denominator);
-}
-
-static const flag_def selection_targets_def[] = {
-	{ V4L2_SEL_TGT_CROP_ACTIVE, "crop" },
-	{ V4L2_SEL_TGT_CROP_DEFAULT, "crop_default" },
-	{ V4L2_SEL_TGT_CROP_BOUNDS, "crop_bounds" },
-	{ V4L2_SEL_TGT_COMPOSE_ACTIVE, "compose" },
-	{ V4L2_SEL_TGT_COMPOSE_DEFAULT, "compose_default" },
-	{ V4L2_SEL_TGT_COMPOSE_BOUNDS, "compose_bounds" },
-	{ V4L2_SEL_TGT_COMPOSE_PADDED, "compose_padded" },
-	{ V4L2_SEL_TGT_NATIVE_SIZE, "native_size" },
-	{ 0, NULL }
-};
-
-static std::string seltarget2s(__u32 target)
-{
-	int i = 0;
-
-	while (selection_targets_def[i].str != NULL) {
-		if (selection_targets_def[i].flag == target)
-			return selection_targets_def[i].str;
-		i++;
-	}
-	return "Unknown";
-}
-
-static void print_selection(const struct v4l2_selection &sel)
-{
-	printf("Selection: %s, Left %d, Top %d, Width %d, Height %d\n",
-			seltarget2s(sel.target).c_str(),
-			sel.r.left, sel.r.top, sel.r.width, sel.r.height);
 }
 
 void selection_cmd(int ch, char *optarg)
@@ -323,8 +270,10 @@ void selection_cmd(int ch, char *optarg)
 	}
 }
 
-void selection_set(int fd)
+void selection_set(cv4l_fd &_fd)
 {
+	int fd = _fd.g_fd();
+
 	if (options[OptSetCrop]) {
 		do_crop(fd, set_crop, vcrop, V4L2_BUF_TYPE_VIDEO_CAPTURE);
 	}
@@ -350,8 +299,10 @@ void selection_set(int fd)
 	}
 }
 
-void selection_get(int fd)
+void selection_get(cv4l_fd &_fd)
 {
+	int fd = _fd.g_fd();
+
 	if (options[OptGetCropCap]) {
 		struct v4l2_cropcap cropcap;
 
@@ -418,17 +369,17 @@ void selection_get(int fd)
 
 	if (options[OptGetSelection]) {
 		struct v4l2_selection sel;
-		int t = 0;
+		unsigned idx = 0;
 
 		memset(&sel, 0, sizeof(sel));
 		sel.type = V4L2_BUF_TYPE_VIDEO_CAPTURE;
 
 		if (options[OptAll] || get_sel_target == -1) {
-			while (selection_targets_def[t].str != NULL) {
-				sel.target = selection_targets_def[t].flag;
+			while (valid_seltarget_at_idx(idx)) {
+				sel.target = seltarget_at_idx(idx);
 				if (doioctl(fd, VIDIOC_G_SELECTION, &sel) == 0)
 					print_selection(sel);
-				t++;
+				idx++;
 			}
 		} else {
 			sel.target = get_sel_target;
@@ -439,17 +390,17 @@ void selection_get(int fd)
 
 	if (options[OptGetOutputSelection]) {
 		struct v4l2_selection sel;
-		int t = 0;
+		unsigned idx = 0;
 
 		memset(&sel, 0, sizeof(sel));
 		sel.type = V4L2_BUF_TYPE_VIDEO_OUTPUT;
 
 		if (options[OptAll] || get_sel_target == -1) {
-			while (selection_targets_def[t].str != NULL) {
-				sel.target = selection_targets_def[t].flag;
+			while (valid_seltarget_at_idx(idx)) {
+				sel.target = seltarget_at_idx(idx);
 				if (doioctl(fd, VIDIOC_G_SELECTION, &sel) == 0)
 					print_selection(sel);
-				t++;
+				idx++;
 			}
 		} else {
 			sel.target = get_sel_target;

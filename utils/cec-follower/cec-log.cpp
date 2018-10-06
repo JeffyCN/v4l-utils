@@ -1,34 +1,6 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause)
 /*
  * Copyright 2016 Cisco Systems, Inc. and/or its affiliates. All rights reserved.
- *
- * This program is free software; you may redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; version 2 of the License.
- *
- * Alternatively you can redistribute this file under the terms of the
- * BSD license as stated below:
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. The names of its contributors may not be used to endorse or promote
- *    products derived from this software without specific prior written
- *    permission.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
  */
 
 #include <unistd.h>
@@ -40,79 +12,12 @@
 #include <string>
 #include <linux/cec-funcs.h>
 #include "cec-htng-funcs.h"
+#include "cec-info.h"
 
 #define CEC_MAX_ARGS 16
 
 #define xstr(s) str(s)
 #define str(s) #s
-
-static std::string tx_status2s(const struct cec_msg &msg)
-{
-	std::string s;
-	char num[4];
-	unsigned stat = msg.tx_status;
-
-	if (stat)
-		s += "Tx";
-	if (stat & CEC_TX_STATUS_OK)
-		s += ", OK";
-	if (stat & CEC_TX_STATUS_ARB_LOST) {
-		sprintf(num, "%u", msg.tx_arb_lost_cnt);
-		s += ", Arbitration Lost";
-		if (msg.tx_arb_lost_cnt)
-			s += " (" + std::string(num) + ")";
-	}
-	if (stat & CEC_TX_STATUS_NACK) {
-		sprintf(num, "%u", msg.tx_nack_cnt);
-		s += ", Not Acknowledged";
-		if (msg.tx_nack_cnt)
-			s += " (" + std::string(num) + ")";
-	}
-	if (stat & CEC_TX_STATUS_LOW_DRIVE) {
-		sprintf(num, "%u", msg.tx_low_drive_cnt);
-		s += ", Low Drive";
-		if (msg.tx_low_drive_cnt)
-			s += " (" + std::string(num) + ")";
-	}
-	if (stat & CEC_TX_STATUS_ERROR) {
-		sprintf(num, "%u", msg.tx_error_cnt);
-		s += ", Error";
-		if (msg.tx_error_cnt)
-			s += " (" + std::string(num) + ")";
-	}
-	if (stat & CEC_TX_STATUS_MAX_RETRIES)
-		s += ", Max Retries";
-	return s;
-}
-
-static std::string rx_status2s(unsigned stat)
-{
-	std::string s;
-
-	if (stat)
-		s += "Rx";
-	if (stat & CEC_RX_STATUS_OK)
-		s += ", OK";
-	if (stat & CEC_RX_STATUS_TIMEOUT)
-		s += ", Timeout";
-	if (stat & CEC_RX_STATUS_FEATURE_ABORT)
-		s += ", Feature Abort";
-	return s;
-}
-
-static std::string status2s(const struct cec_msg &msg)
-{
-	std::string s;
-
-	if (msg.tx_status)
-		s = tx_status2s(msg);
-	if (msg.rx_status) {
-		if (!s.empty())
-			s += ", ";
-		s += rx_status2s(msg.rx_status);
-	}
-	return s;
-}
 
 struct cec_enum_values {
 	const char *type_name;

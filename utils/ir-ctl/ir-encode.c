@@ -64,15 +64,10 @@ static int nec_encode(enum rc_proto proto, unsigned scancode, unsigned *buf)
 		add_byte(~scancode);
 		break;
 	case RC_PROTO_NEC32:
-		/*
-		 * At the time of writing kernel software nec decoder
-		 * reverses the bit order so it will not match. Hardware
-		 * decoders do not have this issue.
-		 */
-		add_byte(scancode >> 24);
 		add_byte(scancode >> 16);
-		add_byte(scancode >> 8);
+		add_byte(scancode >> 24);
 		add_byte(scancode);
+		add_byte(scancode >> 8);
 		break;
 	}
 
@@ -376,6 +371,7 @@ static const struct {
 	[RC_PROTO_MCIR2_MSE] = { "mcir2-mse" },
 	[RC_PROTO_XMP] = { "xmp" },
 	[RC_PROTO_CEC] = { "cec" },
+	[RC_PROTO_IMON] = { "imon", 0x7fffffff },
 };
 
 static bool str_like(const char *a, const char *b)

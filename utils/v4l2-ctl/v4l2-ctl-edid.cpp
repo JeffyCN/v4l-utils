@@ -107,8 +107,8 @@ static __u8 toggle_colorimetry_flags1;
 #define COLORIMETRY_XVYCC601		(1 << 0)
 #define COLORIMETRY_XVYCC709		(1 << 1)
 #define COLORIMETRY_SYCC		(1 << 2)
-#define COLORIMETRY_ADOBEYCC		(1 << 3)
-#define COLORIMETRY_ADOBERGB		(1 << 4)
+#define COLORIMETRY_OPYCC		(1 << 3)
+#define COLORIMETRY_OPRGB		(1 << 4)
 #define COLORIMETRY_BT2020CYCC		(1 << 5)
 #define COLORIMETRY_BT2020YCC		(1 << 6)
 #define COLORIMETRY_BT2020RGB		(1 << 7)
@@ -125,7 +125,7 @@ static __u8 toggle_hdr_md_flags;
 void edid_usage(void)
 {
 	printf("\nEDID options:\n"
-	       "  --set-edid=pad=<pad>[,type=<type>|file=<file>][,format=<fmt>][modifiers]\n"
+	       "  --set-edid pad=<pad>[,type=<type>|file=<file>][,format=<fmt>][modifiers]\n"
 	       "                     <pad> is the input or output index for which to set the EDID.\n"
 	       "                     <type> can be 'hdmi', 'hdmi-4k-170mhz', 'hdmi-4k-300mhz', 'hdmi-4k-600mhz',\n"
 	       "                     'dvid' or 'vga'. A predefined EDID suitable for that connector type will be\n"
@@ -195,8 +195,8 @@ void edid_usage(void)
 	       "                     xvycc-601: toggle the xvYCC 601 bit.\n"
 	       "                     xvycc-709: toggle the xvYCC 709 bit.\n"
 	       "                     sycc: toggle the sYCC 601 bit.\n"
-	       "                     adobe-ycc: toggle the Adobe YCC 601 bit.\n"
-	       "                     adobe-rgb: toggle the Adobe RGB bit.\n"
+	       "                     opycc: toggle the opYCC 601 bit.\n"
+	       "                     oprgb: toggle the opRGB bit.\n"
 	       "                     bt2020-rgb: toggle the BT2020 RGB bit.\n"
 	       "                     bt2020-ycc: toggle the BT2020 YCC bit.\n"
 	       "                     bt2020-cycc: toggle the BT2020 cYCC bit.\n"
@@ -207,11 +207,10 @@ void edid_usage(void)
 	       "                     hdr: toggle the Traditional gamma HDR bit.\n"
 	       "                     smpte2084: toggle the SMPTE ST 2084 bit.\n"
 	       "                     hlg: toggle the Hybrid Log-Gamma bit.\n"
-	       "  --clear-edid=<pad>\n"
-	       "                     <pad> is the input or output index for which to clear the EDID.\n"
-	       "  --info-edid=<pad>  print the current EDID's modifiers\n"
+	       "  --clear-edid <pad> clear the EDID for the input or output index <pad>.\n"
+	       "  --info-edid <pad>  print the current EDID's modifiers\n"
 	       "                     <pad> is the input or output index for which to get the EDID.\n"
-	       "  --get-edid=pad=<pad>,startblock=<startblock>,blocks=<blocks>,format=<fmt>,file=<file>\n"
+	       "  --get-edid pad=<pad>,startblock=<startblock>,blocks=<blocks>,format=<fmt>,file=<file>\n"
 	       "                     <pad> is the input or output index for which to get the EDID.\n"
 	       "                     <startblock> is the first block number you want to read. Default 0.\n"
 	       "                     <blocks> is the number of blocks you want to read. Default is\n"
@@ -688,8 +687,8 @@ static void print_edid_mods(const struct v4l2_edid *e)
 		printf("  xvYCC 601:               %s\n", (v1 & COLORIMETRY_XVYCC601) ? "yes" : "no");
 		printf("  xvYCC 709:               %s\n", (v1 & COLORIMETRY_XVYCC709) ? "yes" : "no");
 		printf("  sYCC:                    %s\n", (v1 & COLORIMETRY_SYCC) ? "yes" : "no");
-		printf("  AdobeRGB:                %s\n", (v1 & COLORIMETRY_ADOBERGB) ? "yes" : "no");
-		printf("  AdobeYCC:                %s\n", (v1 & COLORIMETRY_ADOBEYCC) ? "yes" : "no");
+		printf("  opRGB:                   %s\n", (v1 & COLORIMETRY_OPRGB) ? "yes" : "no");
+		printf("  opYCC:                   %s\n", (v1 & COLORIMETRY_OPYCC) ? "yes" : "no");
 		printf("  BT.2020 RGB:             %s\n", (v1 & COLORIMETRY_BT2020RGB) ? "yes" : "no");
 		printf("  BT.2020 YCC:             %s\n", (v1 & COLORIMETRY_BT2020YCC) ? "yes" : "no");
 		printf("  BT.2020 cYCC:            %s\n", (v1 & COLORIMETRY_BT2020CYCC) ? "yes" : "no");
@@ -949,8 +948,8 @@ void edid_cmd(int ch, char *optarg)
 				"xvycc-601",
 				"xvycc-709",
 				"sycc",
-				"adobe-ycc",
-				"adobe-rgb",
+				"opycc",
+				"oprgb",
 				"bt2020-rgb",
 				"bt2020-ycc",
 				"bt2020-cycc",
@@ -1078,8 +1077,8 @@ void edid_cmd(int ch, char *optarg)
 			case 24: toggle_colorimetry_flags1 |= COLORIMETRY_XVYCC601; break;
 			case 25: toggle_colorimetry_flags1 |= COLORIMETRY_XVYCC709; break;
 			case 26: toggle_colorimetry_flags1 |= COLORIMETRY_SYCC; break;
-			case 27: toggle_colorimetry_flags1 |= COLORIMETRY_ADOBEYCC; break;
-			case 28: toggle_colorimetry_flags1 |= COLORIMETRY_ADOBERGB; break;
+			case 27: toggle_colorimetry_flags1 |= COLORIMETRY_OPYCC; break;
+			case 28: toggle_colorimetry_flags1 |= COLORIMETRY_OPRGB; break;
 			case 29: toggle_colorimetry_flags1 |= COLORIMETRY_BT2020RGB; break;
 			case 30: toggle_colorimetry_flags1 |= COLORIMETRY_BT2020YCC; break;
 			case 31: toggle_colorimetry_flags1 |= COLORIMETRY_BT2020CYCC; break;
@@ -1185,8 +1184,9 @@ void edid_cmd(int ch, char *optarg)
 	}
 }
 
-void edid_set(int fd)
+void edid_set(cv4l_fd &_fd)
 {
+	int fd = _fd.g_fd();
 	int loc;
 
 	if (options[OptClearEdid]) {
@@ -1314,8 +1314,10 @@ void edid_set(int fd)
 	}
 }
 
-void edid_get(int fd)
+void edid_get(cv4l_fd &_fd)
 {
+	int fd = _fd.g_fd();
+
 	if (options[OptGetEdid]) {
 		FILE *fout = stdout;
 

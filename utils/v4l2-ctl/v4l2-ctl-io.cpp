@@ -25,50 +25,26 @@ void io_usage(void)
 {
 	printf("\nInput/Output options:\n"
 	       "  -I, --get-input    query the video input [VIDIOC_G_INPUT]\n"
-	       "  -i, --set-input=<num>\n"
+	       "  -i, --set-input <num>\n"
 	       "                     set the video input to <num> [VIDIOC_S_INPUT]\n"
 	       "  -N, --list-outputs display video outputs [VIDIOC_ENUMOUTPUT]\n"
 	       "  -n, --list-inputs  display video inputs [VIDIOC_ENUMINPUT]\n"
 	       "  -O, --get-output   query the video output [VIDIOC_G_OUTPUT]\n"
-	       "  -o, --set-output=<num>\n"
+	       "  -o, --set-output <num>\n"
 	       "                     set the video output to <num> [VIDIOC_S_OUTPUT]\n"
-	       "  --set-audio-output=<num>\n"
+	       "  --set-audio-output <num>\n"
 	       "                     set the audio output to <num> [VIDIOC_S_AUDOUT]\n"
 	       "  --get-audio-input  query the audio input [VIDIOC_G_AUDIO]\n"
-	       "  --set-audio-input=<num>\n"
+	       "  --set-audio-input <num>\n"
 	       "                     set the audio input to <num> [VIDIOC_S_AUDIO]\n"
 	       "  --get-audio-output query the audio output [VIDIOC_G_AUDOUT]\n"
-	       "  --set-audio-output=<num>\n"
+	       "  --set-audio-output <num>\n"
 	       "                     set the audio output to <num> [VIDIOC_S_AUDOUT]\n"
 	       "  --list-audio-outputs\n"
 	       "                     display audio outputs [VIDIOC_ENUMAUDOUT]\n"
 	       "  --list-audio-inputs\n"
 	       "                     display audio inputs [VIDIOC_ENUMAUDIO]\n"
 	       );
-}
-
-static const flag_def in_status_def[] = {
-	{ V4L2_IN_ST_NO_POWER,    "no power" },
-	{ V4L2_IN_ST_NO_SIGNAL,   "no signal" },
-	{ V4L2_IN_ST_NO_COLOR,    "no color" },
-	{ V4L2_IN_ST_HFLIP,       "hflip" },
-	{ V4L2_IN_ST_VFLIP,       "vflip" },
-	{ V4L2_IN_ST_NO_H_LOCK,   "no hsync lock" },
-	{ V4L2_IN_ST_NO_V_LOCK,   "no vsync lock" },
-	{ V4L2_IN_ST_NO_STD_LOCK, "no standard format lock" },
-	{ V4L2_IN_ST_COLOR_KILL,  "color kill" },
-	{ V4L2_IN_ST_NO_SYNC,     "no sync lock" },
-	{ V4L2_IN_ST_NO_EQU,      "no equalizer lock" },
-	{ V4L2_IN_ST_NO_CARRIER,  "no carrier" },
-	{ V4L2_IN_ST_MACROVISION, "macrovision" },
-	{ V4L2_IN_ST_NO_ACCESS,   "no conditional access" },
-	{ V4L2_IN_ST_VTR,         "VTR time constant" },
-	{ 0, NULL }
-};
-
-static std::string status2s(__u32 status)
-{
-	return status ? flags2s(status, in_status_def) : "ok";
 }
 
 static const char *inputtype2s(__u32 type)
@@ -99,31 +75,6 @@ static const char *outputtype2s(__u32 type)
 	}
 }
 
-
-static const flag_def input_cap_def[] = {
-	{ V4L2_IN_CAP_DV_TIMINGS, "DV timings" },
-	{ V4L2_IN_CAP_STD, "SDTV standards" },
-	{ V4L2_IN_CAP_NATIVE_SIZE, "Native Size" },
-	{ 0, NULL }
-};
-
-static std::string input_cap2s(__u32 capabilities)
-{
-	return capabilities ? flags2s(capabilities, input_cap_def) : "not defined";
-}
-
-static const flag_def output_cap_def[] = {
-	{ V4L2_OUT_CAP_DV_TIMINGS, "DV timings" },
-	{ V4L2_OUT_CAP_STD, "SDTV standards" },
-	{ V4L2_OUT_CAP_NATIVE_SIZE, "Native Size" },
-	{ 0, NULL }
-};
-
-static std::string output_cap2s(__u32 capabilities)
-{
-	return capabilities ? flags2s(capabilities, output_cap_def) : "not defined";
-}
-
 void io_cmd(int ch, char *optarg)
 {
 	switch (ch) {
@@ -142,8 +93,10 @@ void io_cmd(int ch, char *optarg)
 	}
 }
 
-void io_set(int fd)
+void io_set(cv4l_fd &_fd)
 {
+	int fd = _fd.g_fd();
+
 	if (options[OptSetInput]) {
 		if (doioctl(fd, VIDIOC_S_INPUT, &input) == 0) {
 			struct v4l2_input vin;
@@ -153,7 +106,7 @@ void io_set(int fd)
 			if (test_ioctl(fd, VIDIOC_ENUMINPUT, &vin) >= 0)
 				printf(" (%s: %s, %s)", vin.name,
 				       inputtype2s(vin.type),
-				       status2s(vin.status).c_str());
+				       in_status2s(vin.status).c_str());
 			printf("\n");
 		}
 	}
@@ -174,8 +127,10 @@ void io_set(int fd)
 	}
 }
 
-void io_get(int fd)
+void io_get(cv4l_fd &_fd)
 {
+	int fd = _fd.g_fd();
+
 	if (options[OptGetInput]) {
 		if (doioctl(fd, VIDIOC_G_INPUT, &input) == 0) {
 			struct v4l2_input vin;
@@ -183,7 +138,7 @@ void io_get(int fd)
 			printf("Video input : %d", input);
 			vin.index = input;
 			if (test_ioctl(fd, VIDIOC_ENUMINPUT, &vin) >= 0)
-				printf(" (%s: %s)", vin.name, status2s(vin.status).c_str());
+				printf(" (%s: %s)", vin.name, in_status2s(vin.status).c_str());
 			printf("\n");
 		}
 	}
@@ -212,8 +167,10 @@ void io_get(int fd)
 	}
 }
 
-void io_list(int fd)
+void io_list(cv4l_fd &_fd)
 {
+	int fd = _fd.g_fd();
+
 	if (options[OptListInputs]) {
 		struct v4l2_input vin;
 
@@ -229,7 +186,7 @@ void io_list(int fd)
 			printf("\tTuner       : 0x%08X\n", vin.tuner);
 			printf("\tStandard    : 0x%016llX (%s)\n", (unsigned long long)vin.std,
 				std2s(vin.std).c_str());
-			printf("\tStatus      : 0x%08X (%s)\n", vin.status, status2s(vin.status).c_str());
+			printf("\tStatus      : 0x%08X (%s)\n", vin.status, in_status2s(vin.status).c_str());
 			printf("\tCapabilities: 0x%08X (%s)\n", vin.capabilities, input_cap2s(vin.capabilities).c_str());
                         vin.index++;
                 }

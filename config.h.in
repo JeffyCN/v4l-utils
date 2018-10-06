@@ -46,6 +46,9 @@
 /* Define to 1 if you have the `klogctl' function. */
 #undef HAVE_KLOGCTL
 
+/* libelf library is present */
+#undef HAVE_LIBELF
+
 /* Use libudev */
 #undef HAVE_LIBUDEV
 

@@ -57,25 +57,27 @@ void common_usage(void)
 {
 	printf("\nGeneral/Common options:\n"
 	       "  --all              display all information available\n"
-	       "  -C, --get-ctrl=<ctrl>[,<ctrl>...]\n"
+	       "  -C, --get-ctrl <ctrl>[,<ctrl>...]\n"
 	       "                     get the value of the controls [VIDIOC_G_EXT_CTRLS]\n"
-	       "  -c, --set-ctrl=<ctrl>=<val>[,<ctrl>=<val>...]\n"
+	       "  -c, --set-ctrl <ctrl>=<val>[,<ctrl>=<val>...]\n"
 	       "                     set the value of the controls [VIDIOC_S_EXT_CTRLS]\n"
 	       "  -D, --info         show driver info [VIDIOC_QUERYCAP]\n"
-	       "  -d, --device=<dev> use device <dev> instead of /dev/video0\n"
+	       "  -d, --device <dev> use device <dev> instead of /dev/video0\n"
 	       "                     if <dev> starts with a digit, then /dev/video<dev> is used\n"
-	       "  -e, --out-device=<dev> use device <dev> for output streams instead of the\n"
+	       "  -e, --out-device <dev> use device <dev> for output streams instead of the\n"
 	       "                     default device as set with --device\n"
 	       "                     if <dev> starts with a digit, then /dev/video<dev> is used\n"
 	       "  -h, --help         display this help message\n"
 	       "  --help-all         all options\n"
 	       "  --help-io          input/output options\n"
+	       "  --help-meta        metadata format options\n"
 	       "  --help-misc        miscellaneous options\n"
 	       "  --help-overlay     overlay format options\n"
 	       "  --help-sdr         SDR format options\n"
 	       "  --help-selection   crop/selection options\n"
 	       "  --help-stds        standards and other video timings options\n"
 	       "  --help-streaming   streaming options\n"
+	       "  --help-subdev      sub-device options\n"
 	       "  --help-tuner       tuner/modulator options\n"
 	       "  --help-vbi         VBI format options\n"
 	       "  --help-vidcap      video capture format options\n"
@@ -85,7 +87,7 @@ void common_usage(void)
 	       "  -l, --list-ctrls   display all controls and their values [VIDIOC_QUERYCTRL]\n"
 	       "  -L, --list-ctrls-menus\n"
 	       "		     display all controls and their menus [VIDIOC_QUERYMENU]\n"
-	       "  -r, --subset=<ctrl>[,<offset>,<size>]+\n"
+	       "  -r, --subset <ctrl>[,<offset>,<size>]+\n"
 	       "                     the subset of the N-dimensional array to get/set for control <ctrl>,\n"
 	       "                     for every dimension an (<offset>, <size>) tuple is given.\n"
 #ifndef NO_LIBV4L2
@@ -94,11 +96,11 @@ void common_usage(void)
 	       "  --list-devices     list all v4l devices\n"
 	       "  --log-status       log the board status in the kernel log [VIDIOC_LOG_STATUS]\n"
 	       "  --get-priority     query the current access priority [VIDIOC_G_PRIORITY]\n"
-	       "  --set-priority=<prio>\n"
+	       "  --set-priority <prio>\n"
 	       "                     set the new access priority [VIDIOC_S_PRIORITY]\n"
 	       "                     <prio> is 1 (background), 2 (interactive) or 3 (record)\n"
 	       "  --silent           only set the result code, do not print any messages\n"
-	       "  --sleep=<secs>     sleep <secs>, call QUERYCAP and close the file handle\n"
+	       "  --sleep <secs>     sleep <secs>, call QUERYCAP and close the file handle\n"
 	       "  --verbose          turn on verbose ioctl status reporting\n"
 	       );
 }
@@ -281,25 +283,6 @@ static std::string safename(const unsigned char *name)
 static std::string safename(const char *name)
 {
 	return safename((const unsigned char *)name);
-}
-
-static std::string ctrlflags2s(__u32 flags)
-{
-	static const flag_def def[] = {
-		{ V4L2_CTRL_FLAG_GRABBED,    "grabbed" },
-		{ V4L2_CTRL_FLAG_DISABLED,   "disabled" },
-		{ V4L2_CTRL_FLAG_READ_ONLY,  "read-only" },
-		{ V4L2_CTRL_FLAG_UPDATE,     "update" },
-		{ V4L2_CTRL_FLAG_INACTIVE,   "inactive" },
-		{ V4L2_CTRL_FLAG_SLIDER,     "slider" },
-		{ V4L2_CTRL_FLAG_WRITE_ONLY, "write-only" },
-		{ V4L2_CTRL_FLAG_VOLATILE,   "volatile" },
-		{ V4L2_CTRL_FLAG_HAS_PAYLOAD,"has-payload" },
-		{ V4L2_CTRL_FLAG_EXECUTE_ON_WRITE, "execute-on-write" },
-		{ V4L2_CTRL_FLAG_MODIFY_LAYOUT, "modify-layout" },
-		{ 0, NULL }
-	};
-	return flags2s(flags, def);
 }
 
 static void print_qctrl(int fd, struct v4l2_query_ext_ctrl *queryctrl,
@@ -485,7 +468,7 @@ static int query_ext_ctrl_ioctl(int fd, struct v4l2_query_ext_ctrl &qctrl)
 
 	if (have_query_ext_ctrl) {
 		rc = test_ioctl(fd, VIDIOC_QUERY_EXT_CTRL, &qctrl);
-		if (errno != ENOTTY)
+		if (rc != ENOTTY)
 			return rc;
 	}
 	qc.id = qctrl.id;
@@ -512,6 +495,7 @@ static int query_ext_ctrl_ioctl(int fd, struct v4l2_query_ext_ctrl &qctrl)
 			break;
 		case V4L2_CTRL_TYPE_STRING:
 			qctrl.elem_size = qc.maximum + 1;
+			qctrl.flags |= V4L2_CTRL_FLAG_HAS_PAYLOAD;
 			break;
 		default:
 			qctrl.elem_size = sizeof(__s32);
@@ -548,10 +532,11 @@ static void list_controls(int fd, int show_menus)
 	}
 }
 
-static void find_controls(int fd)
+static void find_controls(cv4l_fd &_fd)
 {
 	const unsigned next_fl = V4L2_CTRL_FLAG_NEXT_CTRL | V4L2_CTRL_FLAG_NEXT_COMPOUND;
 	struct v4l2_query_ext_ctrl qctrl;
+	int fd = _fd.g_fd();
 	int id;
 
 	memset(&qctrl, 0, sizeof(qctrl));
@@ -590,14 +575,14 @@ int common_find_ctrl_id(const char *name)
 	return ctrl_str2q[name].id;
 }
 
-void common_process_controls(int fd)
+void common_process_controls(cv4l_fd &fd)
 {
 	struct v4l2_query_ext_ctrl qc = {
 		V4L2_CTRL_FLAG_NEXT_CTRL | V4L2_CTRL_FLAG_NEXT_COMPOUND
 	};
 	int rc;
 
-	rc = test_ioctl(fd, VIDIOC_QUERY_EXT_CTRL, &qc);
+	rc = test_ioctl(fd.g_fd(), VIDIOC_QUERY_EXT_CTRL, &qc);
 	have_query_ext_ctrl = rc == 0;
 
 	find_controls(fd);
@@ -804,8 +789,10 @@ static bool idx_in_subset(const struct v4l2_query_ext_ctrl &qc, const ctrl_subse
 	return true;
 }
 
-void common_set(int fd)
+void common_set(cv4l_fd &_fd)
 {
+	int fd = _fd.g_fd();
+
 	if (options[OptSetPriority]) {
 		if (doioctl(fd, VIDIOC_S_PRIORITY, &prio) >= 0) {
 			printf("Priority set: %d\n", prio);
@@ -825,7 +812,8 @@ void common_set(int fd)
 
 			memset(&ctrl, 0, sizeof(ctrl));
 			ctrl.id = qc.id;
-			if (qc.type == V4L2_CTRL_TYPE_INTEGER64)
+			if (qc.type == V4L2_CTRL_TYPE_INTEGER64 ||
+			    qc.flags & V4L2_CTRL_FLAG_UPDATE)
 				use_ext_ctrls = true;
 			if (qc.flags & V4L2_CTRL_FLAG_HAS_PAYLOAD) {
 				struct v4l2_ext_controls ctrls = { 0, 1 };
@@ -990,8 +978,10 @@ static void print_array(const struct v4l2_query_ext_ctrl &qc, void *p)
 	}
 }
 
-void common_get(int fd)
+void common_get(cv4l_fd &_fd)
 {
+	int fd = _fd.g_fd();
+
 	if (options[OptGetCtrl] && !get_ctrls.empty()) {
 		struct v4l2_ext_controls ctrls;
 		class2ctrls_map class2ctrls;
@@ -1005,7 +995,8 @@ void common_get(int fd)
 
 			memset(&ctrl, 0, sizeof(ctrl));
 			ctrl.id = qc.id;
-			if (qc.type == V4L2_CTRL_TYPE_INTEGER64)
+			if (qc.type == V4L2_CTRL_TYPE_INTEGER64 ||
+			    qc.flags & V4L2_CTRL_FLAG_UPDATE)
 				use_ext_ctrls = true;
 			if (qc.flags & V4L2_CTRL_FLAG_HAS_PAYLOAD) {
 				use_ext_ctrls = true;
@@ -1098,13 +1089,13 @@ void common_get(int fd)
 	}
 }
 
-void common_list(int fd)
+void common_list(cv4l_fd &fd)
 {
 	if (options[OptListCtrlsMenus]) {
-		list_controls(fd, 1);
+		list_controls(fd.g_fd(), 1);
 	}
 
 	if (options[OptListCtrls]) {
-		list_controls(fd, 0);
+		list_controls(fd.g_fd(), 0);
 	}
 }

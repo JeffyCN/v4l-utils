@@ -37,7 +37,7 @@ void vbi_usage(void)
 	       "  -b, --set-fmt-sliced-vbi\n"
 	       "  --try-fmt-sliced-vbi\n"
 	       "  --set-fmt-sliced-vbi-out\n"
-	       "  --try-fmt-sliced-vbi-out=<mode>\n"
+	       "  --try-fmt-sliced-vbi-out <mode>\n"
 	       "                     set/try the sliced VBI capture/output format to <mode>\n"
 	       "                     [VIDIOC_S/TRY_FMT], <mode> is a comma separated list of:\n"
 	       "                     off:      turn off sliced VBI (cannot be combined with\n"
@@ -51,7 +51,7 @@ void vbi_usage(void)
 	       "  --set-fmt-vbi\n"
 	       "  --try-fmt-vbi\n"
 	       "  --set-fmt-vbi-out\n"
-	       "  --try-fmt-vbi-out=samplingrate=<r>,offset=<o>,samplesperline=<spl>,\n"
+	       "  --try-fmt-vbi-out samplingrate=<r>,offset=<o>,samplesperline=<spl>,\n"
 	       "                     start0=<s0>,count0=<c0>,start1=<s1>,count1=<c1>\n"
 	       "                     set/try the raw VBI capture/output format [VIDIOC_S/TRY_FMT]\n"
 	       "                     samplingrate: samples per second\n"
@@ -196,8 +196,9 @@ static void fill_raw_vbi(v4l2_vbi_format &dst, const v4l2_vbi_format &src)
 		dst.count[1] = src.count[1];
 }
 
-void vbi_set(int fd)
+void vbi_set(cv4l_fd &_fd)
 {
+	int fd = _fd.g_fd();
 	int ret;
 
 	if (options[OptSetSlicedVbiFormat] || options[OptTrySlicedVbiFormat]) {
@@ -207,7 +208,7 @@ void vbi_set(int fd)
 		else
 			ret = doioctl(fd, VIDIOC_TRY_FMT, &vbi_fmt);
 		if (ret == 0 && (verbose || options[OptTrySlicedVbiFormat]))
-			printfmt(vbi_fmt);
+			printfmt(fd, vbi_fmt);
 	}
 
 	if (options[OptSetSlicedVbiOutFormat] || options[OptTrySlicedVbiOutFormat]) {
@@ -217,7 +218,7 @@ void vbi_set(int fd)
 		else
 			ret = doioctl(fd, VIDIOC_TRY_FMT, &vbi_fmt_out);
 		if (ret == 0 && (verbose || options[OptTrySlicedVbiOutFormat]))
-			printfmt(vbi_fmt_out);
+			printfmt(fd, vbi_fmt_out);
 	}
 
 	if (options[OptSetVbiFormat] || options[OptTryVbiFormat]) {
@@ -231,7 +232,7 @@ void vbi_set(int fd)
 		else
 			ret = doioctl(fd, VIDIOC_TRY_FMT, &raw_fmt);
 		if (ret == 0 && (verbose || options[OptTryVbiFormat]))
-			printfmt(vbi_fmt);
+			printfmt(fd, vbi_fmt);
 	}
 
 	if (options[OptSetVbiOutFormat] || options[OptTryVbiOutFormat]) {
@@ -245,44 +246,46 @@ void vbi_set(int fd)
 		else
 			ret = doioctl(fd, VIDIOC_TRY_FMT, &raw_fmt);
 		if (ret == 0 && (verbose || options[OptTryVbiOutFormat]))
-			printfmt(vbi_fmt);
+			printfmt(fd, vbi_fmt);
 	}
 }
 
-void vbi_get(int fd)
+void vbi_get(cv4l_fd &_fd)
 {
+	int fd = _fd.g_fd();
+
 	if (options[OptGetSlicedVbiFormat]) {
 		vbi_fmt.type = V4L2_BUF_TYPE_SLICED_VBI_CAPTURE;
 		if (doioctl(fd, VIDIOC_G_FMT, &vbi_fmt) == 0)
-			printfmt(vbi_fmt);
+			printfmt(fd, vbi_fmt);
 	}
 
 	if (options[OptGetSlicedVbiOutFormat]) {
 		vbi_fmt_out.type = V4L2_BUF_TYPE_SLICED_VBI_OUTPUT;
 		if (doioctl(fd, VIDIOC_G_FMT, &vbi_fmt_out) == 0)
-			printfmt(vbi_fmt_out);
+			printfmt(fd, vbi_fmt_out);
 	}
 
 	if (options[OptGetVbiFormat]) {
 		raw_fmt.type = V4L2_BUF_TYPE_VBI_CAPTURE;
 		if (doioctl(fd, VIDIOC_G_FMT, &raw_fmt) == 0)
-			printfmt(raw_fmt);
+			printfmt(fd, raw_fmt);
 	}
 
 	if (options[OptGetVbiOutFormat]) {
 		raw_fmt_out.type = V4L2_BUF_TYPE_VBI_OUTPUT;
 		if (doioctl(fd, VIDIOC_G_FMT, &raw_fmt_out) == 0)
-			printfmt(raw_fmt_out);
+			printfmt(fd, raw_fmt_out);
 	}
 }
 
-void vbi_list(int fd)
+void vbi_list(cv4l_fd &fd)
 {
 	if (options[OptGetSlicedVbiCap]) {
 		struct v4l2_sliced_vbi_cap cap;
 
 		cap.type = V4L2_BUF_TYPE_SLICED_VBI_CAPTURE;
-		if (doioctl(fd, VIDIOC_G_SLICED_VBI_CAP, &cap) == 0) {
+		if (doioctl(fd.g_fd(), VIDIOC_G_SLICED_VBI_CAP, &cap) == 0) {
 			print_sliced_vbi_cap(cap);
 		}
 	}
@@ -291,7 +294,7 @@ void vbi_list(int fd)
 		struct v4l2_sliced_vbi_cap cap;
 
 		cap.type = V4L2_BUF_TYPE_SLICED_VBI_OUTPUT;
-		if (doioctl(fd, VIDIOC_G_SLICED_VBI_CAP, &cap) == 0) {
+		if (doioctl(fd.g_fd(), VIDIOC_G_SLICED_VBI_CAP, &cap) == 0) {
 			print_sliced_vbi_cap(cap);
 		}
 	}

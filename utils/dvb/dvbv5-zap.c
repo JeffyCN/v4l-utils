@@ -24,6 +24,20 @@
 #define _LARGEFILE_SOURCE 1
 #define _LARGEFILE64_SOURCE 1
 
+/*
+ * Use a buffer big enough at least 1 second of data. It is interesting
+ * To have it multiple of a page. So, define it as a multiply of
+ * 4096.
+ */
+#define DVB_BUF_SIZE	(4096 * 8 * 188)
+
+/*
+ * Size of the buffer on read operations. The better is if it is
+ * smaller than DVB_BUF_SIZE, as we want to give more time for
+ * write() syscalls to be able to flush data.
+ */
+#define BUFLEN (188 * 512)
+
 #include <unistd.h>
 #include <stdlib.h>
 #include <string.h>
@@ -33,6 +47,7 @@
 #include <signal.h>
 #include <argp.h>
 #include <sys/time.h>
+#include <time.h>
 
 #include <config.h>
 
@@ -58,6 +73,14 @@
 
 #define CHANNEL_FILE	"channels.conf"
 #define PROGRAM_NAME	"dvbv5-zap"
+
+
+#ifndef O_LARGEFILE
+#  define O_LARGEFILE 0
+#endif
+
+
+const int NANO_SECONDS_IN_SEC = 1000000000;
 
 const char *argp_program_version = PROGRAM_NAME " version " V4L_UTILS_VERSION;
 const char *argp_program_bug_address = "Mauro Carvalho Chehab <m.chehab@samsung.com>";
@@ -102,7 +125,7 @@ static const struct argp_option options[] = {
 	{"video_pid",	'V', N_("video_pid#"),		0, N_("video pid program to use (default 0)"), 0},
 	{"wait",	'W', N_("time"),		0, N_("adds additional wait time for DISEqC command completion"), 0},
 	{"exit",	'x', NULL,			0, N_("exit after tuning"), 0},
-	{"low_traffic",	'X', NULL,			0, N_("also shows DVB traffic with less then 1 packet per second"), 0},
+	{"low_traffic",	'X', N_("packets_per_sec"),	0, N_("sets DVB low traffic traffic threshold. PIDs with less than this amount of packets per second will be ignored. Default: 1 packet per second"), 0},
 	{"cc",		'C', N_("country_code"),	0, N_("Set the default country to be used (in ISO 3166-1 two letter code)"), 0},
 	{"non-numan",	'N', NULL,			0, N_("Non-human formatted stats (useful for scripts)"), 0},
 	{"server",	'H', N_("SERVER"),		0, N_("dvbv5-daemon host IP address"), 0},
@@ -129,6 +152,18 @@ static int timeout_flag = 0;
 		fprintf(stderr, x);                                     \
 		fprintf(stderr, " (%s)\n", strerror(errno));		\
 	} while (0)
+
+#define monitor_log(msg, args...)						\
+	do {									\
+		struct timespec __now = { 0 };					\
+		float __diff;							\
+										\
+		clock_gettime(CLOCK_MONOTONIC, &__now);				\
+		__diff = __now.tv_sec * 1.					\
+			 + __now.tv_nsec *1. / NANO_SECONDS_IN_SEC;		\
+		fprintf(stderr, msg, __diff, ##args);				\
+	} while (0)
+
 
 static int parse(struct arguments *args,
 		 struct dvb_v5_fe_parms *parms,
@@ -477,7 +512,7 @@ static int check_frontend(struct arguments *args,
 	return status & FE_HAS_LOCK;
 }
 
-static void get_show_stats(struct arguments *args,
+static void get_show_stats(FILE *fp, struct arguments *args,
 			   struct dvb_v5_fe_parms *parms,
 			   int loop)
 {
@@ -487,33 +522,77 @@ static void get_show_stats(struct arguments *args,
 	do {
 		rc = dvb_fe_get_stats(parms);
 		if (!rc)
-			print_frontend_stats(stderr, args, parms);
+			print_frontend_stats(fp, args, parms);
 		if (!timeout_flag && loop)
 			usleep(1000000);
 	} while (!timeout_flag && loop);
 }
 
-#define BUFLEN (188 * 256)
+static struct timespec *elapsed_time(struct timespec *start)
+{
+	static struct timespec elapsed;
+	struct timespec end;
+
+	if (!start->tv_sec && !start->tv_nsec)
+		return NULL;
+
+	if (clock_gettime(CLOCK_MONOTONIC, &end))
+		return NULL;
+
+	elapsed.tv_sec = end.tv_sec - start->tv_sec;
+	elapsed.tv_nsec = end.tv_nsec - start->tv_nsec;
+	if (elapsed.tv_nsec < 0) {
+		elapsed.tv_sec--;
+		elapsed.tv_nsec += NANO_SECONDS_IN_SEC;
+	}
+	return &elapsed;
+}
+
 static void copy_to_file(struct dvb_open_descriptor *in_fd, int out_fd,
 			 int timeout, int silent)
 {
 	char buf[BUFLEN];
-	int r;
+	int r, first = 1;
 	long long int rc = 0LL;
+	struct timespec start, *elapsed;
+
 	while (timeout_flag == 0) {
-		r = dvb_dev_read(in_fd, buf, BUFLEN);
+		r = dvb_dev_read(in_fd, buf, sizeof(buf));
 		if (r < 0) {
 			if (r == -EOVERFLOW) {
-				fprintf(stderr, _("buffer overrun\n"));
+				elapsed = elapsed_time(&start);
+				if (!elapsed)
+					fprintf(stderr, _("buffer overrun at %lld\n"), rc);
+				else
+					fprintf(stderr, _("buffer overrun after %lld.%02ld seconds\n"),
+						(long long)elapsed->tv_sec,
+						elapsed->tv_nsec / 10000000);
 				continue;
 			}
 			ERROR("Read failed");
 			break;
 		}
+
+		/*
+		 * It takes a while for a DVB device to start streaming, as the
+		 * hardware may be waiting for some locks. The safest way to
+		 * ensure that a program record will have the start amount of
+		 * time specified by the user is to restart the timeout alarm
+		 * here, after the first succeded read.
+		 */
+		if (first) {
+			if (timeout > 0)
+				alarm(timeout);
+
+			clock_gettime(CLOCK_MONOTONIC, &start);
+			first = 0;
+		}
+
 		if (write(out_fd, buf, r) < 0) {
 			PERROR(_("Write failed"));
 			break;
 		}
+
 		rc += r;
 	}
 	if (silent < 2) {
@@ -611,7 +690,7 @@ static error_t parse_opt(int k, char *optarg, struct argp_state *state)
 		args->non_human = 1;
 		break;
 	case 'X':
-		args->low_traffic = 1;
+		args->low_traffic = atoi(optarg);
 		break;
 	case 'L':
 		args->search = strdup(optarg);
@@ -646,17 +725,46 @@ static error_t parse_opt(int k, char *optarg, struct argp_state *state)
 	return 0;
 }
 
-#define BSIZE 188
+static char *print_bytes(float val)
+{
+	static char buf[20];
+	char *prefix = "";
 
-int do_traffic_monitor(struct arguments *args, struct dvb_device *dvb)
+	if (val >= 500 * 1024 * 1024) {
+		prefix = "G";
+		val /= 1024 * 1024 * 1024.;
+	} else if (val >= 500 * 1024) {
+		prefix = "M";
+		val /= 1024 * 1024.;
+	} else if (val >= 500) {
+		prefix = "K";
+		val /= 1024.;
+	}
+	if (*prefix) {
+		if (snprintf(buf, sizeof(buf), "%8.3f %s", val, prefix) <= 0)
+			return "      NaN ";
+	} else {
+		if (snprintf(buf, sizeof(buf), "%9.3f ", val) <= 0)
+			return "      NaN ";
+	}
+
+	return buf;
+}
+
+int do_traffic_monitor(struct arguments *args, struct dvb_device *dvb,
+		       int out_fd, int timeout)
 {
 	struct dvb_open_descriptor *fd, *dvr_fd;
-	long long unsigned pidt[0x2001], wait;
-	int packets = 0;
-	struct timeval startt;
+	struct timespec startt;
 	struct dvb_v5_fe_parms *parms = dvb->fe_parms;
+	unsigned long long pidt[0x2001], wait, cont_err = 0;
+	unsigned long long err_cnt[0x2000];
+	signed char pid_cont[0x2000];
+	int i, first = 1;
 
 	memset(pidt, 0, sizeof(pidt));
+	memset(err_cnt, 0, sizeof(err_cnt));
+	memset(pid_cont, 0, sizeof(pid_cont));
 
 	args->exit_after_tuning = 1;
 	check_frontend(args, parms);
@@ -665,7 +773,8 @@ int do_traffic_monitor(struct arguments *args, struct dvb_device *dvb)
 	if (!dvr_fd)
 		return -1;
 
-	dvb_dev_set_bufsize(dvr_fd, 1024 * 1024);
+	fprintf(stderr, _("dvb_dev_set_bufsize: buffer set to %d\n"), DVB_BUF_SIZE);
+	dvb_dev_set_bufsize(dvr_fd, DVB_BUF_SIZE);
 
 	fd = dvb_dev_open(dvb, args->demux_dev, O_RDWR);
 	if (!fd) {
@@ -682,112 +791,216 @@ int do_traffic_monitor(struct arguments *args, struct dvb_device *dvb)
 		return -1;
 	}
 
-	gettimeofday(&startt, 0);
+	if (clock_gettime(CLOCK_MONOTONIC, &startt)) {
+		fprintf(stderr, _("Can't get timespec\n"));
+                return -1;
+	}
+
 	wait = 1000;
 
+	monitor_log(_("%.2fs: Starting capture\n"));
 	while (1) {
-		unsigned char buffer[BSIZE];
-		struct dvb_ts_packet_header *h = (void *)buffer;
-		int pid, ok;
+		struct timespec *elapsed;
+		unsigned char buffer[BUFLEN];
+		int pid, ok, diff;
 		ssize_t r;
 
 		if (timeout_flag)
 			break;
 
-		if ((r = dvb_dev_read(dvr_fd, buffer, BSIZE)) <= 0) {
+		if ((r = dvb_dev_read(dvr_fd, buffer, BUFLEN)) <= 0) {
 			if (r == -EOVERFLOW) {
-				struct timeval now;
-				int diff;
-				gettimeofday(&now, 0);
-				diff =
-				    (now.tv_sec - startt.tv_sec) * 1000 +
-				    (now.tv_usec - startt.tv_usec) / 1000;
-				fprintf(stderr, _("%.2fs: buffer overrun\n"), diff / 1000.);
+				monitor_log(_("%.2fs: buffer overrun\n"));
 				continue;
 			}
-			fprintf(stderr, _("dvbtraffic: read() returned error %zd\n"), r);
-			break;
-		}
-		if (r != BSIZE) {
-			fprintf(stderr, _("dvbtraffic: only read %zd bytes\n"), r);
+			monitor_log(_("%.2fs: read() returned error %zd\n"), r);
 			break;
 		}
 
-		if (h->sync_byte != 0x47) {
-			continue;
+		/*
+		 * It takes a while for a DVB device to start streaming, as the
+		 * hardware may be waiting for some locks. The safest way to
+		 * ensure that a program record will have the start amount of
+		 * time specified by the user is to restart the timeout alarm
+		 * here, after the first succeded read.
+		 */
+		if (first) {
+			if (timeout > 0)
+				alarm(timeout);
+			first = 0;
+		}
+		if (out_fd >= 0) {
+			if (write(out_fd, buffer, r) < 0) {
+				PERROR(_("Write failed"));
+				break;
+			}
+		}
+		if (r != BUFLEN) {
+			monitor_log(_("%.2fs: only read %zd bytes\n"), r);
+			break;
 		}
 
-		bswap16(h->bitfield);
+		for (i = 0; i < BUFLEN; i += 188) {
+			struct dvb_ts_packet_header *h = (void *)&buffer[i];
+			if (h->sync_byte != 0x47) {
+				monitor_log(_("%.2fs: invalid sync byte. Discarding %zd bytes\n"), r);
+				continue;
+			}
+
+			bswap16(h->bitfield);
 
 #if 0
-		/*
-		 * ITU-T Rec. H.222.0 decoders shall discard Transport Stream
-		 * packets with theadaptation_field_control field set to
-		 * a value of '00'.
-		 */
-		if (h->adaptation_field_control == 0)
-			continue;
+			/*
+			 * ITU-T Rec. H.222.0 decoders shall discard Transport
+			 * Stream packets with the adaptation_field_control
+			 * field set to a value of '00' (invalid). Packets with
+			 * a value of '01' are NULL packets. Yet, as those are
+			 * actually part of the stream, we won't be discarding,
+			 * as we want to take them into account for traffic
+			 * estimation purposes.
+			 */
+			if (h->adaptation_field_control == 0)
+				continue;
 #endif
-		ok = 1;
-		pid = h->pid;
+			ok = 1;
+			pid = h->pid;
 
-		if (args->search) {
-			int i, sl = strlen(args->search);
-			ok = 0;
-			if (pid != 0x1fff) {
-				for (i = 0; i < (188 - sl); ++i) {
-					if (!memcmp(buffer + i, args->search, sl))
-						ok = 1;
-				}
+			if (pid > 0x1fff) {
+				monitor_log(_("%.2fs: invalid pid: 0x%04x\n"),
+					    pid);
+				pid = 0x1fff;
 			}
-		}
 
-		if (ok) {
-			pidt[pid]++;
-			pidt[0x2000]++;
-		}
+			/*
+			 * After 1 second of processing, check if are there
+			 * any issues with regards to frame continuity for
+			 * non-NULL packets.
+			 *
+			 * According to ITU-T H.222.0 | ISO/IEC 13818-1, the
+			 * continuity counter isn't incremented if the packet
+			 * is 00 or 10. It is only incremented on odd values.
+			 *
+			 * Also, don't check continuity errors on the first
+			 * second, as the frontend is still starting streaming
+			 */
+			if (pid < 0x1fff && h->adaptation_field_control & 1) {
+				int discontinued = 0;
 
-		packets++;
+				if (err_cnt[pid] < 0)
+					err_cnt[pid] = 0;
 
-		if (!(packets & 0xFF)) {
-			struct timeval now;
-			int diff;
-			gettimeofday(&now, 0);
-			diff =
-			    (now.tv_sec - startt.tv_sec) * 1000 +
-			    (now.tv_usec - startt.tv_usec) / 1000;
-			if (diff > wait) {
-				if (isatty(STDOUT_FILENO))
-			                printf("\x1b[1H\x1b[2J");
-
-				args->n_status_lines = 0;
-				printf(_(" PID          FREQ         SPEED       TOTAL\n"));
-				int _pid = 0;
-				for (_pid = 0; _pid < 0x2000; _pid++) {
-					if (pidt[_pid]) {
-						if (!args->low_traffic && (pidt[_pid] * 1000. / diff) < 1)
-							continue;
-						printf("%04x %9.2f p/s %8.1f Kbps ",
-						     _pid,
-						     pidt[_pid] * 1000. / diff,
-						     pidt[_pid] * 1000. / diff * 8 * 188 / 1024);
-						if (pidt[_pid] * 188 / 1024)
-							printf("%8llu KB\n", pidt[_pid] * 188 / 1024);
-						else
-							printf(" %8llu B\n", pidt[_pid] * 188);
+				if (h->adaptation_field_control & 2) {
+					if (h->adaptation_field_length >= 1) {
+						discontinued = h->discontinued;
+					} else {
+						monitor_log(_("%.2fs: pid %d has adaption layer, but size is too small!\n"),
+							    pid);
 					}
 				}
-				/* 0x2000 is the total traffic */
-				printf("TOT %10.2f p/s %8.1f Kbps %8llu KB\n",
-				     pidt[_pid] * 1000. / diff,
-				     pidt[_pid] * 1000. / diff * 8 * 188 / 1024,
-				     pidt[_pid] * 188 / 1024);
-				printf("\n\n");
-				get_show_stats(args, parms, 0);
-				wait += 1000;
+
+				if (wait < 2000)
+					discontinued = 1;
+
+				if (!discontinued && pid_cont[pid] >= 0) {
+					unsigned int next = (pid_cont[pid] + 1) % 16;
+					if (next != h->continuity_counter) {
+						monitor_log(_("%.2fs: pid %d, expecting %d received %d\n"),
+							    pid, next,
+							    h->continuity_counter);
+						discontinued = 1;
+						cont_err++;
+						err_cnt[pid]++;
+					}
+				}
+				if (discontinued)
+					pid_cont[pid] = -1;
+				else
+					pid_cont[pid] = h->continuity_counter;
+			}
+
+			if (args->search) {
+				int i, sl = strlen(args->search);
+				ok = 0;
+				if (pid != 0x1fff) {
+					for (i = 0; i < (188 - sl); ++i) {
+						if (!memcmp((char *)h + i, args->search, sl))
+							ok = 1;
+					}
+				}
+			}
+
+			if (ok) {
+				pidt[pid]++;
+				pidt[0x2000]++;
 			}
 		}
+
+		elapsed = elapsed_time(&startt);
+		if (!elapsed)
+			diff = wait;
+		else
+			diff = (unsigned long long)elapsed->tv_sec * 1000
+				+ elapsed->tv_nsec * 1000 / NANO_SECONDS_IN_SEC;
+
+		if (diff > wait) {
+			unsigned long long other_pidt = 0, other_err_cnt = 0;
+
+			if (isatty(STDOUT_FILENO))
+				printf("\x1b[1H\x1b[2J");
+
+			args->n_status_lines = 0;
+			printf(_(" PID           FREQ         SPEED       TOTAL\n"));
+			int _pid = 0;
+			for (_pid = 0; _pid < 0x2000; _pid++) {
+				if (pidt[_pid]) {
+					if (args->low_traffic && (pidt[_pid] * 1000. / diff) < args->low_traffic) {
+						other_pidt += pidt[_pid];
+						other_err_cnt += err_cnt[_pid];
+						continue;
+					}
+					printf("%5d %9.2f p/s %sbps ",
+						_pid,
+						pidt[_pid] * 1000. / diff,
+						print_bytes(pidt[_pid] * 1000. * 8 * 188/ diff));
+					if (pidt[_pid] * 188 / 1024)
+						printf("%8llu KB", (pidt[_pid] * 188 + 512) / 1024);
+					else
+						printf(" %8llu B", pidt[_pid] * 188);
+					if (err_cnt[_pid] > 0)
+						printf(" %8llu continuity errors",
+						       err_cnt[_pid]);
+
+					printf("\n");
+				}
+			}
+			if (other_pidt) {
+				printf(_("OTHER"));
+				printf(" %9.2f p/s %sbps ",
+					other_pidt * 1000. / diff,
+					print_bytes(other_pidt * 1000. * 8 * 188/ diff));
+				if (other_pidt * 188 / 1024)
+					printf("%8llu KB", (other_pidt * 188 + 512) / 1024);
+				else
+					printf(" %8llu B", other_pidt * 188);
+				if (other_err_cnt > 0)
+					printf(" %8llu continuity errors",
+					       other_err_cnt);
+				printf("\n");
+			}
+
+			/* 0x2000 is the total traffic */
+			printf("TOT %11.2f p/s %sbps %8llu KB\n",
+				pidt[_pid] * 1000. / diff,
+				print_bytes(pidt[_pid] * 1000. * 8 * 188/ diff),
+				(pidt[_pid] * 188 + 512) / 1024);
+			printf("\n");
+			get_show_stats(stdout, args, parms, 0);
+			wait += 1000;
+			if (cont_err)
+				printf("CONTINUITY errors: %llu\n", cont_err);
+		}
 	}
+	monitor_log(_("%.2fs: Stopping capture\n"));
 	dvb_dev_close(dvr_fd);
 	dvb_dev_close(fd);
 	return 0;
@@ -838,6 +1051,7 @@ int main(int argc, char **argv)
 	args.lna = LNA_AUTO;
 	args.input_format = FILE_DVBV5;
 	args.dvr_pipe = "/tmp/dvr-pipe";
+	args.low_traffic = 1;
 
 	if (argp_parse(&argp, argc, argv, ARGP_NO_HELP | ARGP_NO_EXIT, &idx, &args)) {
 		argp_help(&argp, stderr, ARGP_HELP_SHORT_USAGE, PROGRAM_NAME);
@@ -957,8 +1171,18 @@ int main(int argc, char **argv)
 	}
 
 	if (args.traffic_monitor) {
+		if (args.filename) {
+			file_fd = open(args.filename,
+					 O_LARGEFILE |
+					 O_WRONLY | O_CREAT | O_TRUNC,
+					 0644);
+			if (file_fd < 0) {
+				PERROR(_("open of '%s' failed"), args.filename);
+				return -1;
+			}
+		}
 		set_signals(&args);
-		err = do_traffic_monitor(&args, dvb);
+		err = do_traffic_monitor(&args, dvb, file_fd, args.timeout);
 		goto err;
 	}
 
@@ -1023,8 +1247,11 @@ int main(int argc, char **argv)
 
 		if (args.silent < 2)
 			fprintf(stderr, _("  dvb_set_pesfilter %d\n"), vpid);
+
+		fprintf(stderr, _("dvb_dev_set_bufsize: buffer set to %d\n"), DVB_BUF_SIZE);
+		dvb_dev_set_bufsize(video_fd, DVB_BUF_SIZE);
+
 		if (vpid == 0x2000) {
-			dvb_dev_set_bufsize(video_fd, 1024 * 1024);
 			if (dvb_dev_dmx_set_pesfilter(video_fd, vpid, DMX_PES_OTHER,
 					      DMX_OUT_TS_TAP, 0) < 0)
 				goto err;
@@ -1066,10 +1293,8 @@ int main(int argc, char **argv)
 
 			if (strcmp(args.filename, "-") != 0) {
 				file_fd = open(args.filename,
-#ifdef O_LARGEFILE
 					 O_LARGEFILE |
-#endif
-					 O_WRONLY | O_CREAT,
+					 O_WRONLY | O_CREAT | O_TRUNC,
 					 0644);
 				if (file_fd < 0) {
 					PERROR(_("open of '%s' failed"),
@@ -1080,7 +1305,7 @@ int main(int argc, char **argv)
 		}
 
 		if (args.silent < 2)
-			get_show_stats(&args, parms, 0);
+			get_show_stats(stderr, &args, parms, 0);
 
 		if (file_fd >= 0) {
 			dvr_fd = dvb_dev_open(dvb, args.dvr_dev, O_RDONLY);
@@ -1134,14 +1359,14 @@ int main(int argc, char **argv)
 			if (!timeout_flag)
 				fprintf(stderr, _("DVR interface '%s' can now be opened\n"), args.dvr_fname);
 
-			get_show_stats(&args, parms, 1);
+			get_show_stats(stderr, &args, parms, 1);
 		}
 		if (args.silent < 2)
-			get_show_stats(&args, parms, 0);
+			get_show_stats(stderr, &args, parms, 0);
 	} else {
 		/* Wait until timeout or being killed */
 		while (1) {
-			get_show_stats(&args, parms, 1);
+			get_show_stats(stderr, &args, parms, 1);
 			usleep(1000000);
 		}
 	}

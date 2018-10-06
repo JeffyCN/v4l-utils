@@ -1,18 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright 2016 Cisco Systems, Inc. and/or its affiliates. All rights reserved.
- *
- * This program is free software; you may redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; version 2 of the License.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
  */
 
 #include <unistd.h>
@@ -48,15 +36,18 @@
 enum Option {
 	OptTestAdapter = 'A',
 	OptSetDevice = 'd',
+	OptExitOnFail = 'E',
 	OptHelp = 'h',
 	OptInteractive = 'i',
 	OptNoWarnings = 'n',
 	OptRemote = 'r',
 	OptReplyThreshold = 'R',
+	OptSkipInfo = 's',
 	OptTimeout = 't',
 	OptTrace = 'T',
 	OptVerbose = 'v',
 	OptWallClock = 'w',
+	OptExitOnWarn = 'W',
 
 	OptTestCore = 128,
 	OptTestAudioRateControl,
@@ -109,19 +100,24 @@ static int tests_total, tests_ok;
 
 bool show_info;
 bool show_warnings = true;
+bool exit_on_fail;
+bool exit_on_warn;
 unsigned warnings;
 unsigned reply_threshold = 1000;
-unsigned long_timeout = 60;
+time_t long_timeout = 60;
 
 static struct option long_options[] = {
 	{"device", required_argument, 0, OptSetDevice},
 	{"help", no_argument, 0, OptHelp},
 	{"no-warnings", no_argument, 0, OptNoWarnings},
+	{"exit-on-fail", no_argument, 0, OptExitOnFail},
+	{"exit-on-warn", no_argument, 0, OptExitOnWarn},
 	{"remote", optional_argument, 0, OptRemote},
 	{"timeout", required_argument, 0, OptTimeout},
 	{"trace", no_argument, 0, OptTrace},
 	{"verbose", no_argument, 0, OptVerbose},
-	{ "wall-clock", no_argument, 0, OptWallClock },
+	{"skip-info", no_argument, 0, OptSkipInfo},
+	{"wall-clock", no_argument, 0, OptWallClock},
 	{"interactive", no_argument, 0, OptInteractive},
 	{"reply-threshold", required_argument, 0, OptReplyThreshold},
 
@@ -172,13 +168,13 @@ static struct option long_options[] = {
 static void usage(void)
 {
 	printf("Usage:\n"
-	       "  -d, --device=<dev>   Use device <dev> instead of /dev/cec0\n"
+	       "  -d, --device <dev>   Use device <dev> instead of /dev/cec0\n"
 	       "                       If <dev> starts with a digit, then /dev/cec<dev> is used.\n"
-	       "  -r, --remote[=<la>]  As initiator test the remote logical address or all LAs if no LA was given\n"
-	       "  -R, --reply-threshold=<timeout>\n"
+	       "  -r, --remote [<la>]  As initiator test the remote logical address or all LAs if no LA was given\n"
+	       "  -R, --reply-threshold <timeout>\n"
 	       "                       Warn if replies take longer than this threshold (default 1000ms)\n"
 	       "  -i, --interactive    Interactive mode when doing remote tests\n"
-	       "  -t, --timeout=<secs> Set the standby/resume timeout to <secs>. Default is 60s.\n"
+	       "  -t, --timeout <secs> Set the standby/resume timeout to <secs>. Default is 60s.\n"
 	       "\n"
 	       "  -A, --test-adapter                  Test the CEC adapter API\n"
 	       "  --test-core                         Test the core functionality\n"
@@ -207,11 +203,14 @@ static void usage(void)
 	       "  --test-standby-resume               Test standby and resume functionality. This will activate\n"
 	       "                                      testing of Standby, Give Device Power Status and One Touch Play.\n"
 	       "\n"
+	       "  -E, --exit-on-fail Exit on the first fail.\n"
 	       "  -h, --help         Display this help message\n"
 	       "  -n, --no-warnings  Turn off warning messages\n"
+	       "  -s, --skip-info    Skip Driver Info output\n"
 	       "  -T, --trace        Trace all called ioctls\n"
 	       "  -v, --verbose      Turn on verbose reporting\n"
-	       "  -w, --wall-clock   Show timestamps as wall-clock time\n"
+	       "  -w, --wall-clock   Show timestamps as wall-clock time (implies -v)\n"
+	       "  -W, --exit-on-warn Exit on the first warning.\n"
 	       );
 }
 
@@ -241,74 +240,6 @@ static std::string ts2s(__u64 ts)
 	s = s.substr(0, s.length() - 6);
 	sprintf(buf, "%03lu", res.tv_usec / 1000);
 	return s + "." + buf;
-}
-
-static std::string tx_status2s(const struct cec_msg &msg)
-{
-	std::string s;
-	char num[4];
-	unsigned stat = msg.tx_status;
-
-	if (stat)
-		s += "Tx";
-	if (stat & CEC_TX_STATUS_OK)
-		s += ", OK";
-	if (stat & CEC_TX_STATUS_ARB_LOST) {
-		sprintf(num, "%u", msg.tx_arb_lost_cnt);
-		s += ", Arbitration Lost";
-		if (msg.tx_arb_lost_cnt)
-			s += " (" + std::string(num) + ")";
-	}
-	if (stat & CEC_TX_STATUS_NACK) {
-		sprintf(num, "%u", msg.tx_nack_cnt);
-		s += ", Not Acknowledged";
-		if (msg.tx_nack_cnt)
-			s += " (" + std::string(num) + ")";
-	}
-	if (stat & CEC_TX_STATUS_LOW_DRIVE) {
-		sprintf(num, "%u", msg.tx_low_drive_cnt);
-		s += ", Low Drive";
-		if (msg.tx_low_drive_cnt)
-			s += " (" + std::string(num) + ")";
-	}
-	if (stat & CEC_TX_STATUS_ERROR) {
-		sprintf(num, "%u", msg.tx_error_cnt);
-		s += ", Error";
-		if (msg.tx_error_cnt)
-			s += " (" + std::string(num) + ")";
-	}
-	if (stat & CEC_TX_STATUS_MAX_RETRIES)
-		s += ", Max Retries";
-	return s;
-}
-
-static std::string rx_status2s(unsigned stat)
-{
-	std::string s;
-
-	if (stat)
-		s += "Rx";
-	if (stat & CEC_RX_STATUS_OK)
-		s += ", OK";
-	if (stat & CEC_RX_STATUS_TIMEOUT)
-		s += ", Timeout";
-	if (stat & CEC_RX_STATUS_FEATURE_ABORT)
-		s += ", Feature Abort";
-	return s;
-}
-
-std::string status2s(const struct cec_msg &msg)
-{
-	std::string s;
-
-	if (msg.tx_status)
-		s = tx_status2s(msg);
-	if (msg.rx_status) {
-		if (!s.empty())
-			s += ", ";
-		s += rx_status2s(msg.rx_status);
-	}
-	return s;
 }
 
 const char *power_status2s(__u8 power_status)
@@ -703,6 +634,23 @@ int cec_named_ioctl(struct node *node, const char *name,
 				name, retval, strerror(e));
 	}
 
+	if (!retval && request == CEC_TRANSMIT &&
+	    (msg->tx_status & CEC_TX_STATUS_OK) && ((msg->tx_status & CEC_TX_STATUS_MAX_RETRIES))) {
+		/*
+		 * Workaround this bug in the CEC framework. This bug was solved
+		 * in kernel 4.18 but older versions still can produce this incorrect
+		 * combination of TX flags. If this occurs, then this really means
+		 * that the transmit went OK, but the wait for the reply was
+		 * cancelled (e.g. due to the HPD doing down).
+		 */
+		msg->tx_status &= ~(CEC_TX_STATUS_MAX_RETRIES | CEC_TX_STATUS_ERROR);
+		if (msg->tx_error_cnt)
+			msg->tx_error_cnt--;
+		msg->rx_status = CEC_RX_STATUS_TIMEOUT;
+		msg->rx_ts = msg->tx_ts;
+		warn("Both OK and MAX_RETRIES were set in tx_status! Applied workaround.\n");
+	}
+
 	if (!retval && request == CEC_TRANSMIT && show_info) {
 		printf("\t\t%s: Sequence: %u Tx Timestamp: %s Length: %u",
 		       opname.c_str(), msg->sequence, ts2s(msg->tx_ts).c_str(), msg->len);
@@ -710,11 +658,11 @@ int cec_named_ioctl(struct node *node, const char *name,
 			printf("\n\t\t\tRx Timestamp: %s Approximate response time: %u ms",
 			       ts2s(msg->rx_ts).c_str(),
 			       response_time_ms(msg));
-		if ((msg->tx_status & CEC_TX_STATUS_OK) &&
-		    (msg->tx_status & (CEC_TX_STATUS_ARB_LOST | CEC_TX_STATUS_NACK |
-				       CEC_TX_STATUS_LOW_DRIVE | CEC_TX_STATUS_ERROR)))
+		if (msg->tx_status & ~CEC_TX_STATUS_OK)
 			printf("\n\t\t\tStatus: %s", status2s(*msg).c_str());
 		printf("\n");
+		if (msg->tx_status & CEC_TX_STATUS_TIMEOUT)
+			warn("CEC_TX_STATUS_TIMEOUT was set, should not happen.\n");
 	}
 
 	if (!retval && request == CEC_RECEIVE && show_info)
@@ -829,19 +777,15 @@ static bool wait_for_hpd(struct node *node, bool send_image_view_on)
 				break;
 		}
 
-		/*
-		 * If the HPD doesn't return after TX_WAIT_FOR_HPD seconds,
-		 * then send a IMAGE_VIEW_ON message (if possible).
-		 */
 		if (send_image_view_on && time(NULL) - t > TX_WAIT_FOR_HPD) {
 			struct cec_msg image_view_on_msg;
 
-			cec_msg_init(&image_view_on_msg, CEC_LOG_ADDR_UNREGISTERED,
-				     CEC_LOG_ADDR_TV);
-			cec_msg_image_view_on(&image_view_on_msg);
 			// So the HPD is gone (possibly due to a standby), but
 			// some TVs still have a working CEC bus, so send Image
 			// View On to attempt to wake it up again.
+			cec_msg_init(&image_view_on_msg, CEC_LOG_ADDR_UNREGISTERED,
+				     CEC_LOG_ADDR_TV);
+			cec_msg_image_view_on(&image_view_on_msg);
 			doioctl(node, CEC_TRANSMIT, &image_view_on_msg);
 			send_image_view_on = false;
 		}
@@ -1108,6 +1052,18 @@ int main(int argc, char **argv)
 			break;
 
 		options[(int)ch] = 1;
+		if (!option_index) {
+			for (i = 0; long_options[i].val; i++) {
+				if (long_options[i].val == ch) {
+					option_index = i;
+					break;
+				}
+			}
+		}
+		if (long_options[option_index].has_arg == optional_argument &&
+		    !optarg && argv[optind] && argv[optind][0] != '-')
+			optarg = argv[optind++];
+
 		switch (ch) {
 		case OptHelp:
 			usage();
@@ -1130,6 +1086,12 @@ int main(int argc, char **argv)
 		case OptNoWarnings:
 			show_warnings = false;
 			break;
+		case OptExitOnFail:
+			exit_on_fail = true;
+			break;
+		case OptExitOnWarn:
+			exit_on_warn = true;
+			break;
 		case OptRemote:
 			if (optarg) {
 				remote_la = strtoul(optarg, NULL, 0);
@@ -1141,6 +1103,7 @@ int main(int argc, char **argv)
 			}
 			test_remote = true;
 			break;
+		case OptWallClock:
 		case OptVerbose:
 			show_info = true;
 			break;
@@ -1288,17 +1251,16 @@ int main(int argc, char **argv)
 
 		/*
 		 * Special corner case: if PA is invalid, then you can still try
-		 * to poll a TV. If found, try to wake it up.
+		 * to wake up a TV.
 		 */
 		cec_msg_init(&msg, CEC_LOG_ADDR_UNREGISTERED, CEC_LOG_ADDR_TV);
 
+		cec_msg_image_view_on(&msg);
 		fail_on_test(doioctl(&node, CEC_TRANSMIT, &msg));
 		if (msg.tx_status & CEC_TX_STATUS_OK) {
-			unsigned cnt = 0;
+			time_t cnt = 0;
 
-			cec_msg_image_view_on(&msg);
-			fail_on_test(doioctl(&node, CEC_TRANSMIT, &msg));
-			while ((msg.tx_status & CEC_TX_STATUS_OK) && cnt++ <= long_timeout) {
+			while (cnt++ <= long_timeout) {
 				fail_on_test(doioctl(&node, CEC_ADAP_G_PHYS_ADDR, &node.phys_addr));
 				if (node.phys_addr != CEC_PHYS_ADDR_INVALID) {
 					doioctl(&node, CEC_ADAP_G_LOG_ADDRS, &laddrs);
@@ -1310,7 +1272,10 @@ int main(int argc, char **argv)
 
 	}
 
-	cec_driver_info(caps, laddrs, node.phys_addr);
+	if (options[OptSkipInfo])
+		printf("\n");
+	else
+		cec_driver_info(caps, laddrs, node.phys_addr);
 
 	bool missing_pa = node.phys_addr == CEC_PHYS_ADDR_INVALID && (node.caps & CEC_CAP_PHYS_ADDR);
 	bool missing_la = laddrs.num_log_addrs == 0 && (node.caps & CEC_CAP_LOG_ADDRS);
@@ -1324,14 +1289,16 @@ int main(int argc, char **argv)
 	if (missing_la || missing_pa)
 		exit(-1);
 
-	printf("\nCompliance test for device %s:\n\n", device);
-	printf("    The test results mean the following:\n"
-	       "        OK                  Supported correctly by the device.\n"
-	       "        OK (Not Supported)  Not supported and not mandatory for the device.\n"
-	       "        OK (Presumed)       Presumably supported.  Manually check to confirm.\n"
-	       "        OK (Unexpected)     Supported correctly but is not expected to be supported for this device.\n"
-	       "        OK (Refused)        Supported by the device, but was refused.\n"
-	       "        FAIL                Failed and was expected to be supported by this device.\n\n");
+	if (!options[OptSkipInfo]) {
+		printf("\nCompliance test for device %s:\n\n", device);
+		printf("    The test results mean the following:\n"
+		       "        OK                  Supported correctly by the device.\n"
+		       "        OK (Not Supported)  Not supported and not mandatory for the device.\n"
+		       "        OK (Presumed)       Presumably supported.  Manually check to confirm.\n"
+		       "        OK (Unexpected)     Supported correctly but is not expected to be supported for this device.\n"
+		       "        OK (Refused)        Supported by the device, but was refused.\n"
+		       "        FAIL                Failed and was expected to be supported by this device.\n\n");
+	}
 
 	node.has_cec20 = laddrs.cec_version >= CEC_OP_CEC_VERSION_2_0;
 	node.num_log_addrs = laddrs.num_log_addrs;

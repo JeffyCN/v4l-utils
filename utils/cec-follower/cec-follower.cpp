@@ -1,34 +1,6 @@
+// SPDX-License-Identifier: (GPL-2.0-only OR BSD-3-Clause)
 /*
  * Copyright 2016 Cisco Systems, Inc. and/or its affiliates. All rights reserved.
- *
- * This program is free software; you may redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; version 2 of the License.
- *
- * Alternatively you can redistribute this file under the terms of the
- * BSD license as stated below:
- *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
- * 1. Redistributions of source code must retain the above copyright
- *    notice, this list of conditions and the following disclaimer.
- * 2. Redistributions in binary form must reproduce the above copyright
- *    notice, this list of conditions and the following disclaimer in
- *    the documentation and/or other materials provided with the
- *    distribution.
- * 3. The names of its contributors may not be used to endorse or promote
- *    products derived from this software without specific prior written
- *    permission.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
- * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
- * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
- * NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS
- * BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
- * ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
- * CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
- * SOFTWARE.
  */
 
 #include <unistd.h>
@@ -68,6 +40,7 @@ enum Option {
 	OptVerbose = 'v',
 	OptShowMsgs = 'm',
 	OptShowState = 's',
+	OptWallClock = 'w',
 	OptLast = 128
 };
 
@@ -87,6 +60,7 @@ static struct option long_options[] = {
 	{"verbose", no_argument, 0, OptVerbose},
 	{"show-msgs", no_argument, 0, OptShowMsgs},
 	{"show-state", no_argument, 0, OptShowState},
+	{"wall-clock", no_argument, 0, OptWallClock},
 
 	{0, 0, 0, 0}
 };
@@ -94,83 +68,16 @@ static struct option long_options[] = {
 static void usage(void)
 {
 	printf("Usage:\n"
-	       "  -d, --device=<dev>  Use device <dev> instead of /dev/cec0\n"
+	       "  -d, --device <dev>  Use device <dev> instead of /dev/cec0\n"
 	       "                      If <dev> starts with a digit, then /dev/cec<dev> is used.\n"
 	       "  -h, --help          Display this help message\n"
 	       "  -n, --no-warnings   Turn off warning messages\n"
 	       "  -T, --trace         Trace all called ioctls\n"
 	       "  -v, --verbose       Turn on verbose reporting\n"
+	       "  -w, --wall-clock    Show timestamps as wall-clock time (implies -v)\n"
 	       "  -m, --show-msgs     Show received messages\n"
 	       "  -s, --show-state    Show state changes from the emulated device\n"
 	       );
-}
-
-static std::string tx_status2s(const struct cec_msg &msg)
-{
-	std::string s;
-	char num[4];
-	unsigned stat = msg.tx_status;
-
-	if (stat)
-		s += "Tx";
-	if (stat & CEC_TX_STATUS_OK)
-		s += ", OK";
-	if (stat & CEC_TX_STATUS_ARB_LOST) {
-		sprintf(num, "%u", msg.tx_arb_lost_cnt);
-		s += ", Arbitration Lost";
-		if (msg.tx_arb_lost_cnt)
-			s += " (" + std::string(num) + ")";
-	}
-	if (stat & CEC_TX_STATUS_NACK) {
-		sprintf(num, "%u", msg.tx_nack_cnt);
-		s += ", Not Acknowledged";
-		if (msg.tx_nack_cnt)
-			s += " (" + std::string(num) + ")";
-	}
-	if (stat & CEC_TX_STATUS_LOW_DRIVE) {
-		sprintf(num, "%u", msg.tx_low_drive_cnt);
-		s += ", Low Drive";
-		if (msg.tx_low_drive_cnt)
-			s += " (" + std::string(num) + ")";
-	}
-	if (stat & CEC_TX_STATUS_ERROR) {
-		sprintf(num, "%u", msg.tx_error_cnt);
-		s += ", Error";
-		if (msg.tx_error_cnt)
-			s += " (" + std::string(num) + ")";
-	}
-	if (stat & CEC_TX_STATUS_MAX_RETRIES)
-		s += ", Max Retries";
-	return s;
-}
-
-static std::string rx_status2s(unsigned stat)
-{
-	std::string s;
-
-	if (stat)
-		s += "Rx";
-	if (stat & CEC_RX_STATUS_OK)
-		s += ", OK";
-	if (stat & CEC_RX_STATUS_TIMEOUT)
-		s += ", Timeout";
-	if (stat & CEC_RX_STATUS_FEATURE_ABORT)
-		s += ", Feature Abort";
-	return s;
-}
-
-std::string status2s(const struct cec_msg &msg)
-{
-	std::string s;
-
-	if (msg.tx_status)
-		s = tx_status2s(msg);
-	if (msg.rx_status) {
-		if (!s.empty())
-			s += ", ";
-		s += rx_status2s(msg.rx_status);
-	}
-	return s;
 }
 
 void sad_encode(const struct short_audio_desc *sad, __u32 *descriptor)
@@ -417,6 +324,18 @@ int main(int argc, char **argv)
 			break;
 
 		options[(int)ch] = 1;
+		if (!option_index) {
+			for (i = 0; long_options[i].val; i++) {
+				if (long_options[i].val == ch) {
+					option_index = i;
+					break;
+				}
+			}
+		}
+		if (long_options[option_index].has_arg == optional_argument &&
+		    !optarg && argv[optind] && argv[optind][0] != '-')
+			optarg = argv[optind++];
+
 		switch (ch) {
 		case OptHelp:
 			usage();
@@ -439,6 +358,7 @@ int main(int argc, char **argv)
 		case OptShowState:
 			show_state = true;
 			break;
+		case OptWallClock:
 		case OptVerbose:
 			show_info = true;
 			show_msgs = true;
@@ -535,5 +455,5 @@ int main(int argc, char **argv)
 	if (missing_la || missing_pa)
 		exit(-1);
 
-	testProcessing(&node);
+	testProcessing(&node, options[OptWallClock]);
 }

@@ -3,7 +3,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ(2.59)
-AC_INIT([v4l-utils],[1.14.2])
+AC_INIT([v4l-utils],[1.16.0])
 
 AC_CONFIG_AUX_DIR([build-aux])
 AC_CONFIG_MACRO_DIR([m4])
@@ -23,6 +23,7 @@ AC_CONFIG_FILES([Makefile
 	utils/libmedia_dev/Makefile
 	utils/dvb/Makefile
 	utils/keytable/Makefile
+	utils/keytable/bpf_protocols/Makefile
 	utils/ir-ctl/Makefile
 	utils/cx18-ctl/Makefile
 	utils/ivtv-ctl/Makefile
@@ -38,6 +39,7 @@ AC_CONFIG_FILES([Makefile
 	utils/cec-compliance/cec-compliance.1
 	utils/cec-follower/Makefile
 	utils/cec-follower/cec-follower.1
+	utils/qvidcap/Makefile
 	utils/rds-ctl/Makefile
 
 	contrib/Makefile
@@ -64,6 +66,7 @@ AC_CONFIG_FILES([Makefile
 	lib/include/libdvbv5/libdvb-version.h
 
 	utils/qv4l2/qv4l2.1
+	utils/qvidcap/qvidcap.1
 	utils/v4l2-compliance/v4l2-compliance.1
 	utils/v4l2-ctl/v4l2-ctl.1
 	utils/keytable/ir-keytable.1
@@ -167,6 +170,19 @@ AC_SUBST([X11_CFLAGS])
 AC_SUBST([X11_LIBS])
 AM_CONDITIONAL([HAVE_X11], [test x$x11_pkgconfig = xyes])
 
+PKG_CHECK_MODULES([LIBELF], [libelf], [libelf_pkgconfig=yes], [libelf_pkgconfig=no])
+AC_SUBST([LIBELF_CFLAGS])
+AC_SUBST([LIBELF_LIBS])
+AM_CONDITIONAL([HAVE_LIBELF], [test x$libelf_pkgconfig = xyes])
+if test "x$libelf_pkgconfig" = "xyes"; then
+  AC_CHECK_PROG([CLANG], clang, clang)
+  AC_DEFINE([HAVE_LIBELF], [1], [libelf library is present])
+else
+  AC_MSG_WARN(libelf library not available)
+fi
+
+AM_CONDITIONAL([BPF_PROTOCOLS], [test x$CLANG = xclang])
+
 AS_IF([test "x$x11_pkgconfig" = xyes],
       [PKG_CHECK_MODULES(GL, [gl], [gl_pkgconfig=yes], [gl_pkgconfig=no])], [gl_pkgconfig=no])
 AC_SUBST([GL_CFLAGS])
@@ -202,6 +218,7 @@ AM_CONDITIONAL([HAVE_JPEG], [test x$have_jpeg = xyes])
 QT_VERSION="none"
 
 PKG_CHECK_MODULES(QT5, [Qt5Core >= 5.0 Qt5Gui >= 5.0 Qt5Widgets >= 5.0], [qt_pkgconfig=true], [qt_pkgconfig=false])
+PKG_CHECK_MODULES(QT5, [Qt5Core >= 5.4 Qt5Gui >= 5.4 Qt5Widgets >= 5.4], [qt54_pkgconfig=true], [qt54_pkgconfig=false])
 if test "x$qt_pkgconfig" = "xtrue"; then
    QT_CFLAGS="$QT5_CFLAGS -fPIC"
    QT_LIBS="$QT5_LIBS"
@@ -213,16 +230,28 @@ if test "x$qt_pkgconfig" = "xtrue"; then
    AC_SUBST(MOC)
    AC_SUBST(UIC)
    AC_SUBST(RCC)
-   PKG_CHECK_MODULES(QT5GL, [Qt5OpenGL >= 5.0 gl], [qt_pkgconfig_gl=true], [qt_pkgconfig_gl=false])
+   if test "x$qt54_pkgconfig" = "xtrue"; then
+      PKG_CHECK_MODULES(QT5GL, [Qt5OpenGL >= 5.4 gl], [qt_pkgconfig_gl=true], [qt_pkgconfig_gl=false])
+   else
+      PKG_CHECK_MODULES(QT5GL, [Qt5OpenGL >= 5.0 gl], [qt_pkgconfig_gl=true], [qt_pkgconfig_gl=false])
+   fi
    if test "x$qt_pkgconfig_gl" = "xtrue"; then
       QTGL_CFLAGS="$QT5GL_CFLAGS -fPIC"
       QTGL_LIBS="$QT5GL_LIBS"
       AC_SUBST(QT_CFLAGS)
       AC_SUBST(QT_LIBS)
       AC_DEFINE([HAVE_QTGL], [1], [qt has opengl support])
-      QT_VERSION="v5 with QtGL"
+      if test "x$qt54_pkgconfig" = "xtrue"; then
+        QT_VERSION="v5.4 with QtGL"
+      else
+        QT_VERSION="v5 with QtGL"
+      fi
    else
-      QT_VERSION="v5"
+      if test "x$qt54_pkgconfig" = "xtrue"; then
+        QT_VERSION="v5.4"
+      else
+        QT_VERSION="v5"
+      fi
       AC_MSG_WARN(Qt5 OpenGL is not available)
     fi
 else
@@ -329,10 +358,16 @@ AC_ARG_WITH(udevdir,
    	[],
 	[with_udevdir=`$PKG_CONFIG --variable=udevdir udev || echo /lib/udev`])
 
-def_gconv_dir=`for i in /lib64 /usr/lib64 /usr/local/lib64 /lib /usr/lib /usr/local/lib; do if @<:@ -d \$i/gconv @:>@; then echo \$i/gconv; break; fi; done || echo /usr/lib/gconv`
+# Generic check: works with most distributions
+def_gconv_dir=`for i in /lib64 /usr/lib64 /usr/local/lib64 /lib /usr/lib /usr/local/lib; do if @<:@ -d \$i/gconv @:>@; then echo \$i/gconv; break; fi; done`
+
+# Debian/Ubuntu-specific check: should be aligned with the debian package
+AS_IF([test "x${def_gconv_dir}" = "x" ],
+      def_gconv_dir=`for i in mips64el-linux-gnuabi64 mips64el-linux-gnuabin32 mips64-linux-gnuabi64 mips64-linux-gnuabin32 mipsisa64r6el-linux-gnuabi64 mipsisa64r6el-linux-gnuabin32 mipsisa64r6-linux-gnuabi64 mipsisa64r6-linux-gnuabin32 powerpc64-linux-gnu sparc64-linux-gnu x86_64-linux-gnu x86_64-linux-gnux32 alphaev67-linux-gnu arm-linux-gnueabi arm-linux-gnueabihf i686-kfreebsd-gnu i686-linux-gnu mipsel-linux-gnu mipsisa32r6el-linux-gnu mipsisa32r6-linux-gnu mips-linux-gnu powerpc-linux-gnu s390-linux-gnu sparcv9-linux-gnu; do if @<:@ -d /usr/lib/\$i/gconv @:>@; then echo /usr/lib/\$i/gconv; break; fi; done`)
+
 AC_ARG_WITH(gconvdir,
 	AS_HELP_STRING([--with-gconvdir=DIR],
-		       [set system's gconv directory (default=/usr/lib/gconv)]),
+		       [set system's gconv directory (default is to autodetect)]),
 	[],
 	[with_gconvdir=$def_gconv_dir])
 
@@ -423,10 +458,18 @@ AC_ARG_ENABLE(qv4l2,
    esac]
 )
 
+AC_ARG_ENABLE(qvidcap,
+  AS_HELP_STRING([--disable-qvidcap], [disable qvidcap compilation]),
+  [case "${enableval}" in
+     yes | no ) ;;
+     *) AC_MSG_ERROR(bad value ${enableval} for --enable-qvidcap) ;;
+   esac]
+)
+
 AC_ARG_ENABLE(gconv,
   AS_HELP_STRING([--enable-gconv], [enable compilation of gconv modules]),
   [case "${enableval}" in
-    yes | no ) [test x$enable_shared == xno -o x$LIBICONV != x && enable_gconv = no] ;;
+    yes | no ) ;;
     *) AC_MSG_ERROR(bad value ${enableval} for --enable-gconv) ;;
    esac]
 )
@@ -445,10 +488,11 @@ AM_CONDITIONAL([WITH_DVBV5_REMOTE], [test x$enable_libdvbv5  != xno -a x$have_li
 AM_CONDITIONAL([WITH_DYN_LIBV4L],   [test x$enable_dyn_libv4l != xno])
 AM_CONDITIONAL([WITH_V4LUTILS],	    [test x$enable_v4l_utils != xno -a x$linux_os = xyes])
 AM_CONDITIONAL([WITH_QV4L2],	    [test x${qt_pkgconfig} = xtrue -a x$enable_qv4l2 != xno])
+AM_CONDITIONAL([WITH_QVIDCAP],	    [test x${qt_pkgconfig_gl} = xtrue -a x$enable_qvidcap != xno])
 AM_CONDITIONAL([WITH_V4L_PLUGINS],  [test x$enable_dyn_libv4l != xno -a x$enable_shared != xno])
 AM_CONDITIONAL([WITH_V4L_WRAPPERS], [test x$enable_dyn_libv4l != xno -a x$enable_shared != xno])
 AM_CONDITIONAL([WITH_QTGL],	    [test x${qt_pkgconfig_gl} = xtrue])
-AM_CONDITIONAL([WITH_GCONV],        [test x${enable_gconv} = xyes])
+AM_CONDITIONAL([WITH_GCONV],        [test x$enable_gconv = xyes -a x$enable_shared == xyes -a x$with_gconvdir != x -a -f $with_gconvdir/gconv-modules])
 AM_CONDITIONAL([WITH_V4L2_CTL_LIBV4L], [test x${enable_v4l2_ctl_libv4l} != xno])
 AM_CONDITIONAL([WITH_V4L2_CTL_STREAM_TO], [test x${enable_v4l2_ctl_stream_to} != xno])
 AM_CONDITIONAL([WITH_V4L2_COMPLIANCE_LIBV4L], [test x${enable_v4l2_compliance_libv4l} != xno])
@@ -485,6 +529,11 @@ AS_IF([test "x$alsa_pkgconfig" = "xtrue"], [USE_ALSA="yes"], [USE_ALSA="no"])
 
 AC_OUTPUT
 
+if test x$enable_gconv = xyes -a x$USE_GCONV = xno; then
+	echo
+	echo "Failed to enable gconv. Disabling it"
+fi
+
 dnl ---------------------------------------------------------------------
 dnl compile time options summary
 
@@ -497,6 +546,7 @@ compile time options summary
     X11                        : $x11_pkgconfig
     GL                         : $gl_pkgconfig
     glu                        : $glu_pkgconfig
+    libelf		       : $libelf_pkgconfig
     libjpeg                    : $have_jpeg
     libudev                    : $have_libudev
     pthread                    : $have_pthread
