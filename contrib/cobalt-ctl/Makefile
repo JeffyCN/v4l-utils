@@ -93,10 +93,14 @@ subdir = contrib/cobalt-ctl
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/ac_define_dir.m4 \
 	$(top_srcdir)/m4/ax_prog_doxygen.m4 \
-	$(top_srcdir)/m4/ax_pthread.m4 $(top_srcdir)/m4/libtool.m4 \
-	$(top_srcdir)/m4/ltoptions.m4 $(top_srcdir)/m4/ltsugar.m4 \
-	$(top_srcdir)/m4/ltversion.m4 $(top_srcdir)/m4/lt~obsolete.m4 \
-	$(top_srcdir)/m4/mode_t.m4 $(top_srcdir)/configure.ac
+	$(top_srcdir)/m4/ax_pthread.m4 $(top_srcdir)/m4/gettext.m4 \
+	$(top_srcdir)/m4/iconv.m4 $(top_srcdir)/m4/lib-ld.m4 \
+	$(top_srcdir)/m4/lib-link.m4 $(top_srcdir)/m4/lib-prefix.m4 \
+	$(top_srcdir)/m4/libtool.m4 $(top_srcdir)/m4/ltoptions.m4 \
+	$(top_srcdir)/m4/ltsugar.m4 $(top_srcdir)/m4/ltversion.m4 \
+	$(top_srcdir)/m4/lt~obsolete.m4 $(top_srcdir)/m4/mode_t.m4 \
+	$(top_srcdir)/m4/nls.m4 $(top_srcdir)/m4/po.m4 \
+	$(top_srcdir)/m4/progtest.m4 $(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 DIST_COMMON = $(srcdir)/Makefile.am $(am__DIST_COMMON)
@@ -214,7 +218,7 @@ DX_DOT = /usr/bin/dot
 DX_DOXYGEN = /usr/bin/doxygen
 DX_DVIPS = 
 DX_EGREP = /bin/egrep
-DX_ENV =  SRCDIR='.' PROJECT='v4l-utils' DOCDIR='doxygen-doc' VERSION='1.16.0' PERL_PATH='/usr/bin/perl' HAVE_DOT='YES' DOT_PATH='/usr/bin' GENERATE_MAN='NO' GENERATE_RTF='NO' GENERATE_XML='NO' GENERATE_HTMLHELP='NO' GENERATE_CHI='NO' GENERATE_HTML='YES' GENERATE_LATEX='NO'
+DX_ENV =  SRCDIR='.' PROJECT='v4l-utils' DOCDIR='doxygen-doc' VERSION='1.16.1' PERL_PATH='/usr/bin/perl' HAVE_DOT='YES' DOT_PATH='/usr/bin' GENERATE_MAN='NO' GENERATE_RTF='NO' GENERATE_XML='NO' GENERATE_HTMLHELP='NO' GENERATE_CHI='NO' GENERATE_HTML='YES' GENERATE_LATEX='NO'
 DX_FLAG_chi = 0
 DX_FLAG_chm = 0
 DX_FLAG_doc = 1
@@ -299,11 +303,11 @@ OTOOL64 =
 PACKAGE = v4l-utils
 PACKAGE_BUGREPORT = 
 PACKAGE_NAME = v4l-utils
-PACKAGE_STRING = v4l-utils 1.16.0
+PACKAGE_STRING = v4l-utils 1.16.1
 PACKAGE_TARNAME = v4l-utils
 PACKAGE_URL = 
-PACKAGE_VERSION = 1.16.0
-PATCH = 0
+PACKAGE_VERSION = 1.16.1
+PATCH = 1
 PATH_SEPARATOR = :
 PKG_CONFIG = /usr/bin/pkg-config
 PKG_CONFIG_LIBDIR = 
@@ -331,7 +335,7 @@ STRIP = strip
 UIC = uic
 USE_NLS = yes
 V4L_UTILS_VERSION = 
-VERSION = 1.16.0
+VERSION = 1.16.1
 X11_CFLAGS = 
 X11_LIBS = -lX11
 XGETTEXT = /usr/bin/xgettext
