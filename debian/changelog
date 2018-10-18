@@ -1,8 +1,8 @@
-v4l-utils (1.16.0-1) unstable; urgency=medium
+v4l-utils (1.16.1-1) unstable; urgency=low
 
-  * Imported Upstream version 1.16.0
+  * Imported Upstream version 1.16.1
 
- -- Gregor Jasny <gjasny@googlemail.com>  Sat, 06 Oct 2018 13:57:50 +0200
+ -- Gregor Jasny <gjasny@googlemail.com>  Thu, 18 Oct 2018 20:18:22 +0200
 
 v4l-utils (1.14.2-1) unstable; urgency=medium
 
