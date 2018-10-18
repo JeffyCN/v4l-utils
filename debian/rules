@@ -9,7 +9,7 @@ CONFIGURE_FLAGS += --enable-doxygen-man --disable-doxygen-ps --disable-doxygen-p
 CONFIGURE_FLAGS += --disable-qvidcap
 
 %:
-	dh $@ --parallel --with autoreconf
+	dh $@ --with autoreconf
 
 override_dh_autoreconf:
 	dh_autoreconf ./bootstrap.sh
