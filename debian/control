@@ -201,6 +201,17 @@ Description: Test bench application for video4linux devices
  Qt v4l2 control panel application. You can change all through the v4l2
  interface exposed device controls.
 
+Package: qvidcap
+Section: utils
+Architecture: linux-any
+Depends: libv4l-0 (= ${binary:Version}),
+         ${shlibs:Depends},
+         ${misc:Depends}
+Description: V4L2 video capture viewer
+ Use the qvidcap application to test video4linux capture devices,
+ either with a real video device, a file, or over network.
+ It can also serve as a generic video/TV viewer application.
+
 Package: ir-keytable
 Section: utils
 Architecture: linux-any

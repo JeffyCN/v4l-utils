@@ -6,7 +6,6 @@ export DEB_BUILD_MAINT_OPTIONS = hardening=+bindnow
 
 # latex generation seems to be broken
 CONFIGURE_FLAGS += --enable-doxygen-man --disable-doxygen-ps --disable-doxygen-pdf
-CONFIGURE_FLAGS += --disable-qvidcap
 
 %:
 	dh $@ --with autoreconf
@@ -28,10 +27,10 @@ override_dh_install:
 	dh_install --list-missing
 
 override_dh_installchangelogs:
-	dh_installchangelogs -Nlibv4l-dev -Nv4l-utils -Nqv4l2 ChangeLog
+	dh_installchangelogs -Nlibv4l-dev -Nv4l-utils -Nqv4l2 -Nqvidcap ChangeLog
 
 override_dh_installdocs:
-	dh_installdocs -Nlibv4l-dev -Nv4l-utils -Nqv4l2
+	dh_installdocs -Nlibv4l-dev -Nv4l-utils -Nqv4l2 -Nqvidcap
 
 override_dh_makeshlibs:
 	dh_makeshlibs -Xv4l1compat -Xv4l2convert -Xlibv4l-mplane -Xrc_keymaps/protocols
