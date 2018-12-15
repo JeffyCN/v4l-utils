@@ -90,7 +90,8 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 bin_PROGRAMS = ir-keytable$(EXEEXT)
-@HAVE_LIBELF_TRUE@am__append_1 = bpf.c bpf_load.c bpf.h bpf_load.h
+@WITH_BPF_TRUE@am__append_1 = bpf.c bpf_load.c bpf.h bpf_load.h
+@WITH_BPF_TRUE@am__append_2 = $(LIBELF_LIBS)
 subdir = utils/keytable
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4/ac_define_dir.m4 \
@@ -116,7 +117,7 @@ am__installdirs = "$(DESTDIR)$(bindir)" "$(DESTDIR)$(man1dir)" \
 PROGRAMS = $(bin_PROGRAMS)
 am__ir_keytable_SOURCES_DIST = keytable.c parse.h ir-encode.c \
 	ir-encode.h toml.c toml.h bpf.c bpf_load.c bpf.h bpf_load.h
-@HAVE_LIBELF_TRUE@am__objects_1 = bpf.$(OBJEXT) bpf_load.$(OBJEXT)
+@WITH_BPF_TRUE@am__objects_1 = bpf.$(OBJEXT) bpf_load.$(OBJEXT)
 am_ir_keytable_OBJECTS = keytable.$(OBJEXT) ir-encode.$(OBJEXT) \
 	toml.$(OBJEXT) $(am__objects_1)
 ir_keytable_OBJECTS = $(am_ir_keytable_OBJECTS)
@@ -501,8 +502,8 @@ udevrules_DATA = 70-infrared.rules
 ir_keytable_SOURCES = keytable.c parse.h ir-encode.c ir-encode.h \
 	toml.c toml.h $(am__append_1)
 ir_keytable_LDADD = @LIBINTL@
-ir_keytable_LDFLAGS = $(ARGP_LIBS) $(LIBELF_LIBS)
-@BPF_PROTOCOLS_TRUE@SUBDIRS = bpf_protocols
+ir_keytable_LDFLAGS = $(ARGP_LIBS) $(am__append_2)
+@WITH_BPF_TRUE@SUBDIRS = bpf_protocols
 EXTRA_DIST = 70-infrared.rules rc_keymaps rc_keymaps_userspace gen_keytables.pl ir-keytable.1 rc_maps.cfg
 all: all-recursive
 

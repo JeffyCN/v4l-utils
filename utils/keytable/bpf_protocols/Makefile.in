@@ -566,7 +566,7 @@ uninstall-am:
 
 
 %.o: %.c bpf_helpers.h
-	$(CLANG) $(CLANG_SYS_INCLUDES) -I$(top_srcdir)/include -target bpf -O2 -c $<
+	$(CLANG) $(CLANG_SYS_INCLUDES) -D__linux__ -I$(top_srcdir)/include -target bpf -O2 -c $<
 
 all: $(PROTOCOLS)
 
