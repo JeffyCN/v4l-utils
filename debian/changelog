@@ -1,3 +1,12 @@
+v4l-utils (1.16.3-1) unstable; urgency=medium
+
+  * Imported Upstream version 1.16.3
+  * Remove patches applied upstream
+  * Avoid clang build dependency on architectures
+    where it does not exist
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Sat, 15 Dec 2018 19:34:33 +0100
+
 v4l-utils (1.16.1-2) unstable; urgency=medium
 
   [ Helmut Grohne ]
