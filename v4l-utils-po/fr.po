@@ -3,7 +3,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: v4l-utils 1.8.1\n"
 "Report-Msgid-Bugs-To: linux-media@vger.Kernel.org\n"
-"POT-Creation-Date: 2018-10-18 20:14+0200\n"
+"POT-Creation-Date: 2018-11-09 14:18+0100\n"
 "PO-Revision-Date: 2015-11-25 05:37+0000\n"
 "Last-Translator: Maxim Therrien <acerspyro@gmail.com>\n"
 "Language-Team: French\n"
@@ -14,7 +14,7 @@ msgstr ""
 "X-Generator: Zanata 4.6.2\n"
 "Plural-Forms: nplurals=2; plural=(n > 1)\n"
 
-#: utils/keytable/keytable.c:225
+#: utils/keytable/keytable.c:228
 #, fuzzy
 msgid ""
 "\n"
@@ -61,43 +61,43 @@ msgstr ""
 "\n"
 "Les options peuvent être combinées ensemble."
 
-#: utils/keytable/keytable.c:243 utils/dvb/dvb-fe-tool.c:56
+#: utils/keytable/keytable.c:246 utils/dvb/dvb-fe-tool.c:56
 msgid "enables debug messages"
 msgstr "activer les messages de déboguage"
 
-#: utils/keytable/keytable.c:244
+#: utils/keytable/keytable.c:247
 msgid "clears the old table"
 msgstr "efface l'ancienne table"
 
-#: utils/keytable/keytable.c:245
+#: utils/keytable/keytable.c:248
 msgid "SYSDEV"
 msgstr "SYSDEV"
 
-#: utils/keytable/keytable.c:245
+#: utils/keytable/keytable.c:248
 msgid "ir class device to control"
 msgstr "périphérique de classe infrarouge à controller"
 
-#: utils/keytable/keytable.c:246
+#: utils/keytable/keytable.c:249
 msgid "test if IR is generating events"
 msgstr "tester si l'infrarouge génère des évènements"
 
-#: utils/keytable/keytable.c:247 utils/ir-ctl/ir-ctl.c:103
+#: utils/keytable/keytable.c:250 utils/ir-ctl/ir-ctl.c:103
 msgid "DEV"
 msgstr "DEV"
 
-#: utils/keytable/keytable.c:247
+#: utils/keytable/keytable.c:250
 msgid "ir device to control"
 msgstr "périphérique infrarouge à controller"
 
-#: utils/keytable/keytable.c:248
+#: utils/keytable/keytable.c:251
 msgid "reads the current scancode/keycode table"
 msgstr "lit la table de scancodes/keycodes actuelle"
 
-#: utils/keytable/keytable.c:249
+#: utils/keytable/keytable.c:252
 msgid "TABLE"
 msgstr "TABLE"
 
-#: utils/keytable/keytable.c:249
+#: utils/keytable/keytable.c:252
 msgid ""
 "write (adds) the scancodes to the device scancode/keycode table from an "
 "specified file"
@@ -105,19 +105,19 @@ msgstr ""
 "écrit (ajoute) les scancodes à la table de scancodes/keycodes du "
 "périphérique à partir d'un fichier spécifié"
 
-#: utils/keytable/keytable.c:250
+#: utils/keytable/keytable.c:253
 msgid "SCANKEY"
 msgstr "SCANKEY"
 
-#: utils/keytable/keytable.c:250
+#: utils/keytable/keytable.c:253
 msgid "Change scan/key pairs"
 msgstr "Change les paires de scan/touche"
 
-#: utils/keytable/keytable.c:251
+#: utils/keytable/keytable.c:254
 msgid "PROTOCOL"
 msgstr "PROTOCOL"
 
-#: utils/keytable/keytable.c:251
+#: utils/keytable/keytable.c:254
 msgid ""
 "Protocol to enable (the other ones will be disabled). To enable more than "
 "one, use the option more than one time"
@@ -125,35 +125,35 @@ msgstr ""
 "Protocole à activer (les autres seront désactivés). Pour activer plus d'un "
 "protocole, utilisez l'option plus d'une fois"
 
-#: utils/keytable/keytable.c:252
+#: utils/keytable/keytable.c:255
 msgid "PARAMETER"
 msgstr ""
 
-#: utils/keytable/keytable.c:252
+#: utils/keytable/keytable.c:255
 msgid "Set a parameter for the protocol decoder"
 msgstr ""
 
-#: utils/keytable/keytable.c:253
+#: utils/keytable/keytable.c:256
 msgid "DELAY"
 msgstr "DELAY"
 
-#: utils/keytable/keytable.c:253
+#: utils/keytable/keytable.c:256
 msgid "Sets the delay before repeating a keystroke"
 msgstr "Définit le délai avant de répéter une touche"
 
-#: utils/keytable/keytable.c:254
+#: utils/keytable/keytable.c:257
 msgid "PERIOD"
 msgstr "PERIOD"
 
-#: utils/keytable/keytable.c:254
+#: utils/keytable/keytable.c:257
 msgid "Sets the period to repeat a keystroke"
 msgstr "Définit une période au cours de laquelle répéter une touche"
 
-#: utils/keytable/keytable.c:255
+#: utils/keytable/keytable.c:258
 msgid "CFGFILE"
 msgstr "CFGFILE"
 
-#: utils/keytable/keytable.c:255
+#: utils/keytable/keytable.c:258
 #, fuzzy
 msgid ""
 "Auto-load a table, based on a configuration file. Only works with sysdev."
@@ -161,25 +161,25 @@ msgstr ""
 "Charger une table automatiquement, basé sur un fichier de configuration. Ne "
 "fonctionne qu'avec sysdev."
 
-#: utils/keytable/keytable.c:256 utils/dvb/dvb-fe-tool.c:70
+#: utils/keytable/keytable.c:259 utils/dvb/dvb-fe-tool.c:70
 #: utils/dvb/dvb-format-convert.c:62 utils/dvb/dvbv5-scan.c:93
 #: utils/dvb/dvbv5-zap.c:134
 msgid "Give this help list"
 msgstr "Donne cette liste d'aide"
 
-#: utils/keytable/keytable.c:257 utils/dvb/dvb-fe-tool.c:71
+#: utils/keytable/keytable.c:260 utils/dvb/dvb-fe-tool.c:71
 #: utils/dvb/dvb-format-convert.c:63 utils/dvb/dvbv5-scan.c:94
 #: utils/dvb/dvbv5-zap.c:135
 msgid "Give a short usage message"
 msgstr "Donne un court message d'aide à l'utilisation"
 
-#: utils/keytable/keytable.c:258 utils/dvb/dvb-fe-tool.c:72
+#: utils/keytable/keytable.c:261 utils/dvb/dvb-fe-tool.c:72
 #: utils/dvb/dvb-format-convert.c:64 utils/dvb/dvbv5-scan.c:95
 #: utils/dvb/dvbv5-zap.c:136
 msgid "Print program version"
 msgstr "Imprime la version du programme"
 
-#: utils/keytable/keytable.c:263
+#: utils/keytable/keytable.c:266
 #, fuzzy
 msgid ""
 "--device [/dev/input/event* device]\n"
@@ -190,169 +190,169 @@ msgstr ""
 "--sysdev [classe infrarouge (p. ex. rc0)]\n"
 "[pour utiliser le sysdev rc0]"
 
-#: utils/keytable/keytable.c:380
+#: utils/keytable/keytable.c:383
 #, fuzzy, c-format
 msgid "Parsing %s keycode file as plain text\n"
 msgstr "Analyse du fichier de keycodes %s\n"
 
-#: utils/keytable/keytable.c:415
+#: utils/keytable/keytable.c:418
 #, c-format
 msgid "Protocol %s invalid\n"
 msgstr "Protocole %s invalide\n"
 
-#: utils/keytable/keytable.c:446 utils/keytable/keytable.c:541
+#: utils/keytable/keytable.c:449 utils/keytable/keytable.c:544
 #, c-format
 msgid "parsing %s=%s:"
 msgstr "analyse de %s=%s:"
 
-#: utils/keytable/keytable.c:449 utils/keytable/keytable.c:545
+#: utils/keytable/keytable.c:452 utils/keytable/keytable.c:548
 #, c-format
 msgid "\tvalue=%d\n"
 msgstr "\tvaleur=%d\n"
 
-#: utils/keytable/keytable.c:454
+#: utils/keytable/keytable.c:457
 msgid "value"
 msgstr "valeur"
 
-#: utils/keytable/keytable.c:473 utils/keytable/keytable.c:699
+#: utils/keytable/keytable.c:476 utils/keytable/keytable.c:702
 #, c-format
 msgid "Invalid parameter on line %d of %s\n"
 msgstr "Paramètre invalide à la ligne %d du fichier %s\n"
 
-#: utils/keytable/keytable.c:488
+#: utils/keytable/keytable.c:491
 #, fuzzy, c-format
 msgid "protocol missing\n"
 msgstr "Protocole %s invalide\n"
 
-#: utils/keytable/keytable.c:493
+#: utils/keytable/keytable.c:496
 #, c-format
 msgid "Bad value `%s' for protocol\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:514
+#: utils/keytable/keytable.c:517
 #, c-format
 msgid "No [protocols.scancodes] section\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:530
+#: utils/keytable/keytable.c:533
 #, fuzzy, c-format
 msgid "Invalid value `%s'\n"
 msgstr "Paramètre(s) invalide(s)\n"
 
-#: utils/keytable/keytable.c:535
+#: utils/keytable/keytable.c:538
 #, c-format
 msgid "Bad value `%s' for keycode\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:550
+#: utils/keytable/keytable.c:553
 #, c-format
 msgid "keycode `%s' not recognised, no mapping for scancode %s\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:580
+#: utils/keytable/keytable.c:583
 #, fuzzy, c-format
 msgid "Parsing %s keycode file as toml\n"
 msgstr "Analyse du fichier de keycodes %s\n"
 
-#: utils/keytable/keytable.c:589
+#: utils/keytable/keytable.c:592
 #, c-format
 msgid "Failed to parse toml: %s\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:595
+#: utils/keytable/keytable.c:598
 #, c-format
 msgid "Missing [protocols] section\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:612
+#: utils/keytable/keytable.c:615
 #, fuzzy, c-format
 msgid "No protocols found\n"
 msgstr "Protocole %s invalide\n"
 
-#: utils/keytable/keytable.c:644
+#: utils/keytable/keytable.c:647
 #, c-format
 msgid "Parsing %s config file\n"
 msgstr "Analyse du fichier de configuration %s\n"
 
-#: utils/keytable/keytable.c:648
+#: utils/keytable/keytable.c:651
 msgid "opening keycode file"
 msgstr "ouverture du fichier de keycodes"
 
-#: utils/keytable/keytable.c:675
+#: utils/keytable/keytable.c:678
 #, c-format
 msgid "Driver %s, Table %s => file %s\n"
 msgstr "Pilote %s, Table %s => fichier %s\n"
 
-#: utils/keytable/keytable.c:724
+#: utils/keytable/keytable.c:727
 #, c-format
 msgid "Invalid delay: %s"
 msgstr ""
 
-#: utils/keytable/keytable.c:729
+#: utils/keytable/keytable.c:732
 #, fuzzy, c-format
 msgid "Invalid period: %s"
 msgstr "Paramètre(s) invalide(s)\n"
 
-#: utils/keytable/keytable.c:745
+#: utils/keytable/keytable.c:748
 #, c-format
 msgid "Failed to read table file %s"
 msgstr ""
 
-#: utils/keytable/keytable.c:747
+#: utils/keytable/keytable.c:750
 #, fuzzy, c-format
 msgid "Read %s table\n"
 msgstr "Lire la table %s\n"
 
-#: utils/keytable/keytable.c:753
+#: utils/keytable/keytable.c:756
 #, c-format
 msgid "Failed to read config file %s"
 msgstr ""
 
-#: utils/keytable/keytable.c:762
+#: utils/keytable/keytable.c:765
 #, c-format
 msgid "Missing scancode: %s"
 msgstr ""
 
-#: utils/keytable/keytable.c:768 utils/keytable/keytable.c:839
+#: utils/keytable/keytable.c:771 utils/keytable/keytable.c:842
 #, fuzzy
 msgid "No memory!\n"
 msgstr "Aucune mémoire!\n"
 
-#: utils/keytable/keytable.c:775
+#: utils/keytable/keytable.c:778
 #, c-format
 msgid "Invalid scancode: %s"
 msgstr ""
 
-#: utils/keytable/keytable.c:782
+#: utils/keytable/keytable.c:785
 #, fuzzy
 msgid "Missing keycode"
 msgstr "ouverture du fichier de keycodes"
 
-#: utils/keytable/keytable.c:791 utils/keytable/keytable.c:855
+#: utils/keytable/keytable.c:794 utils/keytable/keytable.c:858
 #, c-format
 msgid "Unknown keycode: %s"
 msgstr ""
 
-#: utils/keytable/keytable.c:799
+#: utils/keytable/keytable.c:802
 #, c-format
 msgid "scancode 0x%04x=%u\n"
 msgstr "scancode 0x%04x=%u\n"
 
-#: utils/keytable/keytable.c:833
+#: utils/keytable/keytable.c:836
 #, c-format
 msgid "Missing parameter name: %s"
 msgstr ""
 
-#: utils/keytable/keytable.c:848
+#: utils/keytable/keytable.c:851
 msgid "Missing value"
 msgstr ""
 
-#: utils/keytable/keytable.c:860
+#: utils/keytable/keytable.c:863
 #, c-format
 msgid "parameter %s=%d\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:874 utils/dvb/dvb-fe-tool.c:160
+#: utils/keytable/keytable.c:877 utils/dvb/dvb-fe-tool.c:160
 #: utils/dvb/dvb-format-convert.c:88 utils/dvb/dvbv5-scan.c:421
 #: utils/dvb/dvbv5-zap.c:714
 #, c-format
@@ -363,408 +363,408 @@ msgstr ""
 "\n"
 "Rapporter les bogues à %s.\n"
 
-#: utils/keytable/keytable.c:902
+#: utils/keytable/keytable.c:905
 #, c-format
 msgid "scancode 0x%04x = %s (0x%02x)\n"
 msgstr "scancode 0x%04x = %s (0x%02x)\n"
 
-#: utils/keytable/keytable.c:908
+#: utils/keytable/keytable.c:911
 #, c-format
 msgid "scancode 0x%04x = '%c' (0x%02x)\n"
 msgstr "scancode 0x%04x = '%c' (0x%02x)\n"
 
-#: utils/keytable/keytable.c:910
+#: utils/keytable/keytable.c:913
 #, c-format
 msgid "scancode 0x%04x = 0x%02x\n"
 msgstr "scancode 0x%04x = 0x%02x\n"
 
-#: utils/keytable/keytable.c:961 utils/keytable/keytable.c:1368
+#: utils/keytable/keytable.c:964 utils/keytable/keytable.c:1371
 #, fuzzy, c-format
 msgid "Couldn't find any node at %s%s*.\n"
 msgstr "Impossible de trouver un noeud à %s%s*.\n"
 
-#: utils/keytable/keytable.c:970
+#: utils/keytable/keytable.c:973
 #, fuzzy
 msgid "Seek dir"
 msgstr "Recherche de répertoire"
 
-#: utils/keytable/keytable.c:1002
+#: utils/keytable/keytable.c:1005
 #, c-format
 msgid "Parsing uevent %s\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1026
+#: utils/keytable/keytable.c:1029
 #, c-format
 msgid "Error on uevent information\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1042
+#: utils/keytable/keytable.c:1045
 #, c-format
 msgid "%s uevent %s=%s\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1071
+#: utils/keytable/keytable.c:1074
 #, c-format
 msgid "No devices found\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1077
+#: utils/keytable/keytable.c:1080
 #, c-format
 msgid "Found device %s\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1101
+#: utils/keytable/keytable.c:1104
 #, c-format
 msgid "Not found device %s\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1136
+#: utils/keytable/keytable.c:1139
 #, c-format
 msgid "%s protocol %s\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1201
+#: utils/keytable/keytable.c:1204
 #, c-format
 msgid "%s has invalid content: '%s'\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1208
+#: utils/keytable/keytable.c:1211
 #, c-format
 msgid "protocol %s is %s\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1209 utils/keytable/keytable.c:1276
+#: utils/keytable/keytable.c:1212 utils/keytable/keytable.c:1279
 msgid "enabled"
 msgstr ""
 
-#: utils/keytable/keytable.c:1209 utils/keytable/keytable.c:1276
+#: utils/keytable/keytable.c:1212 utils/keytable/keytable.c:1279
 msgid "disabled"
 msgstr ""
 
-#: utils/keytable/keytable.c:1275
+#: utils/keytable/keytable.c:1278
 #, c-format
 msgid "%s protocol %s (%s)\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1303
+#: utils/keytable/keytable.c:1306
 #, c-format
 msgid "Protocols for device can not be changed\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1360
+#: utils/keytable/keytable.c:1363
 #, c-format
 msgid "Found more than one input interface. This is currently unsupported\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1364
+#: utils/keytable/keytable.c:1367
 #, c-format
 msgid "Input sysfs node is %s\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1376
+#: utils/keytable/keytable.c:1379
 #, c-format
 msgid "Found more than one event interface. This is currently unsupported\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1380
+#: utils/keytable/keytable.c:1383
 #, c-format
 msgid "Event sysfs node is %s\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1399
+#: utils/keytable/keytable.c:1402
 #, c-format
 msgid "Input device name not found.\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1424
+#: utils/keytable/keytable.c:1427
 #, c-format
 msgid "input device is %s\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1502
+#: utils/keytable/keytable.c:1505
 #, c-format
 msgid "Unable to query evdev protocol version: %s\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1507
+#: utils/keytable/keytable.c:1510
 #, c-format
 msgid "Input Protocol version: 0x%08x\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1538
+#: utils/keytable/keytable.c:1541
 #, c-format
 msgid "Deleting entry %d\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1560
+#: utils/keytable/keytable.c:1563
 #, c-format
 msgid "Setting scancode 0x%04x with 0x%04x via "
 msgstr ""
 
-#: utils/keytable/keytable.c:1578
+#: utils/keytable/keytable.c:1581
 #, c-format
 msgid "Current kernel protocols: "
 msgstr ""
 
-#: utils/keytable/keytable.c:1580
+#: utils/keytable/keytable.c:1583
 #, c-format
 msgid "Enabled kernel protocols: "
 msgstr ""
 
-#: utils/keytable/keytable.c:1604
+#: utils/keytable/keytable.c:1607
 #, c-format
 msgid "%llu.%06llu: "
 msgstr ""
 
-#: utils/keytable/keytable.c:1609
+#: utils/keytable/keytable.c:1612
 #, c-format
 msgid "lirc protocol(%s): scancode = 0x%llx"
 msgstr ""
 
-#: utils/keytable/keytable.c:1612
+#: utils/keytable/keytable.c:1615
 #, c-format
 msgid "lirc protocol(%d): scancode = 0x%llx"
 msgstr ""
 
-#: utils/keytable/keytable.c:1616
+#: utils/keytable/keytable.c:1619
 #, c-format
 msgid " repeat"
 msgstr ""
 
-#: utils/keytable/keytable.c:1618
+#: utils/keytable/keytable.c:1621
 #, c-format
 msgid " toggle=1"
 msgstr ""
 
-#: utils/keytable/keytable.c:1639
+#: utils/keytable/keytable.c:1642
 msgid "Can't open lirc device"
 msgstr ""
 
-#: utils/keytable/keytable.c:1649
+#: utils/keytable/keytable.c:1652
 #, c-format
 msgid "Testing events. Please, press CTRL-C to abort.\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1660
+#: utils/keytable/keytable.c:1663
 msgid "poll returned error"
 msgstr ""
 
-#: utils/keytable/keytable.c:1669
+#: utils/keytable/keytable.c:1672
 msgid "Error reading lirc scancode"
 msgstr ""
 
-#: utils/keytable/keytable.c:1680
+#: utils/keytable/keytable.c:1683
 msgid "Error reading event"
 msgstr ""
 
-#: utils/keytable/keytable.c:1685
+#: utils/keytable/keytable.c:1688
 #, c-format
 msgid "%ld.%06ld: event type %s(0x%02x)"
 msgstr ""
 
-#: utils/keytable/keytable.c:1694
+#: utils/keytable/keytable.c:1697
 #, c-format
 msgid " key_%s: %s(0x%04x)\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1695
+#: utils/keytable/keytable.c:1698
 msgid "up"
 msgstr ""
 
-#: utils/keytable/keytable.c:1695
+#: utils/keytable/keytable.c:1698
 msgid "down"
 msgstr ""
 
-#: utils/keytable/keytable.c:1700 utils/keytable/keytable.c:1706
+#: utils/keytable/keytable.c:1703 utils/keytable/keytable.c:1709
 #, c-format
 msgid ": %s (0x%04x) value=%d\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1713
+#: utils/keytable/keytable.c:1716
 #, c-format
 msgid ": scancode = 0x%02x\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1715
+#: utils/keytable/keytable.c:1718
 #, c-format
 msgid ": code = %s(0x%02x), value = %d\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1720
+#: utils/keytable/keytable.c:1723
 #, c-format
 msgid ": value = %d\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1729
+#: utils/keytable/keytable.c:1732
 #, c-format
 msgid ": code = 0x%02x, value = %d\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1798
+#: utils/keytable/keytable.c:1801
 #, c-format
 msgid "Changed Repeat delay to %d ms and repeat period to %d ms\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1812
+#: utils/keytable/keytable.c:1815
 #, c-format
 msgid "Repeat delay = %d ms, repeat period = %d ms\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1831
+#: utils/keytable/keytable.c:1834
 #, c-format
 msgid "%sName: %.*s\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1844
+#: utils/keytable/keytable.c:1847
 #, c-format
 msgid "%sbus: %d, vendor/product: %04x:%04x, version: 0x%04x\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1870
+#: utils/keytable/keytable.c:1873
 #, c-format
 msgid "%s: not a raw IR receiver\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1908
+#: utils/keytable/keytable.c:1911
 #, c-format
 msgid "\tAttached BPF protocols: "
 msgstr ""
 
-#: utils/keytable/keytable.c:1926
+#: utils/keytable/keytable.c:1929
 #, c-format
 msgid "\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1929
+#: utils/keytable/keytable.c:1932
 #, c-format
 msgid "\tAttached BPF protocols: %m\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1964
+#: utils/keytable/keytable.c:1967
 #, c-format
 msgid "BPF protocol prog_id %d\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1968
+#: utils/keytable/keytable.c:1971
 #, c-format
 msgid "Failed to get BPF prog id %u: %m\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:1980
+#: utils/keytable/keytable.c:1983
 #, fuzzy, c-format
 msgid "BPF protocols removed\n"
 msgstr "Protocole %s invalide\n"
 
-#: utils/keytable/keytable.c:1985
+#: utils/keytable/keytable.c:1988
 #, c-format
 msgid "error: ir-keytable was compiled without BPF support\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:2003
+#: utils/keytable/keytable.c:2006
 #, c-format
 msgid "Found %s (%s) with:\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:2007
+#: utils/keytable/keytable.c:2010
 #, c-format
 msgid "\tName: %s\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:2009
+#: utils/keytable/keytable.c:2012
 #, fuzzy, c-format
 msgid "\tDriver: %s, table: %s\n"
 msgstr "Pilote %s, Table %s => fichier %s\n"
 
-#: utils/keytable/keytable.c:2013
+#: utils/keytable/keytable.c:2016
 #, c-format
 msgid "\tLIRC device: %s\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:2017
+#: utils/keytable/keytable.c:2020
 #, c-format
 msgid "\tSupported kernel protocols: "
 msgstr ""
 
-#: utils/keytable/keytable.c:2029
+#: utils/keytable/keytable.c:2032
 #, c-format
 msgid "\tExtra capabilities: <access denied>\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:2045 utils/keytable/keytable.c:2052
+#: utils/keytable/keytable.c:2048 utils/keytable/keytable.c:2055
 #, c-format
 msgid "asprintf failed: %m\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:2057
+#: utils/keytable/keytable.c:2060
 #, c-format
 msgid "Can't find %s bpf protocol in %s or %s\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:2101
+#: utils/keytable/keytable.c:2104
 msgid "Can't open device"
 msgstr ""
 
-#: utils/keytable/keytable.c:2119
+#: utils/keytable/keytable.c:2122
 #, c-format
 msgid "Auto-mode can be used only with --read, --debug and --sysdev options\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:2153
+#: utils/keytable/keytable.c:2156
 #, c-format
 msgid "Table for %s, %s not found. Keep as-is\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:2158
+#: utils/keytable/keytable.c:2161
 #, c-format
 msgid "Table for %s, %s is on %s file.\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:2165
+#: utils/keytable/keytable.c:2168
 #, c-format
 msgid "Can't load %s table\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:2182
+#: utils/keytable/keytable.c:2185
 #, c-format
 msgid "Can't load %s table from %s or %s\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:2187
+#: utils/keytable/keytable.c:2190
 #, c-format
 msgid "Empty table %s\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:2194
+#: utils/keytable/keytable.c:2197
 #, c-format
 msgid "Opening %s\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:2210
+#: utils/keytable/keytable.c:2213
 #, c-format
 msgid "Old keytable cleared\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:2218
+#: utils/keytable/keytable.c:2221
 #, c-format
 msgid "Wrote %d keycode(s) to driver\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:2229
+#: utils/keytable/keytable.c:2232
 #, c-format
 msgid "Couldn't change the IR protocols\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:2231
+#: utils/keytable/keytable.c:2234
 #, c-format
 msgid "Protocols changed to "
 msgstr ""
 
-#: utils/keytable/keytable.c:2241
+#: utils/keytable/keytable.c:2244
 #, c-format
 msgid "Error: unable to attach bpf program, lirc device name was not found\n"
 msgstr ""
 
-#: utils/keytable/keytable.c:2249
+#: utils/keytable/keytable.c:2252
 #, c-format
 msgid "Loaded BPF protocol %s\n"
 msgstr ""
