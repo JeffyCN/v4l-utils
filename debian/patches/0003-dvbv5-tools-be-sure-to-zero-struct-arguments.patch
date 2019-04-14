@@ -1,0 +1,50 @@
+Subject: dvbv5-tools: be sure to zero struct arguments
+Author: Mauro Carvalho Chehab <mchehab+samsung@kernel.org>
+Origin: upstream, https://git.linuxtv.org/v4l-utils.git/commit/?h=stable-1.16&id=faef148b1b67bd17f8aaaa79fd71746532c86e90
+Bug-Ubuntu: https://bugs.launchpad.net/bugs/1819650
+
+From 23e5056b0487acdaa56e5569952b5a8f344cf49b Mon Sep 17 00:00:00 2001
+Date: Thu, 14 Mar 2019 19:23:38 -0300
+
+Let's not let the arguments struct with some random value.
+
+Signed-off-by: Mauro Carvalho Chehab <mchehab+samsung@kernel.org>
+---
+ utils/dvb/dvb-format-convert.c | 2 +-
+ utils/dvb/dvbv5-scan.c         | 2 +-
+ utils/dvb/dvbv5-zap.c          | 2 +-
+ 3 files changed, 3 insertions(+), 3 deletions(-)
+
+--- a/utils/dvb/dvb-format-convert.c
++++ b/utils/dvb/dvb-format-convert.c
+@@ -123,7 +123,7 @@
+ 
+ int main(int argc, char **argv)
+ {
+-	struct arguments args;
++	struct arguments args = {};
+ 	int idx = -1, missing = 0;
+ 	const struct argp argp = {
+ 		.options = options,
+--- a/utils/dvb/dvbv5-scan.c
++++ b/utils/dvb/dvbv5-scan.c
+@@ -450,7 +450,7 @@
+ 
+ int main(int argc, char **argv)
+ {
+-	struct arguments args;
++	struct arguments args = {};
+ 	int err, lnb = -1,idx = -1;
+ 	struct dvb_device *dvb;
+ 	struct dvb_dev_list *dvb_dev;
+--- a/utils/dvb/dvbv5-zap.c
++++ b/utils/dvb/dvbv5-zap.c
+@@ -1018,7 +1018,7 @@
+ 
+ int main(int argc, char **argv)
+ {
+-	struct arguments args;
++	struct arguments args = {};
+ 	char *homedir = getenv("HOME");
+ 	char *channel = NULL;
+ 	int lnb = -1, idx = -1;

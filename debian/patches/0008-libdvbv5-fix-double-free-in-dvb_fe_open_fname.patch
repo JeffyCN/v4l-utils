@@ -1,0 +1,59 @@
+Subject: libdvbv5: fix double free in dvb_fe_open_fname
+Author: Andre Roth <neolynx@gmail.com>
+Origin: upstream, https://git.linuxtv.org/v4l-utils.git/commit/?h=stable-1.16&id=78057aaa784a922b4ac6af9f323b828f7a834581
+Bug-Ubuntu: https://bugs.launchpad.net/raspbian/+bug/1819650
+
+Since parms and fname is allocated outside of the function, do not free it.
+Use dvb_v5_free for freeing parms, it will free fname if required.
+
+Signed-off-by: Andre Roth <neolynx@gmail.com>
+Signed-off-by: Mauro Carvalho Chehab <mchehab+samsung@kernel.org>
+---
+ lib/libdvbv5/dvb-fe.c | 7 +------
+ 1 file changed, 1 insertion(+), 6 deletions(-)
+
+--- a/lib/libdvbv5/dvb-fe.c
++++ b/lib/libdvbv5/dvb-fe.c
+@@ -179,7 +179,7 @@
+ 
+ 	ret = dvb_fe_open_fname(parms, dvb_dev->path, flags);
+ 	if (ret < 0) {
+-		free(parms);
++		dvb_v5_free(parms);
+ 		return NULL;
+ 	}
+ 
+@@ -202,9 +202,7 @@
+ 
+ 	if (xioctl(fd, FE_GET_INFO, &parms->p.info) == -1) {
+ 		dvb_perror("FE_GET_INFO");
+-		dvb_v5_free(parms);
+ 		close(fd);
+-		free(fname);
+ 		return -errno;
+ 	}
+ 
+@@ -291,7 +289,6 @@
+ 		}
+ 		if (!parms->p.num_systems) {
+ 			dvb_logerr(_("delivery system not detected"));
+-			dvb_v5_free(parms);
+ 			close(fd);
+ 			return -EINVAL;
+ 		}
+@@ -302,7 +299,6 @@
+ 		dtv_prop.props = parms->dvb_prop;
+ 		if (xioctl(fd, FE_GET_PROPERTY, &dtv_prop) == -1) {
+ 			dvb_perror("FE_GET_PROPERTY");
+-			dvb_v5_free(parms);
+ 			close(fd);
+ 			return -errno;
+ 		}
+@@ -312,7 +308,6 @@
+ 
+ 		if (parms->p.num_systems == 0) {
+ 			dvb_logerr(_("driver returned 0 supported delivery systems!"));
+-			dvb_v5_free(parms);
+ 			close(fd);
+ 			return -EINVAL;
+ 		}
