@@ -1,3 +1,9 @@
+v4l-utils (1.16.3-2) unstable; urgency=medium
+
+  * Fix double-free and uninitailized memory issue. LP: #1819650
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Sun, 14 Apr 2019 14:30:26 +0200
+
 v4l-utils (1.16.3-1) unstable; urgency=medium
 
   * Imported Upstream version 1.16.3
