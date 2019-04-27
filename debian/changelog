@@ -1,3 +1,9 @@
+v4l-utils (1.16.3-3) unstable; urgency=medium
+
+  * Drop broken libdvbv5 patch (Closes: #927341)
+
+ -- Gregor Jasny <gjasny@googlemail.com>  Sat, 27 Apr 2019 22:45:54 +0200
+
 v4l-utils (1.16.3-2) unstable; urgency=medium
 
   * Fix double-free and uninitailized memory issue. LP: #1819650
