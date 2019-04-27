@@ -1,4 +1,3 @@
 dont-gererate-treeview.diff
 0003-dvbv5-tools-be-sure-to-zero-struct-arguments.patch
-0005-libdvbv5-leaks-and-double-free-in-dvb_fe_open_fname.patch
 0008-libdvbv5-fix-double-free-in-dvb_fe_open_fname.patch

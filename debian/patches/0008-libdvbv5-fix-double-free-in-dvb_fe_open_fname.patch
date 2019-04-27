@@ -14,16 +14,16 @@ Signed-off-by: Mauro Carvalho Chehab <mchehab+samsung@kernel.org>
 
 --- a/lib/libdvbv5/dvb-fe.c
 +++ b/lib/libdvbv5/dvb-fe.c
-@@ -179,7 +179,7 @@
+@@ -185,7 +185,7 @@
  
- 	ret = dvb_fe_open_fname(parms, dvb_dev->path, flags);
+ 	ret = dvb_fe_open_fname(parms, fname, flags);
  	if (ret < 0) {
 -		free(parms);
 +		dvb_v5_free(parms);
  		return NULL;
  	}
  
-@@ -202,9 +202,7 @@
+@@ -209,9 +209,7 @@
  
  	if (xioctl(fd, FE_GET_INFO, &parms->p.info) == -1) {
  		dvb_perror("FE_GET_INFO");
@@ -33,7 +33,7 @@ Signed-off-by: Mauro Carvalho Chehab <mchehab+samsung@kernel.org>
  		return -errno;
  	}
  
-@@ -291,7 +289,6 @@
+@@ -293,7 +291,6 @@
  		}
  		if (!parms->p.num_systems) {
  			dvb_logerr(_("delivery system not detected"));
@@ -41,7 +41,7 @@ Signed-off-by: Mauro Carvalho Chehab <mchehab+samsung@kernel.org>
  			close(fd);
  			return -EINVAL;
  		}
-@@ -302,7 +299,6 @@
+@@ -304,7 +301,6 @@
  		dtv_prop.props = parms->dvb_prop;
  		if (xioctl(fd, FE_GET_PROPERTY, &dtv_prop) == -1) {
  			dvb_perror("FE_GET_PROPERTY");
@@ -49,7 +49,7 @@ Signed-off-by: Mauro Carvalho Chehab <mchehab+samsung@kernel.org>
  			close(fd);
  			return -errno;
  		}
-@@ -312,7 +308,6 @@
+@@ -314,7 +310,6 @@
  
  		if (parms->p.num_systems == 0) {
  			dvb_logerr(_("driver returned 0 supported delivery systems!"));
