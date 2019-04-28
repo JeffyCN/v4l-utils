@@ -1627,6 +1627,16 @@ void *v4l2_mmap(void *start, size_t length, int prot, int flags, int fd,
 	void *result;
 
 	index = v4l2_get_index(fd);
+	if (index != -1 && devices[index].dev_ops->mmap) {
+		pthread_mutex_lock(&devices[index].stream_lock);
+		result = devices[index].dev_ops->mmap(
+				devices[index].dev_ops_priv, start,
+				length, prot, flags, fd, offset);
+
+		pthread_mutex_unlock(&devices[index].stream_lock);
+		return result;
+	}
+
 	if (index == -1 ||
 			/* Check if the mmap data matches our answer to QUERY_BUF. If it doesn't,
 			   let the kernel handle it (to allow for mmap-based non capture use) */
