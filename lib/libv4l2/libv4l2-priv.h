@@ -104,6 +104,7 @@ struct v4l2_dev_info {
 	void *plugin_library;
 	void *dev_ops_priv;
 	const struct libv4l_dev_ops *dev_ops;
+	int has_dmabuf_memory;
 };
 
 /* From v4l2-plugin.c */

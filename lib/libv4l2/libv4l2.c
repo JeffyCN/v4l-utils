@@ -538,7 +538,7 @@ static int v4l2_deactivate_read_stream(int index)
 
 static int v4l2_needs_conversion(int index)
 {
-	if (devices[index].convert == NULL)
+	if (devices[index].convert == NULL || devices[index].has_dmabuf_memory)
 		return 0;
 
 	return v4lconvert_needs_conversion(devices[index].convert,
@@ -1304,10 +1304,16 @@ no_capture_request:
 		struct v4l2_requestbuffers *req = arg;
 
 		/* IMPROVEME (maybe?) add support for userptr's? */
-		if (req->memory != V4L2_MEMORY_MMAP) {
+		if (req->memory != V4L2_MEMORY_MMAP && req->memory != V4L2_MEMORY_DMABUF) {
 			errno = EINVAL;
 			result = -1;
 			break;
+		}
+
+		if (req->memory == V4L2_MEMORY_DMABUF) {
+			devices[index].has_dmabuf_memory = 1;
+			V4L2_LOG("memory type is V4L2_MEMORY_DMABUF, "
+			         "buf conversion and mmap emulation are disabled\n");
 		}
 
 		result = v4l2_check_buffer_change_ok(index);
@@ -1562,6 +1568,14 @@ ssize_t v4l2_read(int fd, void *dest, size_t n)
 		goto leave;
 	}
 
+	if (!(devices[index].flags & V4L2_USE_READ_FOR_READ) &&
+	    devices[index].has_dmabuf_memory) {
+		V4L2_PERROR("memory type is V4L2_MEMORY_DMABUF, "
+		            "no support v4l2 read\n");
+		errno = EINVAL;
+		return -1;
+	}
+
 	/* Since we need to do conversion try to use mmap (streaming) mode under
 	   the hood as that safes a memcpy for each frame read.
 
@@ -1626,6 +1640,7 @@ void *v4l2_mmap(void *start, size_t length, int prot, int flags, int fd,
 	void *result;
 
 	index = v4l2_get_index(fd);
+
 	if (index != -1 && devices[index].dev_ops->mmap) {
 		pthread_mutex_lock(&devices[index].stream_lock);
 		result = devices[index].dev_ops->mmap(
@@ -1635,6 +1650,10 @@ void *v4l2_mmap(void *start, size_t length, int prot, int flags, int fd,
 		pthread_mutex_unlock(&devices[index].stream_lock);
 		return result;
 	}
+
+        if (index != -1 && devices[index].has_dmabuf_memory) {
+                return (void *)SYS_MMAP(start, length, prot, flags, fd, offset);
+        }
 
 	if (index == -1 ||
 			/* Check if the mmap data matches our answer to QUERY_BUF. If it doesn't,
