@@ -540,6 +540,17 @@ static int buf_ioctl(int fd, unsigned long int cmd, struct v4l2_buffer *arg)
 	return ret;
 }
 
+static int exbuf_ioctl(int fd, unsigned long int cmd, struct v4l2_exportbuffer *arg)
+{
+	if (arg->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE ||
+		arg->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) {
+		errno = EINVAL;
+		return -1;
+	}
+	arg->type = convert_type(arg->type);
+	return SYS_IOCTL(fd, cmd, arg);
+}
+
 static int plugin_ioctl(void *dev_ops_priv, int fd,
 			unsigned long int cmd, void *arg)
 {
@@ -581,7 +592,8 @@ static int plugin_ioctl(void *dev_ops_priv, int fd,
 
 		return SYS_IOCTL(fd, cmd, &type);
 	}
-	/* CASE VIDIOC_EXPBUF: */
+	case VIDIOC_EXPBUF:
+		return exbuf_ioctl(fd, cmd, arg);
 	default:
 		return SYS_IOCTL(fd, cmd, arg);
 	}
