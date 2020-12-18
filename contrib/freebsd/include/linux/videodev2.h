@@ -102,7 +102,7 @@ typedef int8_t __s8;
  * Common stuff for both V4L1 and V4L2
  * Moved from videodev.h
  */
-#define VIDEO_MAX_FRAME               32
+#define VIDEO_MAX_FRAME                64
 #define VIDEO_MAX_PLANES               8
 
 /*
