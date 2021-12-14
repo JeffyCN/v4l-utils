@@ -68,6 +68,11 @@ v4l2_utils_incdir_arr = [
     'lib' / 'include',
 ]
 
+builtin_plugins = get_option('v4l2-builtin-plugins')
+if builtin_plugins
+    conf.set('HAVE_V4L_BUILTIN_PLUGINS', 1)
+endif
+
 if host_machine.system() == 'linux'
     v4l2_utils_incdir_arr += 'include'
 elif host_machine.system() == 'freebsd'

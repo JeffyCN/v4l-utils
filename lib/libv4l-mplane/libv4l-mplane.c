@@ -610,7 +610,11 @@ static ssize_t plugin_write(void *dev_ops_priv, int fd, const void *buf,
 	return SYS_WRITE(fd, buf, len);
 }
 
+#ifdef HAVE_V4L_BUILTIN_PLUGINS
+const struct libv4l_dev_ops libv4l2_plugin_mplane = {
+#else
 PLUGIN_PUBLIC const struct libv4l_dev_ops libv4l2_plugin = {
+#endif
 	.init = &plugin_init,
 	.close = &plugin_close,
 	.ioctl = &plugin_ioctl,

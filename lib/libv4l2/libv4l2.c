@@ -69,6 +69,8 @@
 #include "libv4l2-priv.h"
 #include "libv4l-plugin.h"
 
+#define ARRAY_SIZE(x) (sizeof(x) / sizeof((x)[0]))
+
 /* Note these flags are stored together with the flags passed to v4l2_fd_open()
    in v4l2_dev_info's flags member, so care should be taken that the do not
    use the same bits! */
@@ -611,6 +613,77 @@ static void v4l2_update_fps(int index, struct v4l2_streamparm *parm)
 		devices[index].fps = fps;
 	} else
 		devices[index].fps = 0;
+}
+
+#ifdef HAVE_V4L_BUILTIN_PLUGINS
+extern const struct libv4l_dev_ops libv4l2_plugin_mplane;
+
+void v4l2_builtin_plugin_init(int fd, void **plugin_priv_ret,
+			      const struct libv4l_dev_ops **dev_ops_ret)
+{
+	const struct libv4l_dev_ops *builtin_plugins[] = {
+		&libv4l2_plugin_mplane,
+	};
+	const struct libv4l_dev_ops *libv4l2_plugin = NULL;
+	int i;
+
+	*dev_ops_ret = NULL;
+	*plugin_priv_ret = NULL;
+
+	for (i = 0; i < ARRAY_SIZE(builtin_plugins); i++) {
+		V4L2_LOG("PLUGIN: try builtin(%d);\n", i);
+
+		libv4l2_plugin = builtin_plugins[i];
+
+		if (!libv4l2_plugin->init ||
+		    !libv4l2_plugin->close ||
+		    !libv4l2_plugin->ioctl) {
+			V4L2_LOG("PLUGIN: does not have all mandatory ops\n");
+			continue;
+		}
+
+		*plugin_priv_ret = libv4l2_plugin->init(fd);
+		if (!*plugin_priv_ret) {
+			V4L2_LOG("PLUGIN: plugin init() returned NULL\n");
+			continue;
+		}
+
+		*dev_ops_ret = libv4l2_plugin;
+		break;
+	}
+}
+
+void v4l2_builtin_plugin_cleanup(void *plugin_priv,
+				 const struct libv4l_dev_ops *dev_ops)
+{
+	dev_ops->close(plugin_priv);
+}
+#endif /* HAVE_V4L_PLUGINS */
+
+void v4l2_plugin_init(int fd, void **plugin_lib_ret, void **plugin_priv_ret,
+		      const struct libv4l_dev_ops **dev_ops_ret)
+{
+#ifdef HAVE_V4L_BUILTIN_PLUGINS
+	*plugin_lib_ret = NULL;
+	v4l2_builtin_plugin_init(fd, plugin_priv_ret, dev_ops_ret);
+	if (*dev_ops_ret)
+		return;
+#endif
+
+	v4l2_dyn_plugin_init(fd, plugin_lib_ret, plugin_priv_ret, dev_ops_ret);
+}
+
+void v4l2_plugin_cleanup(void *plugin_lib, void *plugin_priv,
+			 const struct libv4l_dev_ops *dev_ops)
+{
+#ifdef HAVE_V4L_BUILTIN_PLUGINS
+	if (!plugin_lib) {
+		v4l2_builtin_plugin_cleanup(plugin_priv, dev_ops);
+		return;
+	}
+#endif
+
+	v4l2_dyn_plugin_cleanup(plugin_lib, plugin_priv, dev_ops);
 }
 
 int v4l2_open(const char *file, int oflag, ...)

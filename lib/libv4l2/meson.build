@@ -25,6 +25,9 @@ if get_option('v4l-plugins')
         '-DHAVE_V4L_PLUGINS',
         '-DLIBV4L2_PLUGIN_DIR="@0@"'.format(libv4l2plugindir)
     ]
+    if builtin_plugins
+        libv4l2_deps += dep_libv4l_mplane
+    endif
 endif
 
 if have_visibility

@@ -47,8 +47,8 @@
 
 #define PLUGINS_PATTERN LIBV4L2_PLUGIN_DIR "/*.so"
 
-void v4l2_plugin_init(int fd, void **plugin_lib_ret, void **plugin_priv_ret,
-		      const struct libv4l_dev_ops **dev_ops_ret)
+void v4l2_dyn_plugin_init(int fd, void **plugin_lib_ret, void **plugin_priv_ret,
+			  const struct libv4l_dev_ops **dev_ops_ret)
 {
 	char *error;
 	int glob_ret, i;
@@ -109,8 +109,8 @@ leave:
 	globfree(&globbuf);
 }
 
-void v4l2_plugin_cleanup(void *plugin_lib, void *plugin_priv,
-			 const struct libv4l_dev_ops *dev_ops)
+void v4l2_dyn_plugin_cleanup(void *plugin_lib, void *plugin_priv,
+			     const struct libv4l_dev_ops *dev_ops)
 {
 	if (plugin_lib) {
 		dev_ops->close(plugin_priv);

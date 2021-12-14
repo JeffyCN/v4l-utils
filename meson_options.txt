@@ -34,6 +34,8 @@ option('v4l2-ctl-libv4l', type : 'boolean',
        description : 'Enable use of libv4l in v4l2-ctl')
 option('v4l2-ctl-stream-to', type : 'boolean',
        description : 'Enable use of --stream-to in v4l2-ctl')
+option('v4l2-builtin-plugins', type : 'boolean',
+       description : 'Enable builtin libv4l plugins')
 
 # Directories
 option('docdir', type : 'string',
