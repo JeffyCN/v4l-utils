@@ -784,6 +784,9 @@ int v4l2_fd_open(int fd, int v4l2_flags)
 	if (dev_ops->ioctl(dev_ops_priv, fd, VIDIOC_G_PARM, &parm))
 		parm.type = 0;
 
+	if (!getenv("LIBV4L2_ALLOW_CONVERSION"))
+		v4l2_flags |= V4L2_DISABLE_CONVERSION;
+
 	/* init libv4lconvert */
 	if (!(v4l2_flags & V4L2_DISABLE_CONVERSION)) {
 		convert = v4lconvert_create_with_dev_ops(fd, dev_ops_priv, dev_ops);
